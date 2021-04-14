@@ -579,3 +579,7 @@ def MAP(data, graph,
     end = time.time()
     print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
     return results
+
+
+
+def  PaCMAP(data, graph):

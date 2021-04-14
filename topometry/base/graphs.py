@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 import igraph as ig
+import leidenalg as la
 from topometry.tpgraph import cknn, diffusion, multiscale
 
 def igraph_from_w_adj(A):

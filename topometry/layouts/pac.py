@@ -10,7 +10,7 @@
 # embedding for your work.
 #
 #    Copyright 2020 Yingfan Wang, Haiyang Huang, Cynthia Rudin, Yaron Shaposhnik
-#    Copyright 2021 Davi Sidarta-Oliveira - modifications
+#
 # Apache License
 #
 # Version 2.0, January 2004
@@ -71,81 +71,17 @@ import numpy as np
 from sklearn.base import BaseEstimator
 import numba
 from annoy import AnnoyIndex
-from sklearn.decomposition import TruncatedSVD
-from sklearn.decomposition import PCA
 import time
 import math
 import datetime
 import warnings
-
-@numba.njit("f4(f4[:])")
-def l2_norm(x):
-    """
-    L2 norm of a vector.
-    """
-    result = 0.0
-    for i in range(x.shape[0]):
-        result += x[i] ** 2
-    return np.sqrt(result)
-
-
-@numba.njit("f4(f4[:],f4[:])")
-def euclid_dist(x1, x2):
-    """
-    Euclidean distance between two vectors.
-    """
-    result = 0.0
-    for i in range(x1.shape[0]):
-        result += (x1[i] - x2[i]) ** 2
-    return np.sqrt(result)
-
-
-@numba.njit("f4(f4[:],f4[:])")
-def manhattan_dist(x1, x2):
-    """
-    Manhattan distance between two vectors.
-    """
-    result = 0.0
-    for i in range(x1.shape[0]):
-        result += np.abs(x1[i] - x2[i])
-    return result
-
-
-@numba.njit("f4(f4[:],f4[:])")
-def angular_dist(x1, x2):
-    """
-    Angular (i.e. cosine) distance between two vectors.
-    """
-    x1_norm = np.maximum(l2_norm(x1), 1e-20)
-    x2_norm = np.maximum(l2_norm(x2), 1e-20)
-    result = 0.0
-    for i in range(x1.shape[0]):
-        result += x1[i] * x2[i]
-    return np.sqrt(2.0 - 2.0 * result / x1_norm / x2_norm)
-
-
-@numba.njit("f4(f4[:],f4[:])")
-def hamming_dist(x1, x2):
-    """
-    Hamming distance between two vectors.
-    """
-    result = 0.0
-    for i in range(x1.shape[0]):
-        if x1[i] != x2[i]:
-            result += 1.0
-    return result
-
+from topometry.base.dists import *
+from topometry.spectral import spectral
 
 @numba.njit()
-def calculate_dist(x1, x2, distance_index):
-    if distance_index == 0:
-        return euclid_dist(x1, x2)
-    elif distance_index == 1:
-        return manhattan_dist(x1, x2)
-    elif distance_index == 2:
-        return angular_dist(x1, x2)
-    elif distance_index == 3:
-        return hamming_dist(x1, x2)
+def calculate_dist(x1, x2, metric):
+    metric = named_distances[metric]
+    return metric(x1, x2)
 
 @numba.njit("i4[:](i4,i4,i4[:])", nogil=True)
 def sample_FP(n_samples, maximum, reject_ind):
@@ -241,7 +177,8 @@ def generate_pair(
             knn_distances[i, j] = tree.get_distance(i, nbrs[i, j])
     if verbose:
         print("found nearest neighbor")
-    sig = np.maximum(np.mean(knn_distances[:, 3:6], axis=1), 1e-10)
+    sig = np.maximum(knn_distances[:, n_neighbors], 1e-10)
+    # TopOMetry adaptation: change sig from 3:6 mean to distance to the k-th NN
     if verbose:
         print("found sig")
     scaled_dist = scale_dist(knn_distances, sig, nbrs)
@@ -319,8 +256,7 @@ def pacmap(
         distance,
         lr,
         num_iters,
-        Yinit,
-        apply_pca,
+        init,
         verbose,
         intermediate
 ):
@@ -338,18 +274,9 @@ def pacmap(
         if verbose:
             print("finding pairs!")
         if distance != "hamming":
-            if high_dim > 100 and apply_pca:
-                X -= np.mean(X, axis=0)
-                X = TruncatedSVD(n_components=100, random_state=0).fit_transform(X)
-                pca_solution = True
-                if verbose:
-                    print("applied PCA, the high dimension becomes 100")
-            else:
                 X -= np.min(X)
                 X /= np.max(X)
                 X -= np.mean(X, axis=0)
-                if verbose:
-                    print(X)
         pair_neighbors, pair_MN, pair_FP = generate_pair(
             X, n_neighbors, n_MN, n_FP, distance, verbose
         )
@@ -359,15 +286,33 @@ def pacmap(
         if verbose:
             print("using stored pairs")
 
-    if Yinit is None or Yinit == "pca":
-        if pca_solution:
-            Y = 0.01 * X[:, :n_dims]
-        else:
-            Y = 0.01 * PCA(n_components=n_dims).fit_transform(X).astype(np.float32)
-    elif Yinit == "random":
+    if init is None:
+        print('No initialisation provided, falling back to random...')
+        init = 'random'
+    elif init == 'spectral':
+        initialisation = spectral.spectral_layout(
+                    data,
+                    graph,
+                    n_components,
+                    random_state,
+                    metric="precomputed",
+                    metric_kwds=metric_kwds,
+                )
+        expansion = 10.0 / np.abs(initialisation).max()
+        Y = (initialisation * expansion).astype(
+                    np.float32
+                ) + random_state.normal(
+                    scale=0.0001, size=[graph.shape[0], n_components]
+                ).astype(
+                    np.float32
+                )
+    elif init == "random":
         Y = np.random.normal(size=[n, n_dims]).astype(np.float32) * 0.0001
-    else:
-        Y = Yinit.astype(np.float32)
+    else: # user_supplied matrix
+        print('Using user-supplied initialisation...')
+        Yinit = Yinit.astype(np.float32)
+        scaler = preprocessing.StandardScaler().fit(Yinit)
+        Y = scaler.transform(Yinit) * 0.0001
 
     w_MN_init = 1000.
     beta1 = 0.9
@@ -424,8 +369,8 @@ class PaCMAP(BaseEstimator):
         distance="euclidean",
         lr=1.0,
         num_iters=450,
+        init='spectral',
         verbose=False,
-        apply_pca=True,
         intermediate=False
     ):
         self.n_dims = n_dims
@@ -438,7 +383,7 @@ class PaCMAP(BaseEstimator):
         self.distance = distance
         self.lr = lr
         self.num_iters = num_iters
-        self.apply_pca = apply_pca
+        self.init = init
         self.verbose = verbose
         self.intermediate = intermediate
 
@@ -446,10 +391,6 @@ class PaCMAP(BaseEstimator):
             raise ValueError("The number of projection dimensions must be at least 2")
         if self.lr <= 0:
             raise ValueError("The learning rate must be larger than 0")
-        if self.distance == "hamming" and apply_pca:
-            warnings.warn("apply_pca = True for Hamming distance.")
-        if not self.apply_pca:
-            print("running ANNOY on high-dimensional data. nearest-neighbor search may be slow!")
 
     def fit(self, X, init=None):
         X = X.astype(np.float32)
@@ -470,14 +411,14 @@ class PaCMAP(BaseEstimator):
         if self.verbose:
             print(
                 "PaCMAP(n_neighbors={}, n_MN={}, n_FP={}, distance={},"
-                "lr={}, n_iters={}, apply_pca={}, opt_method='adam', verbose={}, intermediate={})".format(
+                "lr={}, n_iters={}, init={}, opt_method='adam', verbose={}, intermediate={})".format(
                     self.n_neighbors,
                     self.n_MN,
                     self.n_FP,
                     self.distance,
                     self.lr,
                     self.num_iters,
-                    self.apply_pca,
+                    self.init
                     self.verbose,
                     self.intermediate
                 )
@@ -494,8 +435,7 @@ class PaCMAP(BaseEstimator):
             self.distance,
             self.lr,
             self.num_iters,
-            init,
-            self.apply_pca,
+            self.init,
             self.verbose,
             self.intermediate
         )
@@ -527,12 +467,6 @@ class PaCMAP(BaseEstimator):
         if self.n_FP < 1:
             raise ValueError("The number of further points can't be less than 1")
         if self.distance != "hamming":
-            if X.shape[1] > 100 and self.apply_pca:
-                X -= np.mean(X, axis=0)
-                X = TruncatedSVD(n_components=100, random_state=0).fit_transform(X)
-                if self.verbose:
-                    print("applied PCA")
-            else:
                 X -= np.min(X)
                 X /= np.max(X)
                 X -= np.mean(X, axis=0)

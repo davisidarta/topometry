@@ -2,13 +2,6 @@
 import numpy as np
 from topometry.base import ann
 
-def hyperboloid_emb(emb):
-    z = np.sqrt(1 + np.sum(emb ** 2, axis=1))
-    emb[:, 2] = z
-
-    return emb
-
-
 def knn_graph(data, k=15, metric='cosine', n_jobs=10, M=30, efC=100, efS=100):
     knn = ann.NMSlibTransformer(n_neighbors=k,
                                 metric=metric,
