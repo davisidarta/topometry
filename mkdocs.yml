@@ -1,0 +1,9 @@
+site_name: TopOMetry
+nav:
+    - Home: readme.md
+theme:
+    name: readthedocs
+    highlightjs: true
+    hljs_languages:
+        - python
+        - bash
