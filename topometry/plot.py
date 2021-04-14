@@ -55,6 +55,12 @@ def hyperboloid_plot(emb, labels=None, pt_size=None, marker='o', opacity=1, cmap
 
     return plt.show()
 
+def hyperboloid_emb(emb):
+    z = np.sqrt(1 + np.sum(emb ** 2, axis=1))
+    emb[:, 2] = z
+
+    return emb
+
 def poincare_disk_plot(emb, labels=None, pt_size=1, marker='o', opacity=1, cmap='Spectral'):
     x = emb[:, 0]
     y = emb[:, 1]
@@ -74,5 +80,3 @@ def poincare_disk_plot(emb, labels=None, pt_size=1, marker='o', opacity=1, cmap=
     ax.axis('off')
     plt.gca().set_aspect('equal', 'datalim')
     return plt.show()
-
-
