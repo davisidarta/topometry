@@ -9,7 +9,7 @@ from topometry.tpgraph.diffusion import Diffusor
 from topometry.tpgraph.cknn import CkNearestNeighbors, cknn_graph
 from topometry.spectral import spectral as spt
 from topometry.tpgraph.GL import InvLaplGraph
-from topometry.layouts import net, uni, pac, tri, mde
+from topometry.layouts import net, uni, pac, tri
 from topometry import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
 

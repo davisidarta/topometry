@@ -19,6 +19,7 @@ import sys
 import warnings
 from topometry.base.dists import *
 from topometry.spectral import spectral
+from sklearn.decomposition import PCA
 
 if sys.version_info < (3,):
     range = xrange
@@ -468,17 +469,9 @@ def trimap(
             if verbose:
                 print("pre-processing")
             if distance != "hamming":
-                if dim > 100 and apply_pca:
-                    X -= np.mean(X, axis=0)
-                    X = TruncatedSVD(n_components=100, random_state=0).fit_transform(X)
-                    dim = 100
-                    pca_solution = True
-                    if verbose:
-                        print("applied PCA")
-                else:
-                    X -= np.min(X)
-                    X /= np.max(X)
-                    X -= np.mean(X, axis=0)
+                X -= np.min(X)
+                X /= np.max(X)
+                X -= np.mean(X, axis=0)
             triplets, weights = generate_triplets(
                 X, n_inliers, n_outliers, n_random, distance, weight_adj, verbose
             )
@@ -488,11 +481,25 @@ def trimap(
         if verbose:
             print("using stored triplets")
 
-    if Yinit is None or Yinit is "pca":
-        if pca_solution:
-            Y = 0.01 * X[:, :n_dims]
-        else:
-            Y = 0.01 * PCA(n_components=n_dims).fit_transform(X).astype(np.float32)
+    if Yinit is None:
+        print('Initialisation not provided, falling back to random...')
+    elif Yinit == 'spectral':
+        initialisation = spectral.spectral_layout(
+                    data,
+                    graph,
+                    n_components,
+                    random_state,
+                    metric="precomputed",
+                    metric_kwds=metric_kwds,
+                )
+        expansion = 10.0 / np.abs(initialisation).max()
+        Y = (initialisation * expansion).astype(
+                    np.float32
+                ) + random_state.normal(
+                    scale=0.0001, size=[graph.shape[0], n_components]
+                ).astype(
+                    np.float32
+                )
     elif Yinit is "random":
         Y = np.random.normal(size=[n, n_dims]).astype(np.float32) * 0.0001
     else:
@@ -611,7 +618,6 @@ class TRIMAP(BaseEstimator):
         self.use_dist_matrix = use_dist_matrix
         self.knn_tuple = knn_tuple
         self.weight_adj = weight_adj
-        self.apply_pca = apply_pca
         self.opt_method = opt_method
         self.verbose = verbose
         self.return_seq = return_seq
@@ -635,7 +641,7 @@ class TRIMAP(BaseEstimator):
         if self.verbose:
             print(
                 "TRIMAP(n_inliers={}, n_outliers={}, n_random={}, distance={}, "
-                "lr={}, n_iters={}, weight_adj={}, apply_pca={}, opt_method={}, verbose={}, return_seq={})".format(
+                "lr={}, n_iters={}, weight_adj={}, opt_method={}, verbose={}, return_seq={})".format(
                     n_inliers,
                     n_outliers,
                     n_random,
@@ -648,12 +654,6 @@ class TRIMAP(BaseEstimator):
                     return_seq,
                 )
             )
-            if not self.apply_pca:
-                print(
-                    bold
-                    + "running ANNOY on high-dimensional data. nearest-neighbor search may be slow!"
-                    + reset
-                )
 
     def fit(self, X, init=None):
         """
