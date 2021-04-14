@@ -1,39 +1,39 @@
 import matplotlib
 matplotlib.use('Agg')  # plotting backend compatible with screen
 import sys
+from topometry.models import TopoGraph, MAP
 
 filename = sys.argv[1]  # read filename from command line
 
-def sc_standard(filename):
+def TopoMAP(data, **tg_kwargs, **map_kwargs):
     """""""""
-    Standard analysis usually employed for single-cell analysis.     
-    
-    """""""""
-    import scanpy.api as sc
+    Easy, direct application of topological graphs (``TopoGraph``) and Manifold Approximation and Projection (``MAP``) for layout optimization with triple
+    approximation of the Laplace-Beltrami Operator.
 
-    adata = sc.read_10x_h5(filename)
-    sc.pp.recipe_zheng17(adata)
-    sc.pp.neighbors(adata)
-    sc.tl.louvain(adata)
-    sc.tl.paga(adata)
-    sc.tl.umap(adata)
-    sc.tl.rank_genes_groups(adata, 'louvain')
-    adata.write('std_an_'+filename)
+    Parameters
+    ----------
+    data: np.ndarray, csr_matrix, pd.DataFrame
+        Input data. Will be converted to csr_matrix by default
 
-def sc_dbmap(filename):
-    """""""""
-    Standard analysis usually employed for single-cell analysis.     
+    **tg_kwargs: dict
+        keyword arguments for the ``TopoGraph`` instance.
+
+    **map_kwargs: dict
+        keyword arguments for the ``MAP`` function
+
+    Returns
+    -------
+    TopoGraph:
+        object containing topological graph analysis
+    embedding: np.ndarray
+        lower dimensional projection for optimal visualization
 
     """""""""
-    adata = sc.read_10x_h5(filename)
-    sc.pp.recipe_zheng17(adata)
-    sc.pp.neighbors(adata)
-    sc.tl.louvain(adata)
-    sc.tl.paga(adata)
-    sc.tl.umap(adata)
-    sc.tl.rank_genes_groups(adata, 'louvain')
-    adata.write('./write/result.h5ad')
-    # plotting
-    sc.pl.paga(adata)
-    sc.pl.umap(adata, color='louvain')
-    sc.pl.rank_genes_groups(adata, save='.pdf')
+
+    tg = TopoGraph(**tg_kwargs).fit(data)
+    graph = tg.transform()
+    topo = tg.MSDiffMap
+
+    emb = MAP(topo, tg.DiffGraph.T, **map_kwargs)
+
+    return tg, emb
