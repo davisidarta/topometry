@@ -91,6 +91,6 @@ After fitting, we can access topological metrics and basis in the ``tg`` object.
 
 [MIT License]()
 
-Copyright (c) 2021 Davi Sidarta-Oliveira, davisidarta@gmail.com
+Copyright (c) 2021 Davi Sidarta-Oliveira, davisidarta(at)gmail.com
 
 
