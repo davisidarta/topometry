@@ -9,7 +9,7 @@ from topometry.tpgraph.diffusion import Diffusor
 from topometry.tpgraph.cknn import CkNearestNeighbors, cknn_graph
 from topometry.spectral import spectral as spt
 from topometry.tpgraph.GL import InvLaplGraph
-from topometry.layouts import net, uni, pac, tri
+from topometry.layouts import uni, pac
 from topometry import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
 
@@ -579,7 +579,3 @@ def MAP(data, graph,
     end = time.time()
     print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
     return results
-
-
-
-def  PaCMAP(data, graph):

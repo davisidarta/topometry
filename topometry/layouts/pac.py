@@ -74,11 +74,10 @@ from annoy import AnnoyIndex
 import time
 import math
 import datetime
-import warnings
 from topometry.base.dists import *
-from topometry.spectral import spectral
+from sklearn import preprocessing
 
-@numba.njit()
+@numba.jit(nopython=False, fastmath=True)
 def calculate_dist(x1, x2, metric):
     metric = named_distances[metric]
     return metric(x1, x2)
@@ -122,7 +121,7 @@ def sample_MN_pair(X, n_MN):
             sampled = np.random.randint(0, n, 6)
             dist_list = np.empty((6), dtype=np.float32)
             for t in range(sampled.shape[0]):
-                dist_list[t] = euclid_dist(X[i], X[sampled[t]])
+                dist_list[t] = euclidean(X[i], X[sampled[t]])
             min_dic = np.argmin(dist_list)
             dist_list = np.delete(dist_list, [min_dic])
             sampled = np.delete(sampled, [min_dic])
@@ -160,6 +159,7 @@ def generate_pair(
         distance='euclidean',
         verbose=True
 ):
+    metric=distance
     n, dim = X.shape
     n_neighbors_extra = min(n_neighbors + 50, n)
     tree = AnnoyIndex(dim, metric=distance)
@@ -185,7 +185,7 @@ def generate_pair(
     if verbose:
         print("found scaled dist")
     pair_neighbors = sample_neighbors_pair(X, scaled_dist, nbrs, n_neighbors)
-    pair_MN = sample_MN_pair(X, n_MN)
+    pair_MN = sample_MN_pair(X, n_MN, metric)
     pair_FP = sample_FP_pair(X, pair_neighbors, n_neighbors, n_FP)
     return pair_neighbors, pair_MN, pair_FP
 
@@ -256,7 +256,7 @@ def pacmap(
         distance,
         lr,
         num_iters,
-        init,
+        Yinit,
         verbose,
         intermediate
 ):
@@ -286,27 +286,10 @@ def pacmap(
         if verbose:
             print("using stored pairs")
 
-    if init is None:
+    if Yinit is None:
         print('No initialisation provided, falling back to random...')
         init = 'random'
-    elif init == 'spectral':
-        initialisation = spectral.spectral_layout(
-                    data,
-                    graph,
-                    n_components,
-                    random_state,
-                    metric="precomputed",
-                    metric_kwds=metric_kwds,
-                )
-        expansion = 10.0 / np.abs(initialisation).max()
-        Y = (initialisation * expansion).astype(
-                    np.float32
-                ) + random_state.normal(
-                    scale=0.0001, size=[graph.shape[0], n_components]
-                ).astype(
-                    np.float32
-                )
-    elif init == "random":
+    elif Yinit == "random":
         Y = np.random.normal(size=[n, n_dims]).astype(np.float32) * 0.0001
     else: # user_supplied matrix
         print('Using user-supplied initialisation...')
@@ -418,7 +401,7 @@ class PaCMAP(BaseEstimator):
                     self.distance,
                     self.lr,
                     self.num_iters,
-                    self.init
+                    self.init,
                     self.verbose,
                     self.intermediate
                 )
