@@ -10,3 +10,4 @@ kneed>=0.6
 pymde>=0.1.5
 setuptools~=45.2.0
 igraph>=0.1.10
+topo>=0.1
