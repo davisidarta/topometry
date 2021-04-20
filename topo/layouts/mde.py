@@ -14,7 +14,7 @@ from pymde import preprocess
 import pymde
 import igraph
 
-# Some handles
+# Some custom minimum-distortion-embedding problems
 
 def IsomorphicMDE(data,
                   embedding_dim=2,
@@ -176,3 +176,4 @@ def IsometricMDE(data,
                                    max_distances=max_distances,
                                    device=device,
                                    verbose=verbose)
+    return mde
