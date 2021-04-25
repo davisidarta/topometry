@@ -4,6 +4,7 @@ import numpy as np
 import time
 import random
 from sklearn.cluster import AffinityPropagation
+from sklearn.manifold import SpectralEmbedding
 from topo.base import ann as nn
 from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.cknn import CkNearestNeighbors, cknn_graph
@@ -19,18 +20,18 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                  base_knn=10,
                  graph_knn=20,
                  n_eigs=100,
+                 basis='diffusion',
                  graph='dgraph',
                  kernel_use='decay_adaptive',
                  base_metric='cosine',
                  graph_metric='cosine',
-                 norm=True,
                  transitions=False,
                  alpha=1,
                  plot_spectrum=False,
                  eigengap=True,
                  delta=1.0,
                  t='inf',
-                 p=None,
+                 p=11/16,
                  n_jobs=1,
                  ann=True,
                  M=30,
@@ -38,9 +39,12 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                  efS=100,
                  verbose=False,
                  cache_base=True,
-                 cache_graph=True
+                 cache_graph=True,
+                 norm=True,
+                 random_state=None
                  ):
         self.graph = graph
+        self.basis = basis
         self.n_eigs = n_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
@@ -71,20 +75,26 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         self.LapGraph = None
         self.clusters = None
         self.computed_LapGraph = False
+        self.ContBasis = None
+        self.CLapMap = None
+        self.random_state = None
 
     def __repr__(self):
         base_print = "TopoGraph object with:"
         if self.DiffBasis is None:
             print("TopoGraph object without any fitted model")
         if self.DiffBasis is not None:
-            print(base_print + " \n DiffusionBasis fitted on %f samples and %f observations" % (self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[0]))
+            print(base_print + " \n Diffusion basis fitted on %f samples and %f observations" % (self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
+        if self.ContBasis is not None:
+            print(base_print + " \n Continuous basis fitted on %f samples and %f observations" % (self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
 
     """""""""
     Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
 
-    From data, builds a topologically-oriented basis with  optimized diffusion maps,
-    and from this basis learns a diffusion graph (using a new diffusion process or a continuous kNN kernel -
-    both approximate the Laplace-Beltrami Operator). Can be visualized in two or three dimensions with multiple
+    From data, builds a topologically-oriented basis with  optimized diffusion maps or a continuous k-nearest-neighbors
+    Laplacian Eigenmap, and from this basis learns a topological graph (using a new diffusion process or a continuous 
+    kNN kernel). This model approximates the Laplace-Beltrami Operator multiple ways by different ways, depending on
+    the user setup. The topological graph can then be visualized in two or three dimensions with multiple
     classes for graph layout optimization in `topo.layout`.
 
    Parameters
@@ -109,8 +119,16 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         discretization threshold.
 
     n_eigs : int (optional, default 50)
-        Number of diffusion components to compute. This number can be iterated to get different views
-        from data at distinct spectral resolution.
+        Number of components to compute. This number can be iterated to get different views
+        from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
+        computed diffusion components. If `basis` is set to `continuous`, this is the number of computed eigenvectors
+        of the Laplacian Eigenmaps from the continuous affinity matrix.
+        
+    basis: `diffusion` or `continuous` (optional, default `diffusion`)
+        Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
+        diffusion mapping. If `continuous`, computes affinities from continuous k-nearest-neighbors, and a topological
+        basis from the Laplacian Eigenmaps of such metric.
+    
     ann : bool (optional, default True)
         Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
 
@@ -131,7 +149,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         -'jansen-shan'
 
     p: int or float (optional, default 11/16 )
-        P for the Lp metric, when ``metric='lp'``.  Can be fractional. The default 11/16 approximates
+        P for the Lp metric, when `metric='lp'`.  Can be fractional. The default 11/16 approximates
         an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
         See https://en.wikipedia.org/wiki/Lp_space for some context.
 
@@ -144,11 +162,12 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             Defaults to 1, which is suitable for normalized data.
 
     kernel_use: str (optional, default 'decay_adaptive')
-        Which type of kernel to use. There are four implemented, considering the adaptive decay and the
-        neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
+        Which type of kernel to use in the diffusion approach. There are four implemented, considering the adaptive 
+        decay and the neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
 
-        - The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.(https://doi.org/10.1016/j.acha.2005.07.004)
-        and implemented in Setty et al. (https://doi.org/10.1038/s41587-019-0068-4).
+        - The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.
+        (https://doi.org/10.1016/j.acha.2005.07.004) and implemented in Setty et al. 
+        (https://doi.org/10.1038/s41587-019-0068-4).
 
         - The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
 
@@ -156,9 +175,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
 
     transitions: bool (optional, default False)
-        Whether to decompose the transition graph when transforming.
-    norm: bool (optional, default True)
-        Whether to normalize the kernel transition probabilities to approximate the LPO.
+        Whether to decompose the transition graph when fitting the diffusion basis.
     n_jobs : int
         Number of threads to use in calculations. Defaults to all but one.
     verbose : bool (optional, default False)
@@ -176,41 +193,85 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         Parameters
         ----------
         data:
-            High-dimensional data matrix. Currently, supports only data from the similar type (i.e. all bool, all float)
+            High-dimensional data matrix. Currently, supports only data from similar type (i.e. all bool, all float)
 
         Returns
         -------
 
-        TopoGraph instance with the following attributes populated:
-            TopoGraph.DiffBasis: diffusion basis operator, with kernel K and transition matrix T
-            TopoGraph.MSDiffMap: multiscale diffusion maps
+        TopoGraph instance with several slots, populated as per user settings.
+            If `basis=diffusion`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
+                `TopoGraph.DiffBasis` with a fitted `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics
+                and transition probabilities, respectively stored in TopoGraph.DiffBasis.K and TopoGraph.DiffBasis.T
 
+            If `basis=continuous`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
+                `TopoGraph.ContBasis` with a continuous-k-nearest-neighbors model, containing continuous metrics and
+                adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
 
         """
-
+        if self.random_state is None:
+            self.random_state = random.RandomState()
         print('Building topological basis...')
-        start = time.time()
-        self.DiffBasis = Diffusor(n_components=self.n_eigs,
-                                      n_neighbors=self.base_knn,
-                                      alpha=self.alpha,
-                                      n_jobs=self.n_jobs,
-                                      ann=self.ann,
-                                      metric=self.base_metric,
-                                      p=self.p,
-                                      M=self.M,
-                                      efC=self.efC,
-                                      efS=self.efS,
-                                      kernel_use=self.kernel_use,
-                                      norm=self.norm,
-                                      transitions=self.transitions,
-                                      eigengap=self.eigengap,
-                                      verbose=self.verbose,
-                                      plot_spectrum=self.plot_spectrum,
-                                      cache=self.cache_base)
-        self.MSDiffMap = self.DiffBasis.fit_transform(data)
+        if self.basis == 'diffusion':
+            start = time.time()
+            self.DiffBasis = Diffusor(n_components=self.n_eigs,
+                                          n_neighbors=self.base_knn,
+                                          alpha=self.alpha,
+                                          n_jobs=self.n_jobs,
+                                          ann=self.ann,
+                                          metric=self.base_metric,
+                                          p=self.p,
+                                          M=self.M,
+                                          efC=self.efC,
+                                          efS=self.efS,
+                                          kernel_use=self.kernel_use,
+                                          norm=self.norm,
+                                          transitions=self.transitions,
+                                          eigengap=self.eigengap,
+                                          verbose=self.verbose,
+                                          plot_spectrum=self.plot_spectrum,
+                                          cache=self.cache_base)
+            self.MSDiffMap = self.DiffBasis.fit_transform(data)
 
-        end = time.time()
-        print('Diffusion fitted in = %f (sec)' % (end - start))
+            end = time.time()
+            print('Topological basis fitted with diffusion processes in = %f (sec)' % (end - start))
+        elif self.basis == 'continuous':
+            start = time.time()
+            anbrs = nn.NMSlibTransformer(n_neighbors=self.base_knn,
+                                          metric=self.base_metric,
+                                          p=self.p,
+                                          method='hnsw',
+                                          n_jobs=self.n_jobs,
+                                          M=self.M,
+                                          efC=self.efC,
+                                          efS=self.efS,
+                                          verbose=self.verbose).fit(data)
+
+            self.ContBasis = cknn_graph(anbrs,
+                                        n_neighbors=self.base_knn,
+                                        delta=self.delta,
+                                        metric='precomputed',
+                                        t=self.t,
+                                        include_self=True,
+                                        is_sparse=True,
+                                        return_instance=True)
+
+            self.CLapMap = spt.spectral_layout(
+                data,
+                self.ContBasis.K,
+                self.n_eigs,
+                metric="precomputed",
+            )
+            expansion = 10.0 / np.abs(self.CLapMap).max()
+            self.CLapMap = (self.CLapMap * expansion).astype(
+                np.float32
+            ) + self.random_state.normal(
+                scale=0.0001, size=[self.ContBasis.K.shape[0], self.n_eigs]
+            ).astype(
+                np.float32
+            )
+            end = time.time()
+            print('Topological basis fitted with continuous Laplacian Eigenmaps in = %f (sec)' % (end - start))
+
         return self
 
     def transform(self):
@@ -220,11 +281,11 @@ class TopoGraph(TransformerMixin, BaseEstimator):
 
         Returns
         -------
-
-        TopoGraph instance with the following attributes populated:
-            if graph is 'dgraph' or 'diffcknn', returns  a tuple containing the kernel and the transition matrices
-                i.e. kgraph, tgraph = tg.transform()
-            if graph is 'cdiff' or 'cknn', returns a topologically weighted k-nearest-neighbors graph
+        If `graph` is 'dgraph' or 'diffcknn', returns  a tuple containing the kernel and the transition matrices
+            i.e. kgraph, tgraph = tg.transform(), and if `cache=True`, writes the topological graph to
+            `TopoGraph.DiffGraph` or `TopoGraph.DiffCknnGraph'
+        If `graph` is 'cknn' or 'cdiff', returns a topologically weighted k-nearest-neighbors graph, and if
+            `cache=True`, writes the topological graph to `TopoGraph.CknnGraph` or `TopoGraph.CDiffGraph'.
 
 
         """
@@ -344,9 +405,6 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         -------
         reducedLaplacian
             Reduced node-weighted laplacian of size $\tilde{V} \times \tilde{V}$
-
-
-
 
         """
 

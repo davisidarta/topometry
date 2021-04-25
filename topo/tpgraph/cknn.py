@@ -65,7 +65,8 @@ def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
     if return_instance:
         return c_knn
     else:
-        return c_knn.ckng
+
+        return c_knn.K
 
 def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                        include_self=False, is_sparse=True):
@@ -76,19 +77,6 @@ def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
     c_knn.cknneighbors_graph(X)
     A = c_knn.adjacency()
     return A
-
-def CnnAto_iGraph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
-                       include_self=False, is_sparse=True):
-    knn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
-            include_self=False, is_sparse=True):
-
-    c_knn = CkNearestNeighbors(n_neighbors=n_neighbors, delta=delta,
-                               metric=metric, t=t, include_self=include_self,
-                               is_sparse=is_sparse)
-    c_knn.cknneighbors_graph(X)
-    A = c_knn.adjacency()
-
-
 
 
 class CkNearestNeighbors(object):
@@ -127,7 +115,7 @@ class CkNearestNeighbors(object):
         self.t = t
         self.include_self = include_self
         self.is_sparse = is_sparse
-        self.ckng = None
+        self.K = None
         self.return_adjacency = return_adjacency
         if self.metric == 'euclidean':
             self.metric_fun = euclidean
@@ -233,10 +221,10 @@ class CkNearestNeighbors(object):
         if self.return_adjacency:
             return self.A
         if is_sparse:
-            self.ckng = neigh
+            self.K = neigh
         else:
-            self.ckng = neigh.toarray()
-        return self.ckng
+            self.K = neigh.toarray()
+        return self.K
 
     def adjacency(self):
         """
