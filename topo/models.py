@@ -14,6 +14,23 @@ from topo.layouts import uni, pac
 from topo import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
 
+try:
+    from typing import Literal
+except ImportError:
+    try:
+        from typing_extensions import Literal
+    except ImportError:
+
+        class LiteralMeta(type):
+            def __getitem__(cls, values):
+                if not isinstance(values, tuple):
+                    values = (values,)
+                return type('Literal_', (Literal,), dict(__args__=values))
+
+
+        class Literal(metaclass=LiteralMeta):
+            pass
+
 
 class TopoGraph(TransformerMixin, BaseEstimator):
     def __init__(self,
@@ -31,7 +48,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                  eigengap=True,
                  delta=1.0,
                  t='inf',
-                 p=11/16,
+                 p=11 / 16,
                  n_jobs=1,
                  ann=True,
                  M=30,
@@ -77,16 +94,18 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         self.computed_LapGraph = False
         self.ContBasis = None
         self.CLapMap = None
-        self.random_state = None
+        self.random_state = random_state
 
     def __repr__(self):
         base_print = "TopoGraph object with:"
         if self.DiffBasis is None:
             print("TopoGraph object without any fitted model")
         if self.DiffBasis is not None:
-            print(base_print + " \n Diffusion basis fitted on %f samples and %f observations" % (self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
+            print(base_print + " \n Diffusion basis fitted on %f samples and %f observations" % (
+                        self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
         if self.ContBasis is not None:
-            print(base_print + " \n Continuous basis fitted on %f samples and %f observations" % (self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
+            print(base_print + " \n Continuous basis fitted on %f samples and %f observations" % (
+                        self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
 
     """""""""
     Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
@@ -123,12 +142,12 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
         computed diffusion components. If `basis` is set to `continuous`, this is the number of computed eigenvectors
         of the Laplacian Eigenmaps from the continuous affinity matrix.
-        
+
     basis: `diffusion` or `continuous` (optional, default `diffusion`)
         Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
         diffusion mapping. If `continuous`, computes affinities from continuous k-nearest-neighbors, and a topological
         basis from the Laplacian Eigenmaps of such metric.
-    
+
     ann : bool (optional, default True)
         Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
 
@@ -214,22 +233,22 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         if self.basis == 'diffusion':
             start = time.time()
             self.DiffBasis = Diffusor(n_components=self.n_eigs,
-                                          n_neighbors=self.base_knn,
-                                          alpha=self.alpha,
-                                          n_jobs=self.n_jobs,
-                                          ann=self.ann,
-                                          metric=self.base_metric,
-                                          p=self.p,
-                                          M=self.M,
-                                          efC=self.efC,
-                                          efS=self.efS,
-                                          kernel_use=self.kernel_use,
-                                          norm=self.norm,
-                                          transitions=self.transitions,
-                                          eigengap=self.eigengap,
-                                          verbose=self.verbose,
-                                          plot_spectrum=self.plot_spectrum,
-                                          cache=self.cache_base)
+                                      n_neighbors=self.base_knn,
+                                      alpha=self.alpha,
+                                      n_jobs=self.n_jobs,
+                                      ann=self.ann,
+                                      metric=self.base_metric,
+                                      p=self.p,
+                                      M=self.M,
+                                      efC=self.efC,
+                                      efS=self.efS,
+                                      kernel_use=self.kernel_use,
+                                      norm=self.norm,
+                                      transitions=self.transitions,
+                                      eigengap=self.eigengap,
+                                      verbose=self.verbose,
+                                      plot_spectrum=self.plot_spectrum,
+                                      cache=self.cache_base)
             self.MSDiffMap = self.DiffBasis.fit_transform(data)
 
             end = time.time()
@@ -237,14 +256,15 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         elif self.basis == 'continuous':
             start = time.time()
             anbrs = nn.NMSlibTransformer(n_neighbors=self.base_knn,
-                                          metric=self.base_metric,
-                                          p=self.p,
-                                          method='hnsw',
-                                          n_jobs=self.n_jobs,
-                                          M=self.M,
-                                          efC=self.efC,
-                                          efS=self.efS,
-                                          verbose=self.verbose).fit(data)
+                                         metric=self.base_metric,
+                                         p=self.p,
+                                         method='hnsw',
+                                         n_jobs=self.n_jobs,
+                                         M=self.M,
+                                         efC=self.efC,
+                                         efS=self.efS,
+                                         verbose=self.verbose).fit(data)
+
             self.ContBasis = cknn_graph(anbrs,
                                         n_neighbors=self.base_knn,
                                         delta=self.delta,
@@ -270,9 +290,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             )
             end = time.time()
             print('Topological basis fitted with continuous Laplacian Eigenmaps in = %f (sec)' % (end - start))
-        else:
 
-            print('Cannnot compute unknown basis. `basis` must be \'diffusion\' or \'continuous\'.')
         return self
 
     def transform(self):
@@ -282,36 +300,15 @@ class TopoGraph(TransformerMixin, BaseEstimator):
 
         Returns
         -------
-        If `self.graph` is 'dgraph':
-            Uses a diffusion process on the learned topological basis to build a topological graph by fitting the
-            `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics and transition probabilities,
-            respectively stored in `TopoGraph.DiffGraph.K` and `TopoGraph.DiffGraph.T`.
+        If `graph` is 'dgraph' or 'diffcknn', returns  a tuple containing the kernel and the transition matrices
+            i.e. kgraph, tgraph = tg.transform(), and if `cache=True`, writes the topological graph to
+            `TopoGraph.DiffGraph` or `TopoGraph.DiffCknnGraph'
+        If `graph` is 'cknn' or 'cdiff', returns a topologically weighted k-nearest-neighbors graph, and if
+            `cache=True`, writes the topological graph to `TopoGraph.CknnGraph` or `TopoGraph.CDiffGraph'.
 
-        If `self.graph` is 'diffcknn':
-            Uses a diffusion process on the learned topological basis to build a topological graph by fitting the
-            `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics and transition probabilities,
-            respectively stored in `TopoGraph.DiffCknnGraph.K` and `TopoGraph.DiffCknnGraph.T`.
-
-        If 'self.graph' is 'cknn':
-            Uses a continuous-k-nearest-neighbors kernel on the learned topological basis to build a topological graph by
-            fitting the `topo.tpgraph.cknn.CkNearestNeighbors()` class containing similarity metrics and the graph adjacency,
-            respectively stored in `TopoGraph.CknnGraph.K` and `TopoGraph.CknnGraph.A`
-
-        If 'self.graph' is 'cdiff':
-            Uses a continuous-k-nearest-neighbors kernel on the learned topological basis to build a topological graph by
-            fitting the `topo.tpgraph.cknn.CkNearestNeighbors()` class containing similarity metrics and the graph adjacency,
-            respectively stored in `TopoGraph.CDiffGraph.K` and `TopoGraph.CDiffGraph.A`
-
-        The learned graphs are written to `TopoGraph` if `self.cache_graph` is `True`.
 
         """
-        print('Building topological graph...')
-        if self.basis == 'diffusion':
-            use_basis = self.MSDiffMap
-        elif self.basis == 'continuous':
-            use_basis = self.CLapMap
-        else:
-            return print('WARNING: Could not find a valid topological basis!')
+        print('Building diffusion graph...')
         start = time.time()
         if self.graph == 'dgraph' or self.graph == 'cdiff':
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
@@ -330,11 +327,11 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                  verbose=self.verbose,
                                  plot_spectrum=self.plot_spectrum,
                                  cache=False
-                                 ).fit(use_basis)
+                                 ).fit(self.MSDiffMap)
             if self.cache_graph:
                 self.DiffGraph = DiffGraph
             if self.graph == 'cdiff':
-                print('`graph` set to' + str(self.basis) + '. Building 2-nd order, continuous version of the diffusion graph...')
+                print('Building 2-nd order, continuous version of the diffusion graph...')
                 CDiffGraph = cknn_graph(DiffGraph.K,
                                         n_neighbors=self.graph_knn,
                                         delta=self.delta,
@@ -345,7 +342,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 if self.cache_graph:
                     self.CDiffGraph = CDiffGraph
         if self.graph == 'cknn' or self.graph == 'diffcknn':
-            CknnGraph = cknn_graph(use_basis,
+            CknnGraph = cknn_graph(self.MSDiffMap,
                                    n_neighbors=self.graph_knn,
                                    delta=self.delta,
                                    metric=self.graph_metric,
@@ -355,7 +352,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             if self.cache_graph:
                 self.CknnGraph = CknnGraph
             if self.graph == 'diffcknn':
-                print('`graph` set to' + str(self.basis) + '. Building 2-nd order, diffuse version of the diffusion graph...')
+                print('Building 2-nd order, diffuse version of the diffusion graph...')
                 DiffCknnGraph = Diffusor(n_neighbors=self.graph_knn,
                                          alpha=self.alpha,
                                          n_jobs=self.n_jobs,
@@ -376,15 +373,15 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 if self.cache_graph:
                     self.DiffCknnGraph = DiffCknnGraph
         end = time.time()
-        print('Topological graph(s) extracted in = %f (sec)' % (end - start))
+        print('Topological graphs extracted in = %f (sec)' % (end - start))
         if self.graph == 'dgraph':
-            return DiffGraph
+            return DiffGraph.K, DiffGraph.T
         elif self.graph == 'cdiff':
             return CDiffGraph
         elif self.graph == 'cknn':
             return CknnGraph
         elif self.graph == 'diffcknn':
-            return DiffCknnGraph
+            return DiffCknnGraph.K, DiffCknnGraph.T
         else:
             return self
 
@@ -432,16 +429,15 @@ class TopoGraph(TransformerMixin, BaseEstimator):
 
         if not self.computed_LapGraph:
             self.LapGraph = InvLaplGraph(edges,
-                                     reductionTarget=reductionTarget,
-                                     actionSwitch=actionSwitch,
-                                     numSamplesS=numSamplesS,
-                                     qOverS=qOverS,
-                                     minProbPerActionD=minProbPerActionD,
-                                     minTargetItems=minTargetItems,
-                                     plotError=plotError,
-                                     reproject=reproject)
+                                         reductionTarget=reductionTarget,
+                                         actionSwitch=actionSwitch,
+                                         numSamplesS=numSamplesS,
+                                         qOverS=qOverS,
+                                         minProbPerActionD=minProbPerActionD,
+                                         minTargetItems=minTargetItems,
+                                         plotError=plotError,
+                                         reproject=reproject)
             self.computed_LapGraph = True
-
 
         coarse = self.LapGraph.nodeWeightedInverseLaplacian
         return coarse
@@ -512,7 +508,6 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                             max_iter=max_iter,
                                             convergence_iter=convergence_iter,
                                             preference=preference).fit_predict(graph)
-
 
         return self.clusters
 
