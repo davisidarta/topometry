@@ -245,7 +245,6 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                           efC=self.efC,
                                           efS=self.efS,
                                           verbose=self.verbose).fit(data)
-
             self.ContBasis = cknn_graph(anbrs,
                                         n_neighbors=self.base_knn,
                                         delta=self.delta,
@@ -271,7 +270,9 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             )
             end = time.time()
             print('Topological basis fitted with continuous Laplacian Eigenmaps in = %f (sec)' % (end - start))
+        else:
 
+            print('Cannnot compute unknown basis. `basis` must be \'diffusion\' or \'continuous\'.')
         return self
 
     def transform(self):
@@ -281,15 +282,36 @@ class TopoGraph(TransformerMixin, BaseEstimator):
 
         Returns
         -------
-        If `graph` is 'dgraph' or 'diffcknn', returns  a tuple containing the kernel and the transition matrices
-            i.e. kgraph, tgraph = tg.transform(), and if `cache=True`, writes the topological graph to
-            `TopoGraph.DiffGraph` or `TopoGraph.DiffCknnGraph'
-        If `graph` is 'cknn' or 'cdiff', returns a topologically weighted k-nearest-neighbors graph, and if
-            `cache=True`, writes the topological graph to `TopoGraph.CknnGraph` or `TopoGraph.CDiffGraph'.
+        If `self.graph` is 'dgraph':
+            Uses a diffusion process on the learned topological basis to build a topological graph by fitting the
+            `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics and transition probabilities,
+            respectively stored in `TopoGraph.DiffGraph.K` and `TopoGraph.DiffGraph.T`.
 
+        If `self.graph` is 'diffcknn':
+            Uses a diffusion process on the learned topological basis to build a topological graph by fitting the
+            `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics and transition probabilities,
+            respectively stored in `TopoGraph.DiffCknnGraph.K` and `TopoGraph.DiffCknnGraph.T`.
+
+        If 'self.graph' is 'cknn':
+            Uses a continuous-k-nearest-neighbors kernel on the learned topological basis to build a topological graph by
+            fitting the `topo.tpgraph.cknn.CkNearestNeighbors()` class containing similarity metrics and the graph adjacency,
+            respectively stored in `TopoGraph.CknnGraph.K` and `TopoGraph.CknnGraph.A`
+
+        If 'self.graph' is 'cdiff':
+            Uses a continuous-k-nearest-neighbors kernel on the learned topological basis to build a topological graph by
+            fitting the `topo.tpgraph.cknn.CkNearestNeighbors()` class containing similarity metrics and the graph adjacency,
+            respectively stored in `TopoGraph.CDiffGraph.K` and `TopoGraph.CDiffGraph.A`
+
+        The learned graphs are written to `TopoGraph` if `self.cache_graph` is `True`.
 
         """
-        print('Building diffusion graph...')
+        print('Building topological graph...')
+        if self.basis == 'diffusion':
+            use_basis = self.MSDiffMap
+        elif self.basis == 'continuous':
+            use_basis = self.CLapMap
+        else:
+            return print('WARNING: Could not find a valid topological basis!')
         start = time.time()
         if self.graph == 'dgraph' or self.graph == 'cdiff':
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
@@ -308,11 +330,11 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                  verbose=self.verbose,
                                  plot_spectrum=self.plot_spectrum,
                                  cache=False
-                                 ).fit(self.MSDiffMap)
+                                 ).fit(use_basis)
             if self.cache_graph:
                 self.DiffGraph = DiffGraph
             if self.graph == 'cdiff':
-                print('Building 2-nd order, continuous version of the diffusion graph...')
+                print('`graph` set to' + str(self.basis) + '. Building 2-nd order, continuous version of the diffusion graph...')
                 CDiffGraph = cknn_graph(DiffGraph.K,
                                         n_neighbors=self.graph_knn,
                                         delta=self.delta,
@@ -323,7 +345,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 if self.cache_graph:
                     self.CDiffGraph = CDiffGraph
         if self.graph == 'cknn' or self.graph == 'diffcknn':
-            CknnGraph = cknn_graph(self.MSDiffMap,
+            CknnGraph = cknn_graph(use_basis,
                                    n_neighbors=self.graph_knn,
                                    delta=self.delta,
                                    metric=self.graph_metric,
@@ -333,7 +355,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             if self.cache_graph:
                 self.CknnGraph = CknnGraph
             if self.graph == 'diffcknn':
-                print('Building 2-nd order, diffuse version of the diffusion graph...')
+                print('`graph` set to' + str(self.basis) + '. Building 2-nd order, diffuse version of the diffusion graph...')
                 DiffCknnGraph = Diffusor(n_neighbors=self.graph_knn,
                                          alpha=self.alpha,
                                          n_jobs=self.n_jobs,
@@ -354,15 +376,15 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 if self.cache_graph:
                     self.DiffCknnGraph = DiffCknnGraph
         end = time.time()
-        print('Topological graphs extracted in = %f (sec)' % (end - start))
+        print('Topological graph(s) extracted in = %f (sec)' % (end - start))
         if self.graph == 'dgraph':
-            return DiffGraph.K, DiffGraph.T
+            return DiffGraph
         elif self.graph == 'cdiff':
             return CDiffGraph
         elif self.graph == 'cknn':
             return CknnGraph
         elif self.graph == 'diffcknn':
-            return DiffCknnGraph.K, DiffCknnGraph.T
+            return DiffCknnGraph
         else:
             return self
 

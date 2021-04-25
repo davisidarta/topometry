@@ -75,8 +75,7 @@ def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                               metric=metric, t=t, include_self=include_self,
                               is_sparse=is_sparse)
     c_knn.cknneighbors_graph(X)
-    A = c_knn.adjacency()
-    return A
+    return c_knn.A()
 
 
 class CkNearestNeighbors(object):
