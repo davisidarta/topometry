@@ -563,18 +563,17 @@ class Diffusor(TransformerMixin):
 
     def spectrum_plot(self):
         if self.kn is None:
-            msc, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
+            msc, self.kn, self.scaled_eigs, self.eig_vals = multiscale.multiscale(self.res,
                                                  n_eigs=self.use_eigs,
                                                  verbose=self.verbose)
 
-        evals = np.array(self.res['EigenValues'])
         ax1 = plt.subplot(1, 2, 1)
-        ax1.set_title('Spectrum decay and \'knee\'.')
+        ax1.set_title('Spectrum decay and \'knee\' (%f)' % self.kn.knee)
         ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
         ax1.set_ylabel('Eigenvalues')
         ax1.set_xlabel('Eigenvectors')
         ax1.vlines(
-            self.scaled_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Multiscaled components'
+            self.eig_vals, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Multiscaled components'
         )
         ax1.legend(loc='best')
 

@@ -2,7 +2,6 @@
 
 import numpy as np
 import time
-import random
 from sklearn.cluster import AffinityPropagation
 from sklearn.manifold import SpectralEmbedding
 from topo.base import ann as nn
@@ -13,6 +12,8 @@ from topo.tpgraph.GL import InvLaplGraph
 from topo.layouts import uni, pac
 from topo import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
+
+from numpy import random
 
 try:
     from typing import Literal
@@ -30,7 +31,6 @@ except ImportError:
 
         class Literal(metaclass=LiteralMeta):
             pass
-
 
 class TopoGraph(TransformerMixin, BaseEstimator):
     def __init__(self,
@@ -94,6 +94,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         self.computed_LapGraph = False
         self.ContBasis = None
         self.CLapMap = None
+        self.DLapMap = None
         self.random_state = random_state
 
     def __repr__(self):
@@ -250,25 +251,29 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                       plot_spectrum=self.plot_spectrum,
                                       cache=self.cache_base)
             self.MSDiffMap = self.DiffBasis.fit_transform(data)
-
+            self.DLapMap = spt.spectral_layout(
+                data,
+                self.DiffBasis.T,
+                self.n_eigs,
+                metric="precomputed",
+            )
+            expansion = 10.0 / np.abs(self.DLapMap).max()
+            self.DLapMap = (self.DLapMap * expansion).astype(
+                np.float32
+            ) + self.random_state.normal(
+                scale=0.0001, size=[self.ContBasis.K.shape[0], self.n_eigs]
+            ).astype(
+                np.float32
+            )
             end = time.time()
-            print('Topological basis fitted with diffusion processes in = %f (sec)' % (end - start))
+            print('Topological basis fitted with diffusion mappings in = %f (sec)' % (end - start))
+
         elif self.basis == 'continuous':
             start = time.time()
-            anbrs = nn.NMSlibTransformer(n_neighbors=self.base_knn,
-                                         metric=self.base_metric,
-                                         p=self.p,
-                                         method='hnsw',
-                                         n_jobs=self.n_jobs,
-                                         M=self.M,
-                                         efC=self.efC,
-                                         efS=self.efS,
-                                         verbose=self.verbose).fit(data)
-
-            self.ContBasis = cknn_graph(anbrs,
+            self.ContBasis = cknn_graph(data,
                                         n_neighbors=self.base_knn,
                                         delta=self.delta,
-                                        metric='precomputed',
+                                        metric=self.base_metric,
                                         t=self.t,
                                         include_self=True,
                                         is_sparse=True,
@@ -278,6 +283,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 data,
                 self.ContBasis.K,
                 self.n_eigs,
+                self.random_state,
                 metric="precomputed",
             )
             expansion = 10.0 / np.abs(self.CLapMap).max()
@@ -289,7 +295,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 np.float32
             )
             end = time.time()
-            print('Topological basis fitted with continuous Laplacian Eigenmaps in = %f (sec)' % (end - start))
+            print('Topological basis fitted with continuous mappings in = %f (sec)' % (end - start))
 
         return self
 
@@ -310,6 +316,12 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         """
         print('Building diffusion graph...')
         start = time.time()
+        if self.basis == 'continuous':
+            use_basis = self.CLapMap
+        elif self.basis == 'diffusion':
+            use_basis = self.MSDiffMap
+
+
         if self.graph == 'dgraph' or self.graph == 'cdiff':
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
                                  alpha=self.alpha,
@@ -327,7 +339,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                                  verbose=self.verbose,
                                  plot_spectrum=self.plot_spectrum,
                                  cache=False
-                                 ).fit(self.MSDiffMap)
+                                 ).fit(use_basis)
             if self.cache_graph:
                 self.DiffGraph = DiffGraph
             if self.graph == 'cdiff':
@@ -342,7 +354,7 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 if self.cache_graph:
                     self.CDiffGraph = CDiffGraph
         if self.graph == 'cknn' or self.graph == 'diffcknn':
-            CknnGraph = cknn_graph(self.MSDiffMap,
+            CknnGraph = cknn_graph(use_basis,
                                    n_neighbors=self.graph_knn,
                                    delta=self.delta,
                                    metric=self.graph_metric,
@@ -375,13 +387,13 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         end = time.time()
         print('Topological graphs extracted in = %f (sec)' % (end - start))
         if self.graph == 'dgraph':
-            return DiffGraph.K, DiffGraph.T
+            return DiffGraph
         elif self.graph == 'cdiff':
             return CDiffGraph
         elif self.graph == 'cknn':
             return CknnGraph
         elif self.graph == 'diffcknn':
-            return DiffCknnGraph.K, DiffCknnGraph.T
+            return DiffCknnGraph
         else:
             return self
 
@@ -512,145 +524,145 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         return self.clusters
 
 
-def MAP(data, graph,
-        dims=2,
-        min_dist=0.3,
-        spread=1.2,
-        initial_alpha=1,
-        n_epochs=500,
-        metric='cosine',
-        metric_kwds={},
-        output_metric='euclidean',
-        output_metric_kwds={},
-        gamma=1.2,
-        negative_sample_rate=10,
-        init='spectral',
-        random_state=None,
-        euclidean_output=True,
-        parallel=True,
-        njobs=-1,
-        verbose=False,
-        densmap=False,
-        densmap_kwds={},
-        output_dens=False,
-        ):
-    """""
-
-    Manifold Approximation and Projection, as proposed by Leland McInnes with an uniform distribution assumption in
-    [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html). Perform a fuzzy simplicial set embedding, using a
-    specified initialisation method and then minimizing the fuzzy set cross entropy between the 1-skeletons of the high
-    and low dimensional fuzzy simplicial sets. The fuzzy simplicial set embedding was proposed and implemented by
-    Leland McInnes in UMAP (see `umap-learn <https://github.com/lmcinnes/umap>`). Here we're using it only for the
-    projection (layout optimization) by minimizing the cross-entropy between a phenotypic map (i.e. data, MSDiffMap,
-    CknnL) and its graph topological representation (i.e. a continuous nearest-neighbors or a diffusion
-    kernel, or their transition matrices).
-
-
-    Parameters
-    ----------
-    data: array of shape (n_samples, n_features)
-        The source data to be embedded by UMAP.
-    graph: sparse matrix
-        The 1-skeleton of the high dimensional fuzzy simplicial set as
-        represented by a graph for which we require a sparse matrix for the
-        (weighted) adjacency matrix.
-    n_components: int
-        The dimensionality of the euclidean space into which to embed the data.
-    initial_alpha: float
-        Initial learning rate for the SGD.
-    a: float
-        Parameter of differentiable approximation of right adjoint functor
-    b: float
-        Parameter of differentiable approximation of right adjoint functor
-    gamma: float
-        Weight to apply to negative samples.
-    negative_sample_rate: int (optional, default 5)
-        The number of negative samples to select per positive sample
-        in the optimization process. Increasing this value will result
-        in greater repulsive force being applied, greater optimization
-        cost, but slightly more accuracy.
-    n_epochs: int (optional, default 0)
-        The number of training epochs to be used in optimizing the
-        low dimensional embedding. Larger values result in more accurate
-        embeddings. If 0 is specified a value will be selected based on
-        the size of the input dataset (200 for large datasets, 500 for small).
-    init: string
-        How to initialize the low dimensional embedding. Options are:
-            * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
-            * 'random': assign initial embedding positions at random.
-            * A numpy array of initial embedding positions.
-    random_state: numpy RandomState or equivalent
-        A state capable being used as a numpy random state.
-    metric: string or callable
-        The metric used to measure distance in high dimensional space; used if
-        multiple connected components need to be layed out.
-    metric_kwds: dict
-        Key word arguments to be passed to the metric function; used if
-        multiple connected components need to be layed out.
-    densmap: bool
-        Whether to use the density-augmented objective function to optimize
-        the embedding according to the densMAP algorithm.
-    densmap_kwds: dict
-        Key word arguments to be used by the densMAP optimization.
-    output_dens: bool
-        Whether to output local radii in the original data and the embedding.
-    output_metric: function
-        Function returning the distance between two points in embedding space and
-        the gradient of the distance wrt the first argument.
-    output_metric_kwds: dict
-        Key word arguments to be passed to the output_metric function.
-    euclidean_output: bool
-        Whether to use the faster code specialised for euclidean output metrics
-    parallel: bool (optional, default False)
-        Whether to run the computation using numba parallel.
-        Running in parallel is non-deterministic, and is not used
-        if a random seed has been set, to ensure reproducibility.
-    return_init: bool , (optional, default False)
-        Whether to also return the multicomponent spectral initialization.
-    verbose: bool (optional, default False)
-        Whether to report information on the current progress of the algorithm.
-    Returns
-    -------
-    embedding: array of shape (n_samples, n_components)
-        The optimized of ``graph`` into an ``n_components`` dimensional
-        euclidean space.
-    aux_data: dict
-        Auxiliary dictionary output returned with the embedding.
-        ``aux_data['Y_init']``: array of shape (n_samples, n_components)
-            The spectral initialization of ``graph`` into an ``n_components`` dimensional
+    def MAP(self, data, graph,
+            dims=2,
+            min_dist=0.3,
+            spread=1.2,
+            initial_alpha=1,
+            n_epochs=500,
+            metric='cosine',
+            metric_kwds={},
+            output_metric='euclidean',
+            output_metric_kwds={},
+            gamma=1.2,
+            negative_sample_rate=10,
+            init='spectral',
+            random_state=None,
+            euclidean_output=True,
+            parallel=True,
+            njobs=-1,
+            verbose=False,
+            densmap=False,
+            densmap_kwds={},
+            output_dens=False,
+            ):
+        """""
+    
+        Manifold Approximation and Projection, as proposed by Leland McInnes with an uniform distribution assumption in
+        [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html). Perform a fuzzy simplicial set embedding, using a
+        specified initialisation method and then minimizing the fuzzy set cross entropy between the 1-skeletons of the high
+        and low dimensional fuzzy simplicial sets. The fuzzy simplicial set embedding was proposed and implemented by
+        Leland McInnes in UMAP (see `umap-learn <https://github.com/lmcinnes/umap>`). Here we're using it only for the
+        projection (layout optimization) by minimizing the cross-entropy between a phenotypic map (i.e. data, MSDiffMap,
+        CknnL) and its graph topological representation (i.e. a continuous nearest-neighbors or a diffusion
+        kernel, or their transition matrices).
+    
+    
+        Parameters
+        ----------
+        data: array of shape (n_samples, n_features)
+            The source data to be embedded by UMAP.
+        graph: sparse matrix
+            The 1-skeleton of the high dimensional fuzzy simplicial set as
+            represented by a graph for which we require a sparse matrix for the
+            (weighted) adjacency matrix.
+        n_components: int
+            The dimensionality of the euclidean space into which to embed the data.
+        initial_alpha: float
+            Initial learning rate for the SGD.
+        a: float
+            Parameter of differentiable approximation of right adjoint functor
+        b: float
+            Parameter of differentiable approximation of right adjoint functor
+        gamma: float
+            Weight to apply to negative samples.
+        negative_sample_rate: int (optional, default 5)
+            The number of negative samples to select per positive sample
+            in the optimization process. Increasing this value will result
+            in greater repulsive force being applied, greater optimization
+            cost, but slightly more accuracy.
+        n_epochs: int (optional, default 0)
+            The number of training epochs to be used in optimizing the
+            low dimensional embedding. Larger values result in more accurate
+            embeddings. If 0 is specified a value will be selected based on
+            the size of the input dataset (200 for large datasets, 500 for small).
+        init: string
+            How to initialize the low dimensional embedding. Options are:
+                * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
+                * 'random': assign initial embedding positions at random.
+                * A numpy array of initial embedding positions.
+        random_state: numpy RandomState or equivalent
+            A state capable being used as a numpy random state.
+        metric: string or callable
+            The metric used to measure distance in high dimensional space; used if
+            multiple connected components need to be layed out.
+        metric_kwds: dict
+            Key word arguments to be passed to the metric function; used if
+            multiple connected components need to be layed out.
+        densmap: bool
+            Whether to use the density-augmented objective function to optimize
+            the embedding according to the densMAP algorithm.
+        densmap_kwds: dict
+            Key word arguments to be used by the densMAP optimization.
+        output_dens: bool
+            Whether to output local radii in the original data and the embedding.
+        output_metric: function
+            Function returning the distance between two points in embedding space and
+            the gradient of the distance wrt the first argument.
+        output_metric_kwds: dict
+            Key word arguments to be passed to the output_metric function.
+        euclidean_output: bool
+            Whether to use the faster code specialised for euclidean output metrics
+        parallel: bool (optional, default False)
+            Whether to run the computation using numba parallel.
+            Running in parallel is non-deterministic, and is not used
+            if a random seed has been set, to ensure reproducibility.
+        return_init: bool , (optional, default False)
+            Whether to also return the multicomponent spectral initialization.
+        verbose: bool (optional, default False)
+            Whether to report information on the current progress of the algorithm.
+        Returns
+        -------
+        embedding: array of shape (n_samples, n_components)
+            The optimized of ``graph`` into an ``n_components`` dimensional
             euclidean space.
+        aux_data: dict
+            Auxiliary dictionary output returned with the embedding.
+            ``aux_data['Y_init']``: array of shape (n_samples, n_components)
+                The spectral initialization of ``graph`` into an ``n_components`` dimensional
+                euclidean space.
+    
+            When densMAP extension is turned on, this dictionary includes local radii in the original
+            data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
+    
+    
+        """""
 
-        When densMAP extension is turned on, this dictionary includes local radii in the original
-        data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
+        start = time.time()
+        results = uni.fuzzy_embedding(data, graph,
+                                      n_components=dims,
+                                      initial_alpha=initial_alpha,
+                                      min_dist=min_dist,
+                                      spread=spread,
+                                      n_epochs=n_epochs,
+                                      metric=metric,
+                                      metric_kwds=metric_kwds,
+                                      output_metric=output_metric,
+                                      output_metric_kwds=output_metric_kwds,
+                                      gamma=gamma,
+                                      negative_sample_rate=negative_sample_rate,
+                                      init=init,
+                                      random_state=random_state,
+                                      euclidean_output=euclidean_output,
+                                      parallel=parallel,
+                                      njobs=njobs,
+                                      verbose=verbose,
+                                      a=None,
+                                      b=None,
+                                      densmap=densmap,
+                                      densmap_kwds=densmap_kwds,
+                                      output_dens=output_dens)
 
-
-    """""
-
-    start = time.time()
-    results = uni.fuzzy_embedding(data, graph,
-                                  n_components=dims,
-                                  initial_alpha=initial_alpha,
-                                  min_dist=min_dist,
-                                  spread=spread,
-                                  n_epochs=n_epochs,
-                                  metric=metric,
-                                  metric_kwds=metric_kwds,
-                                  output_metric=output_metric,
-                                  output_metric_kwds=output_metric_kwds,
-                                  gamma=gamma,
-                                  negative_sample_rate=negative_sample_rate,
-                                  init=init,
-                                  random_state=random_state,
-                                  euclidean_output=euclidean_output,
-                                  parallel=parallel,
-                                  njobs=njobs,
-                                  verbose=verbose,
-                                  a=None,
-                                  b=None,
-                                  densmap=densmap,
-                                  densmap_kwds=densmap_kwds,
-                                  output_dens=output_dens)
-
-    end = time.time()
-    print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
-    return results
+        end = time.time()
+        print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
+        return results

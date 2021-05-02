@@ -37,19 +37,21 @@ def multiscale(res,
 
 
     """
-
     if n_eigs == 'comp_gap':
         vals = np.array(res["EigenValues"])
-        use_eigs = np.sum(vals > 0, axis=0)
     else:
         vals = np.positive(np.array(res["EigenValues"]))
+
+
     kn = KneeLocator(range(0, len(vals)), vals, S=5,
                      curve='convex', direction='decreasing', interp_method='polynomial')
 
+    if isinstance(n_eigs, int):
+        use_eigs = n_eigs
     if n_eigs == 'max':
-            use_eigs = np.sum(vals > 0, axis=0)
-    elif type(n_eigs) == int:
-            use_eigs = n_eigs
+        use_eigs = np.sum(vals > 0, axis=0)
+    if n_eigs == 'knee':
+        use_eigs = int(kn.knee)
     else:
         raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
 
@@ -72,5 +74,5 @@ def multiscale(res,
             print('Multiscaled ' + str(round(use_eigs)) +
                   ' diffusion components.')
     data = np.array(data)
-    return data, kn, use_eigs
+    return data, kn, use_eigs, eig_vals
 
