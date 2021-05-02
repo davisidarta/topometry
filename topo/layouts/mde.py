@@ -17,14 +17,16 @@ import igraph
 # Some custom minimum-distortion-embedding problems
 
 def IsomorphicMDE(data,
+                  attractive_penalty,
+                  repulsive_penalty,
                   embedding_dim=2,
-                  attractive_penalty=<class 'pymde.functions.penalties.Log1p'>, repulsive_penalty=<class 'pymde.functions.penalties.Log'>, constraint=None,
+                  constraint=None,
                   n_neighbors=None,
                   repulsive_fraction=None,
                   max_distance=None,
                   init='quadratic',
                   device='cpu',
-                  verbose=False)-> problem.MDE:
+                  verbose=False):
     """
     Construct an MDE problem designed to preserve local structure.
     This function constructs an MDE problem for preserving the
@@ -111,7 +113,7 @@ def IsometricMDE(data,
                   constraint=None,
                   max_distances=5e7,
                   device="cpu",
-                  verbose=False) -> problem.MDE:
+                  verbose=False):
     """
     Construct an MDE problem based on original distances.
     This function constructs an MDE problem for preserving pairwise

@@ -65,7 +65,6 @@ def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
     if return_instance:
         return c_knn
     else:
-
         return c_knn.K
 
 def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
@@ -132,12 +131,6 @@ class CkNearestNeighbors(object):
             self.metric_fun = chebyshev
         elif metric == 'manhattan':
             self.metric_fun = manhattan
-        elif metric == 'rel_entr':
-            self.metric_fun = rel_entr
-        elif metric == 'jensenshannon':
-            self.metric_fun = jensenshannon
-        elif metric == 'mahalanobis':
-            self.metric_fun = mahalanobis
         elif metric == 'mahalanobis':
             self.metric_fun = mahalanobis
         elif metric == 'minkowski':
