@@ -755,7 +755,10 @@ def simplicial_set_embedding(
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
 
-    if isinstance(init, str) and init == "random":
+    if isinstance(init, np.ndarray):
+        initialisation = init
+        embedding = init
+    elif isinstance(init, str) and init == "random":
         embedding = random_state.uniform(
             low=-10.0, high=10.0, size=(graph.shape[0], n_components)
         ).astype(np.float32)
