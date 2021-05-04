@@ -55,7 +55,7 @@ def component_layout(
         # cannot compute centroids from precomputed distances
         # instead, compute centroid distances using linkage
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
-        linkage = metric_kwds.get("linkage", "average")
+        linkage = metric_kwds.get("linkage", "complete")
         if linkage == "average":
             linkage = np.mean
         elif linkage == "complete":

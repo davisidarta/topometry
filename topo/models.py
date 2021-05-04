@@ -35,7 +35,7 @@ except ImportError:
 class TopoGraph(TransformerMixin, BaseEstimator):
     def __init__(self,
                  base_knn=10,
-                 graph_knn=20,
+                 graph_knn=10,
                  n_eigs=100,
                  basis='diffusion',
                  graph='dgraph',
@@ -255,13 +255,14 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 data,
                 self.DiffBasis.T,
                 self.n_eigs,
+                self.random_state,
                 metric="precomputed",
             )
             expansion = 10.0 / np.abs(self.DLapMap).max()
             self.DLapMap = (self.DLapMap * expansion).astype(
                 np.float32
             ) + self.random_state.normal(
-                scale=0.0001, size=[self.ContBasis.K.shape[0], self.n_eigs]
+                scale=0.0001, size=[self.DiffBasis.T.shape[0], self.n_eigs]
             ).astype(
                 np.float32
             )
@@ -529,8 +530,8 @@ class TopoGraph(TransformerMixin, BaseEstimator):
             min_dist=0.3,
             spread=1.2,
             initial_alpha=1,
-            n_epochs=500,
-            metric='cosine',
+            n_epochs=800,
+            metric='New',
             metric_kwds={},
             output_metric='euclidean',
             output_metric_kwds={},
