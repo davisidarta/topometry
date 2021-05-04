@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def multiscale(res,
-                 n_eigs='max',
+                 n_eigs='knee',
                  verbose=True
                  ):
     """
@@ -43,14 +43,14 @@ def multiscale(res,
         vals = np.positive(np.array(res["EigenValues"]))
 
 
-    kn = KneeLocator(range(0, len(vals)), vals, S=5,
+    kn = KneeLocator(range(0, len(vals)), vals, S=50,
                      curve='convex', direction='decreasing', interp_method='polynomial')
 
     if isinstance(n_eigs, int):
-        use_eigs = n_eigs
-    if n_eigs == 'max':
-        use_eigs = np.sum(vals > 0, axis=0)
-    if n_eigs == 'knee':
+        use_eigs = int(n_eigs)
+    elif n_eigs == 'max':
+        use_eigs = int(np.sum(vals > 0, axis=0))
+    elif n_eigs == 'knee':
         use_eigs = int(kn.knee)
     else:
         raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
@@ -74,5 +74,5 @@ def multiscale(res,
             print('Multiscaled ' + str(round(use_eigs)) +
                   ' diffusion components.')
     data = np.array(data)
-    return data, kn, use_eigs, eig_vals
+    return data, kn, use_eigs
 
