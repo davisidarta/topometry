@@ -64,6 +64,7 @@ topo/base/__pycache__/features.cpython-38.pyc
 topo/base/__pycache__/graphs.cpython-38.pyc
 topo/base/__pycache__/sparse.cpython-38.pyc
 topo/diag/__init__.py
+topo/diag/fcc_utils.py
 topo/diag/fisher_sep.py
 topo/diag/id_est.py
 topo/diag/__pycache__/__init__.cpython-38.pyc
