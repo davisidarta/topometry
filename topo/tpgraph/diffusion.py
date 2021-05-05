@@ -566,7 +566,7 @@ class Diffusor(TransformerMixin):
                                                  verbose=self.verbose)
 
         ax1 = plt.subplot(1, 2, 1)
-        ax1.set_title('Spectrum decay and \'knee\' (%f)' % int(self.kn.knee))
+        ax1.set_title('Spectrum decay and \'knee\' (%i)' % int(self.kn.knee))
         ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
         ax1.set_ylabel('Eigenvalues')
         ax1.set_xlabel('Eigenvectors')
