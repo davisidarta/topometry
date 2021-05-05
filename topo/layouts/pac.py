@@ -65,17 +65,13 @@
 #
 # END OF TERMS AND CONDITIONS
 #
-
-
-import numpy as np
 from sklearn.base import BaseEstimator
-import numba
 from annoy import AnnoyIndex
 import time
 import math
 import datetime
 from topo.base.dists import *
-from sklearn import preprocessing
+import warnings
 
 @numba.jit(nopython=False, fastmath=True)
 def calculate_dist(x1, x2, metric):
@@ -121,7 +117,7 @@ def sample_MN_pair(X, n_MN):
             sampled = np.random.randint(0, n, 6)
             dist_list = np.empty((6), dtype=np.float32)
             for t in range(sampled.shape[0]):
-                dist_list[t] = euclidean(X[i], X[sampled[t]])
+                dist_list[t] = calculate_dist(X[i], X[sampled[t]])
             min_dic = np.argmin(dist_list)
             dist_list = np.delete(dist_list, [min_dic])
             sampled = np.delete(sampled, [min_dic])
@@ -159,7 +155,6 @@ def generate_pair(
         distance='euclidean',
         verbose=True
 ):
-    metric=distance
     n, dim = X.shape
     n_neighbors_extra = min(n_neighbors + 50, n)
     tree = AnnoyIndex(dim, metric=distance)
@@ -177,15 +172,14 @@ def generate_pair(
             knn_distances[i, j] = tree.get_distance(i, nbrs[i, j])
     if verbose:
         print("found nearest neighbor")
-    sig = np.maximum(knn_distances[:, n_neighbors], 1e-10)
-    # TopOMetry adaptation: change sig from 3:6 mean to distance to the k-th NN
+    sig = np.maximum(np.mean(knn_distances[:, 3:6], axis=1), 1e-10)
     if verbose:
         print("found sig")
     scaled_dist = scale_dist(knn_distances, sig, nbrs)
     if verbose:
         print("found scaled dist")
     pair_neighbors = sample_neighbors_pair(X, scaled_dist, nbrs, n_neighbors)
-    pair_MN = sample_MN_pair(X, n_MN, metric)
+    pair_MN = sample_MN_pair(X, n_MN)
     pair_FP = sample_FP_pair(X, pair_neighbors, n_neighbors, n_FP)
     return pair_neighbors, pair_MN, pair_FP
 
@@ -273,10 +267,11 @@ def pacmap(
     if pair_neighbors is None:
         if verbose:
             print("finding pairs!")
-        if distance != "hamming":
-                X -= np.min(X)
-                X /= np.max(X)
-                X -= np.mean(X, axis=0)
+            X -= np.min(X)
+            X /= np.max(X)
+            X -= np.mean(X, axis=0)
+            if verbose:
+                print(X)
         pair_neighbors, pair_MN, pair_FP = generate_pair(
             X, n_neighbors, n_MN, n_FP, distance, verbose
         )
@@ -285,17 +280,10 @@ def pacmap(
     else:
         if verbose:
             print("using stored pairs")
-
-    if Yinit is None:
-        print('No initialisation provided, falling back to random...')
-        init = 'random'
-    elif Yinit == "random":
+    if Yinit == "random":
         Y = np.random.normal(size=[n, n_dims]).astype(np.float32) * 0.0001
-    else: # user_supplied matrix
-        print('Using user-supplied initialisation...')
-        Yinit = Yinit.astype(np.float32)
-        scaler = preprocessing.StandardScaler().fit(Yinit)
-        Y = scaler.transform(Yinit) * 0.0001
+    else:
+        Y = Yinit.astype(np.float32)
 
     w_MN_init = 1000.
     beta1 = 0.9
@@ -352,7 +340,6 @@ class PaCMAP(BaseEstimator):
         distance="euclidean",
         lr=1.0,
         num_iters=450,
-        init='spectral',
         verbose=False,
         intermediate=False
     ):
@@ -366,7 +353,6 @@ class PaCMAP(BaseEstimator):
         self.distance = distance
         self.lr = lr
         self.num_iters = num_iters
-        self.init = init
         self.verbose = verbose
         self.intermediate = intermediate
 
@@ -394,14 +380,13 @@ class PaCMAP(BaseEstimator):
         if self.verbose:
             print(
                 "PaCMAP(n_neighbors={}, n_MN={}, n_FP={}, distance={},"
-                "lr={}, n_iters={}, init={}, opt_method='adam', verbose={}, intermediate={})".format(
+                "lr={}, n_iters={}, opt_method='adam', verbose={}, intermediate={})".format(
                     self.n_neighbors,
                     self.n_MN,
                     self.n_FP,
                     self.distance,
                     self.lr,
                     self.num_iters,
-                    self.init,
                     self.verbose,
                     self.intermediate
                 )
@@ -418,7 +403,8 @@ class PaCMAP(BaseEstimator):
             self.distance,
             self.lr,
             self.num_iters,
-            self.init,
+            init,
+            self.apply_pca,
             self.verbose,
             self.intermediate
         )
@@ -449,10 +435,9 @@ class PaCMAP(BaseEstimator):
             raise ValueError("The number of nearest neighbors can't be less than 1")
         if self.n_FP < 1:
             raise ValueError("The number of further points can't be less than 1")
-        if self.distance != "hamming":
-                X -= np.min(X)
-                X /= np.max(X)
-                X -= np.mean(X, axis=0)
+        X -= np.min(X)
+        X /= np.max(X)
+        X -= np.mean(X, axis=0)
         self.pair_neighbors, self.pair_MN, self.pair_FP = generate_pair(
             X,
             self.n_neighbors,

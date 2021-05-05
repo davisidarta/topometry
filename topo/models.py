@@ -8,7 +8,6 @@ from topo.base import ann as nn
 from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.cknn import CkNearestNeighbors, cknn_graph
 from topo.spectral import spectral as spt
-from topo.tpgraph.GL import InvLaplGraph
 from topo.layouts import uni, pac
 from topo import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
@@ -419,133 +418,6 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         else:
             return self
 
-    def coarse(self, edges,
-               reductionTarget='edges',
-               actionSwitch='both',
-               numSamplesS='all',
-               qOverS=1.0 / 8,
-               minProbPerActionD=1.0 / 4,
-               minTargetItems=1024,
-               plotError=False,
-               reproject=False
-               ):
-        """
-
-        Parameters
-        ----------
-        edges: X
-            Target basis to reduce.
-        reductionTarget: str, 'edges' or 'nodes', default 'edges'
-            Target item to reduce.
-        actionSwitch: str, 'both' or 'delete', default 'both'
-            Choosing 'delete' does not allow contraction.
-        numSamplesS: int or 'all', default 'all'
-            Perturbed edges per sampled edges. Setting to 0 gives q=1 per round using the single-edge method.
-        qOverS: float, from 0.0 to 1.0, default 1.0 / 8
-            Perturbed edges per sampled edges. Setting to 0 gives q=1 per round using the single-edge method.
-        minProbPerActionD: float, from 0.0 to 1.0, default 1.0 / 4
-            Minimum expected (target items removed)/(num actions taken).
-        minTargetItems: int or 'all', default 1024
-            Minimum expected (target items removed)/(num actions taken).
-        plotError: bool, default False
-            Decide whether or not to compute the hyperbolic alignment of the output of the original eigenvectors.
-        reproject: bool, default False
-            Whether to reproject the learned inverse laplacian back to the original dimensional space.
-            Use this to get approximate solutions to your Lx=b problems.
-
-
-        Returns
-        -------
-        reducedLaplacian
-            Reduced node-weighted laplacian of size $\tilde{V} \times \tilde{V}$
-
-        """
-
-        if not self.computed_LapGraph:
-            self.LapGraph = InvLaplGraph(edges,
-                                         reductionTarget=reductionTarget,
-                                         actionSwitch=actionSwitch,
-                                         numSamplesS=numSamplesS,
-                                         qOverS=qOverS,
-                                         minProbPerActionD=minProbPerActionD,
-                                         minTargetItems=minTargetItems,
-                                         plotError=plotError,
-                                         reproject=reproject)
-            self.computed_LapGraph = True
-
-        coarse = self.LapGraph.nodeWeightedInverseLaplacian
-        return coarse
-
-    def project(self, data):
-        """
-
-        Parameters
-        ----------
-        data
-
-
-        Returns
-        -------
-        GLGraph.reducedLaplacianOriginalDimension
-            The reduced node-weighted laplacian appropriately projected back to the original dimensions.
-            Use this to get approximate solutions to your Lx=b problems.
-
-        """
-
-        if self.computed_LapGraph is False:
-            self.LapGraph = InvLaplGraph(data)
-
-        projection = self.LapGraph.reducedLaplacianProjected(data)
-
-        return projection
-
-    def affinity_clustering(self,
-                            graph,
-                            damping=1,
-                            max_iter=500,
-                            convergence_iter=30,
-                            preference=None):
-
-        """
-
-        Performs affinity propagantion clustering on the selected topological graph.
-
-        Parameters
-        ----------
-            graph:
-                Selected graph representation to propagate affinities of.
-
-            damping: float, default=0.5
-                Damping factor (between 0.5 and 1) is the extent to which the current value is maintained relative to
-                incoming values (weighted 1 - damping). This in order to avoid numerical oscillations when updating
-                these values (messages).
-
-            max_iter: int, default=200
-                Maximum number of iterations.
-
-            convergence_iter: int, default=15
-                Number of iterations with no change in the number of estimated clusters that stops the convergence.
-
-            preference: array-like of shape (n_samples,) or float, default=None
-                Preferences for each point - points with larger values of preferences are more likely to be
-                chosen as exemplars. The number of exemplars, ie of clusters, is influenced by the input preferences
-                value. If the preferences are not passed as arguments, they will be set to the median of
-                the input similarities.
-
-        Returns
-        -------
-            labels: ndarray of shape (n_samples,)
-                The labels of learned the clusters.
-
-       """
-        self.clusters = AffinityPropagation(damping=damping,
-                                            max_iter=max_iter,
-                                            convergence_iter=convergence_iter,
-                                            preference=preference).fit_predict(graph)
-
-        return self.clusters
-
-
     def MAP(self, data, graph,
             dims=2,
             min_dist=0.3,
@@ -688,3 +560,14 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         end = time.time()
         print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
         return results
+
+
+
+
+
+
+
+
+
+
+
