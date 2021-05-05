@@ -5,7 +5,7 @@ from . import tpgraph as tpg
 from . import layouts as lyt
 from . import utils
 from . import models as ml
-from . import plot
+from . import plot as pl
 from ._utils import annotate_doc_types
 from .version import __version__
 
