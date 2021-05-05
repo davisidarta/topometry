@@ -85,28 +85,47 @@ class TopoGraph(TransformerMixin, BaseEstimator):
         self.cache_base = cache_base
         self.cache_graph = cache_graph
         self.DiffBasis = None
+        self.LapGraph = None
+        self.clusters = None
+        self.computed_LapGraph = False
+        self.MSDiffMap = None
+        self.ContBasis = None
+        self.CLapMap = None
+        self.DLapMap = None
         self.DiffCknnGraph = None
         self.CknnGraph = None
         self.CDiffGraph = None
         self.DiffGraph = None
-        self.LapGraph = None
-        self.clusters = None
-        self.computed_LapGraph = False
-        self.ContBasis = None
-        self.CLapMap = None
-        self.DLapMap = None
         self.random_state = random_state
 
     def __repr__(self):
-        base_print = "TopoGraph object with:"
-        if self.DiffBasis is None:
-            print("TopoGraph object without any fitted model")
+        msg = "TopoGraph object with %i samples and %i observations:" % (self.N , self.M)
         if self.DiffBasis is not None:
-            print(base_print + " \n Diffusion basis fitted on %f samples and %f observations" % (
-                        self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
+            msg = msg + " \n Diffusion basis fitted"
         if self.ContBasis is not None:
-            print(base_print + " \n Continuous basis fitted on %f samples and %f observations" % (
-                        self.DiffBasis.N.shape[0] / self.DiffBasis.N.shape[1]))
+            msg = msg + " \n Continuous basis fitted"
+        if self.MSDiffMap is not None:
+            msg = msg + " \n Multiscale diffusion maps fitted"
+        if self.LapGraph is not None:
+            msg = msg + " \n Laplacian graph fitted"
+        if self.DLapMap is not None:
+            msg = msg + " \n Diffuse Laplacian graph fitted"
+        if self.CLapMap is not None:
+            msg = msg + " \n Continuous Laplacian graph fitted"
+        if self.DiffGraph is not None:
+            msg = msg + " \n Diffusion graph fitted"
+        if self.CknnGraph is not None:
+            msg = msg + " \n Continuous graph fitted"
+        if self.DiffCknnGraph is not None:
+            msg = msg + " \n Diffuse continuous graph fitted"
+        if self.DiffGraph is not None:
+            msg = msg + " \n Diffusion graph fitted"
+        if self.CDiffGraph is not None:
+            msg = msg + " \n Continuous diffusion graph fitted"
+        if self.clusters is not None:
+            msg = msg + " \n Clustering fitted"
+
+        return msg
 
     """""""""
     Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
@@ -228,6 +247,8 @@ class TopoGraph(TransformerMixin, BaseEstimator):
                 adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
 
         """
+        self.N = data.shape[0]
+        self.M = data.shape[1]
         if self.random_state is None:
             self.random_state = random.RandomState()
         print('Building topological basis...')

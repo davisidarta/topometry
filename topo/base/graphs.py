@@ -150,3 +150,4 @@ def transitivity_local_undirected(G, vertices=None, mode='nan', weights=None):
 
     """
     local_trans = G.transitivity_local_undirected(vertices=None, mode=mode, weights=weights)
+    return local_trans
