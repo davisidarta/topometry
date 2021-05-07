@@ -132,7 +132,7 @@ class Diffusor(TransformerMixin):
                  n_components=50,
                  use_eigs='max',
                  metric='cosine',
-                 kernel_use='decay_adaptive',
+                 kernel_use='simple_adaptive',
                  eigengap=True,
                  plot_spectrum=False,
                  verbose=False,
