@@ -30,10 +30,30 @@
 #
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.spatial.distance import squareform
-from topo.base.dists import *
+from sklearn.metrics.pairwise import pairwise_distances
+from topo.base.dists import \
+    (euclidean,
+     standardised_euclidean,
+     cosine,
+     correlation,
+     bray_curtis,
+     canberra,
+     chebyshev,
+     manhattan,
+     mahalanobis,
+     minkowski,
+     dice,
+     hamming,
+     jaccard,
+     kulsinski,
+     rogers_tanimoto,
+     russellrao,
+     sokal_michener,
+     sokal_sneath,
+     yule)
+from scipy.spatial.distance import squareform, pdist
 
-def cknn_graph(X, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
+def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                        include_self=False, is_sparse=True,
                        return_instance=False):
 
@@ -45,7 +65,7 @@ def cknn_graph(X, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
     if return_instance:
         return c_knn
     else:
-        return c_knn.ckng
+        return c_knn.K
 
 def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                        include_self=False, is_sparse=True):
@@ -54,9 +74,7 @@ def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                               metric=metric, t=t, include_self=include_self,
                               is_sparse=is_sparse)
     c_knn.cknneighbors_graph(X)
-    A = c_knn.adjacency()
-    return A
-
+    return c_knn.A()
 
 
 class CkNearestNeighbors(object):
@@ -95,32 +113,24 @@ class CkNearestNeighbors(object):
         self.t = t
         self.include_self = include_self
         self.is_sparse = is_sparse
-        self.ckng = None
+        self.K = None
         self.return_adjacency = return_adjacency
         if self.metric == 'euclidean':
             self.metric_fun = euclidean
-        elif metric == 'seuclidean':
-            self.metric_fun = seuclidean
-        elif metric == 'sqeuclidean':
-            self.metric_fun = sqeuclidean
+        elif metric == 'standardised_euclidean':
+            self.metric_fun = standardised_euclidean
         elif metric == 'cosine':
             self.metric_fun = cosine
         elif metric == 'correlation':
             self.metric_fun = correlation
-        elif metric == 'braycurtis':
-            self.metric_fun = braycurtis
+        elif metric == 'bray_curtis':
+            self.metric_fun = bray_curtis
         elif metric == 'canberra':
             self.metric_fun = canberra
         elif metric == 'chebyshev':
             self.metric_fun = chebyshev
-        elif metric == 'cityblock':
-            self.metric_fun = cityblock
-        elif metric == 'rel_entr':
-            self.metric_fun = rel_entr
-        elif metric == 'jensenshannon':
-            self.metric_fun = jensenshannon
-        elif metric == 'mahalanobis':
-            self.metric_fun = mahalanobis
+        elif metric == 'manhattan':
+            self.metric_fun = manhattan
         elif metric == 'mahalanobis':
             self.metric_fun = mahalanobis
         elif metric == 'minkowski':
@@ -133,14 +143,14 @@ class CkNearestNeighbors(object):
             self.metric_fun = jaccard
         elif metric == 'kulsinski':
             self.metric_fun = kulsinski
-        elif metric == 'rogerstanimoto':
-            self.metric_fun = rogerstanimoto
+        elif metric == 'rogers_tanimoto':
+            self.metric_fun = rogers_tanimoto
         elif metric == 'russellrao':
             self.metric_fun = russellrao
-        elif metric == 'sokalmichener':
-            self.metric_fun = sokalmichener
-        elif metric == 'sokalsneath':
-            self.metric_fun = sokalsneath
+        elif metric == 'sokal_michener':
+            self.metric_fun = sokal_michener
+        elif metric == 'sokal_sneath':
+            self.metric_fun = sokal_sneath
         elif metric == 'yule':
             self.metric_fun = yule
 
@@ -176,8 +186,7 @@ class CkNearestNeighbors(object):
                 raise ValueError("`X` must be square matrix")
             dmatrix = X
         else:
-            dmatrix = squareform(matrix_pairwise_distance(
-                    X, metric=self.metric_fun, metric_name=self.metric, return_matrix=True))
+            dmatrix = pairwise_distances(X, metric=metric)
 
         darray_n_nbrs = np.partition(dmatrix, n_neighbors)[:, [n_neighbors]]
         ratio_matrix = dmatrix / np.sqrt(darray_n_nbrs.dot(darray_n_nbrs.T))
@@ -204,10 +213,10 @@ class CkNearestNeighbors(object):
         if self.return_adjacency:
             return self.A
         if is_sparse:
-            self.ckng = neigh
+            self.K = neigh
         else:
-            self.ckng = neigh.toarray()
-        return self.ckng
+            self.K = neigh.toarray()
+        return self.K
 
     def adjacency(self):
         """

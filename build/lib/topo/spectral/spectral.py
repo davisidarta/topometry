@@ -9,6 +9,14 @@ from sklearn.cluster._spectral import discretize
 from topo.base.dists import pairwise_special_metric, SPECIAL_METRICS
 from topo.base.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
+def LapEigenmap(affinity_matrix, dim, random_state):
+    if random_state is None:
+        random_state = np.random.RandomState()
+    component_embedding = SpectralEmbedding(
+        n_components=dim, affinity="precomputed", random_state=random_state
+    ).fit_transform(affinity_matrix)
+    component_embedding /= component_embedding.max()
+    return component_embedding
 
 def component_layout(
     data,
@@ -55,7 +63,7 @@ def component_layout(
         # cannot compute centroids from precomputed distances
         # instead, compute centroid distances using linkage
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
-        linkage = metric_kwds.get("linkage", "average")
+        linkage = metric_kwds.get("linkage", "complete")
         if linkage == "average":
             linkage = np.mean
         elif linkage == "complete":

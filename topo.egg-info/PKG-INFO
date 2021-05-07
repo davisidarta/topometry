@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: topo
-Version: 0.4.1
+Version: 0.0.1
 Summary: Fast, accurate learning of data topology with self-adaptive metrics, graphs and layouts
 Home-page: https://github.com/davisidarta/topometry
 Author: Davi Sidarta-Oliveira

@@ -132,7 +132,7 @@ class Diffusor(TransformerMixin):
                  n_components=50,
                  use_eigs='max',
                  metric='cosine',
-                 kernel_use='decay',
+                 kernel_use='simple_adaptive',
                  eigengap=True,
                  plot_spectrum=False,
                  verbose=False,
@@ -166,6 +166,7 @@ class Diffusor(TransformerMixin):
         self.plot_spectrum = plot_spectrum
         self.cache = cache
         self.kn = None
+        self.scaled_eigs = None
 
     def fit(self, X):
 
@@ -401,9 +402,7 @@ class Diffusor(TransformerMixin):
         self.res['EigenVectors'] = pd.DataFrame(self.res['EigenVectors'])
         self.res["EigenValues"] = pd.Series(self.res["EigenValues"])
 
-        self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
-                                                                                            n_eigs=self.use_eigs,
-                                                                                            verbose=self.verbose)
+        self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res, verbose=self.verbose)
 
         end = time.time()
         if self.verbose:
@@ -552,7 +551,7 @@ class Diffusor(TransformerMixin):
         if n_eigs is None:
             n_eigs = self.n_components
 
-        mms, self.kn, self.scaled_eigs  = multiscale.multiscale(self.res,
+        mms, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                                 n_eigs=n_eigs,
                                                                 verbose=self.verbose)
 
@@ -562,18 +561,17 @@ class Diffusor(TransformerMixin):
 
     def spectrum_plot(self):
         if self.kn is None:
-            msc, self.kn = multiscale.multiscale(self.res,
+            msc, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                  n_eigs=self.use_eigs,
                                                  verbose=self.verbose)
 
-        evals = np.array(self.res['EigenValues'])
         ax1 = plt.subplot(1, 2, 1)
-        ax1.set_title('Spectrum decay and \'knee\'.')
+        ax1.set_title('Spectrum decay and \'knee\' (%i)' % int(self.kn.knee))
         ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
         ax1.set_ylabel('Eigenvalues')
         ax1.set_xlabel('Eigenvectors')
         ax1.vlines(
-            self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Knee'
+            self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Multiscaled components'
         )
         ax1.legend(loc='best')
 
