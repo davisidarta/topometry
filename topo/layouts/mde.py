@@ -17,8 +17,8 @@ import igraph
 # Some custom minimum-distortion-embedding problems
 
 def IsomorphicMDE(data,
-                  attractive_penalty,
-                  repulsive_penalty,
+                  attractive_penalty=penalties.Log1p,
+                  repulsive_penalty=penalties.Log,
                   embedding_dim=2,
                   constraint=None,
                   n_neighbors=None,
@@ -104,9 +104,6 @@ def IsomorphicMDE(data,
 
     return mde
 
-
-
-
 def IsometricMDE(data,
                   embedding_dim=2,
                   loss=losses.Absolute,
@@ -174,7 +171,7 @@ def IsometricMDE(data,
     mde = pymde.preserve_distances(data=data,
                                    embedding_dim=embedding_dim,
                                    loss=loss,
-                                   constraint=None,
+                                   constraint=constraint,
                                    max_distances=max_distances,
                                    device=device,
                                    verbose=verbose)

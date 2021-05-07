@@ -9,7 +9,7 @@ from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.cknn import CkNearestNeighbors, cknn_graph
 from topo.spectral import spectral as spt
 from topo.tpgraph.GL import InvLaplGraph
-from topo.layouts import uni, pac
+from topo.layouts import uni, tri
 from topo import plot as pl
 from sklearn.base import TransformerMixin, BaseEstimator
 
