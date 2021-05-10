@@ -17,10 +17,11 @@ def multiscale(res,
         Results from the dbMAP framework. Expects dictionary containing numerical
         'EigenVectors' and 'EigenValues'.
 
-    n_eigs: int or str (optional, default 'max')
+    n_eigs: int or str (optional, default 'knee')
         Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
         (reach of numerical precision), else to the maximum amount of computed components.
         If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
+        If 'comp_gap', tries to find a discrete eigengap from the computation process.
 
     expansion: int (optional, default 30)
         Number of additional components to compute in search for a numerical eigengap.
