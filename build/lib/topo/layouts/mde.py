@@ -3,16 +3,8 @@
 # the monograph https://arxiv.org/abs/2103.02559
 # and implemented in https://github.com/cvxgrp/pymde under the Apache 2.0 license
 
-import numpy as np
-import pandas as pd
-from scipy.sparse import csr_matrix
-from pymde import problem
-from pymde import quadratic
-from pymde import constraints
 from pymde.functions import penalties, losses
-from pymde import preprocess
 import pymde
-import igraph
 
 # Some custom minimum-distortion-embedding problems
 
