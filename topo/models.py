@@ -33,14 +33,14 @@ except ImportError:
 
 class TopoGraph(TransformerMixin, BaseEstimator):
     def __init__(self,
-                 base_knn=10,
-                 graph_knn=10,
+                 base_knn=30,
+                 graph_knn=20,
                  n_eigs=100,
                  basis='diffusion',
                  graph='dgraph',
                  kernel_use='simple_adaptive',
                  base_metric='cosine',
-                 graph_metric='cosine',
+                 graph_metric='euclidean',
                  transitions=False,
                  alpha=1,
                  plot_spectrum=False,

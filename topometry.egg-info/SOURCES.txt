@@ -52,7 +52,6 @@ topo/base/__pycache__/dists.cpython-38.pyc
 topo/base/__pycache__/features.cpython-38.pyc
 topo/base/__pycache__/sparse.cpython-38.pyc
 topo/diag/__init__.py
-topo/diag/fcc_utils.py
 topo/diag/fisher_sep.py
 topo/diag/global.py
 topo/diag/id_est.py

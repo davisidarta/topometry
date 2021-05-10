@@ -27,9 +27,16 @@ class Diffusor(TransformerMixin):
 
     Parameters
     ----------
-    n_components : int (optional, default 50)
+    n_eigs : int (optional, default 50)
         Number of diffusion components to compute. This number can be iterated to get different views
         from data at distinct spectral resolution.
+
+    use_eigs: int or str (optional, default 'knee')
+        Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
+        (reach of numerical precision), else to the maximum amount of computed components.
+        If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
+        If 'comp_gap', tries to find a discrete eigengap from the computation process.
+
 
     n_neighbors : int (optional, default 10)
         Number of k-nearest-neighbors to compute. The adaptive kernel will normalize distances by each cell
@@ -130,7 +137,7 @@ class Diffusor(TransformerMixin):
     def __init__(self,
                  n_neighbors=10,
                  n_components=50,
-                 use_eigs='max',
+                 use_eigs='knee',
                  metric='cosine',
                  kernel_use='simple_adaptive',
                  eigengap=True,
