@@ -67,7 +67,7 @@ If your CPU supports advanced instructions, we recommend you install nmslib sepa
    ```
 Then, you can install TopOMetry and its other requirements with pip:
    ```
-   pip3 install numpy pandas annoy scipy numba torch igraph scikit-learn kneed pymde
+   pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
    ```
    ```
    pip3 install topometry
