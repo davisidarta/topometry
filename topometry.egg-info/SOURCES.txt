@@ -18,6 +18,9 @@ setup.py
 .idea/dictionaries/davi.xml
 .idea/inspectionProfiles/Project_Default.xml
 .idea/inspectionProfiles/profiles_settings.xml
+dist/topometry-0.0.1-py3-none-any.whl
+dist/topometry-0.0.1-py3.8.egg
+dist/topometry-0.0.1.tar.gz
 docs/Makefile
 docs/TopOMetry_Intro.ipynb
 docs/TopOMetry_Intro_pbmc.ipynb
