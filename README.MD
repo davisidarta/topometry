@@ -67,7 +67,7 @@ If your CPU supports advanced instructions, we recommend you install nmslib sepa
    ```
 Then, you can install TopOMetry and its other requirements with pip:
    ```
-   pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
+   pip3 install numpy pandas annoy scipy numba torch igraph scikit-learn kneed pymde
    ```
    ```
    pip3 install topometry
@@ -83,7 +83,7 @@ Alternatevely, clone this repo and build from source:
 From a large data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` with default parameters: 
 
    ```
-   import topograph.models as tp
+   import topo.models as tp
    
    # Learn topological metrics and basis from data. The default is to use diffusion harmonics.
    tg = tp.TopoGraph()
