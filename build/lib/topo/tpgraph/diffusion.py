@@ -16,7 +16,7 @@ from topo.base import ann
 from topo.tpgraph import multiscale
 import warnings
 from scipy.sparse import (SparseEfficiencyWarning,csr_matrix, find, issparse)
-warnings.simplefilter('ignore',SparseEfficiencyWarning)
+warnings.simplefilter('ignore', SparseEfficiencyWarning)
 import matplotlib.pyplot as plt
 
 
@@ -137,7 +137,7 @@ class Diffusor(TransformerMixin):
     def __init__(self,
                  n_neighbors=10,
                  n_components=50,
-                 use_eigs='max',
+                 use_eigs='knee',
                  metric='cosine',
                  kernel_use='simple_adaptive',
                  eigengap=True,
@@ -174,6 +174,24 @@ class Diffusor(TransformerMixin):
         self.cache = cache
         self.kn = None
         self.scaled_eigs = None
+        self.N = None
+        self.M = None
+        self.K = None
+        self.T = None
+        self.res = None
+
+    def __repr__(self):
+        if (self.N is not None) and (self.M is not None):
+            msg = "Diffusor() instance with %i samples and %i observations" % (self.N, self.M) + " and:"
+        else:
+            msg = "Diffusor() instance object without any fitted data."
+        if self.K is not None:
+            msg = msg + " \n    Diffusion kernel fitted - Diffusor.K"
+        if self.T is not None:
+            msg = msg + " \n    Normalized diffusion transitions fitted - Diffusor.T"
+        if self.res is not None:
+            msg = msg + " \n    Multiscale diffusion maps fitted - Diffusor.res"
+        return msg
 
     def fit(self, X):
 
@@ -196,9 +214,7 @@ class Diffusor(TransformerMixin):
         data = X
         self.start_time = time.time()
         self.N = data.shape[0]
-        if self.kernel_use == 'orig' and self.transitions == 'False':
-            print('The original kernel implementation used transitions computation. Set `transitions` to `True`'
-                  'for similar results.')
+        self.M = data.shape[1]
         if self.kernel_use not in ['simple', 'simple_adaptive', 'decay', 'decay_adaptive']:
             raise Exception('Kernel must be either \'simple\', \'simple_adaptive\', \'decay\' or \'decay_adaptive\'.') 
         if self.ann:
