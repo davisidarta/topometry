@@ -6,6 +6,7 @@ from . import layouts as lt
 from . import utils
 from . import models as ml
 from . import plot as pl
+
 from ._utils import annotate_doc_types
 from .version import __version__
 
