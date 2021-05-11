@@ -588,7 +588,7 @@ class Diffusor(TransformerMixin):
                                                  n_eigs=self.use_eigs,
                                                  verbose=self.verbose)
 
-        ax1 = plt.subplot(1, 2, 1)
+        ax1 = plt.subplot(2, 1, 1)
         ax1.set_title('Spectrum decay and \'knee\' (%i)' % int(self.kn.knee))
         ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
         ax1.set_ylabel('Eigenvalues')
@@ -598,7 +598,7 @@ class Diffusor(TransformerMixin):
         )
         ax1.legend(loc='best')
 
-        ax2 = plt.subplot(1, 2, 2)
+        ax2 = plt.subplot(2, 1, 2)
         ax2.set_title('Curve analysis')
         ax2.plot(self.kn.x_normalized, self.kn.y_normalized, "b", label="normalized")
         ax2.plot(self.kn.x_difference, self.kn.y_difference, "r", label="differential")

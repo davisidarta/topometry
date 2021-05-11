@@ -285,12 +285,10 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                         is_sparse=True,
                                         return_instance=True)
 
-            self.CLapMap = spt.spectral_layout(
-                data,
+            self.CLapMap = spt.LapEigenmap(
                 self.ContBasis.K,
                 self.n_eigs,
                 self.random_state,
-                metric="precomputed",
             )
             expansion = 10.0 / np.abs(self.CLapMap).max()
             self.CLapMap = (self.CLapMap * expansion).astype(
@@ -383,8 +381,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 np.float32
             )
         elif self.basis == 'continuous':
-            spt_layout = spt.spectral_layout(
-                data,
+            spt_layout = spt.LapEigenmap(
                 self.ContBasis.K,
                 dim,
                 self.random_state,
@@ -448,7 +445,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         return emb
 
-    def MAP(data, graph,
+    def MAP(self, data, graph,
             dims=2,
             min_dist=0.3,
             spread=1.2,
