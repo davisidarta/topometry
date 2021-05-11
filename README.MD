@@ -98,10 +98,10 @@ topological graphs.
    tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
    
    # Graph layout optimization with UMAP (not so much 'uniform' in this case)
-   topo_umap, aux = MAP(tg.MSDiffMaps, tgraph.T)
+   topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
 
-   emb_t, aux = MAP(tg.MSDiffMaps, traph)
-   
+   emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
+  
    ```
 
 ## Tutorials and examples

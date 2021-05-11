@@ -61,6 +61,7 @@ def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                               metric=metric, t=t, include_self=include_self,
                               is_sparse=is_sparse)
     c_knn.cknneighbors_graph(X)
+    c_knn.K[(np.arange(c_knn.K.shape[0]), np.arange(c_knn.K.shape[0]))] = 0
 
     if return_instance:
         return c_knn
@@ -105,6 +106,17 @@ class CkNearestNeighbors(object):
 
         """
 
+    def __repr__(self):
+        if (self.N is not None) and (self.M is not None):
+            msg = "CkNearestNeighbors() object with %i samples and %i observations" % (self.N, self.M) + " and:"
+        else:
+            msg = "CkNearestNeighbors() object object without any fitted data."
+        if self.K is not None:
+            msg = msg + " \n    Continuous kernel fitted - CkNearestNeighbors.K"
+        if self.A is not None:
+            msg = msg + " \n    Adjacency matrix fitted - CkNearestNeighbors.T"
+        return msg
+
     def __init__(self, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
                  include_self=False, is_sparse=True, return_adjacency=False):
         self.n_neighbors = n_neighbors
@@ -115,6 +127,9 @@ class CkNearestNeighbors(object):
         self.is_sparse = is_sparse
         self.K = None
         self.return_adjacency = return_adjacency
+        self.A = None
+        self.N = None
+        self.M = None
         if self.metric == 'euclidean':
             self.metric_fun = euclidean
         elif metric == 'standardised_euclidean':
@@ -163,7 +178,8 @@ class CkNearestNeighbors(object):
         return: csr_matrix (if self.is_sparse is True)
                 or ndarray(if self.is_sparse is False)
         """
-
+        self.N = X.shape[0]
+        self.M = X.shape[1]
         n_neighbors = self.n_neighbors
         delta = self.delta
         metric = self.metric
