@@ -963,7 +963,8 @@ dim : int (optional, default 2)
 <span class="sd">    scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
-
+    <span class="k">if</span> <span class="n">base</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">basis</span> <span class="o">=</span> <span class="n">base</span>
     <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Building topological graph...&#39;</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">basis</span> <span class="o">==</span> <span class="s1">&#39;continuous&#39;</span><span class="p">:</span>

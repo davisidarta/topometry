@@ -110,19 +110,26 @@
 <pre><code>import topo.models as tp
 
 # Learn topological metrics and basis from data. The default is to use diffusion harmonics.
-tg = tp.TopoGraph()
+tg = tp.TopOGraph()
 tg = tg.fit(data)
-
 </code></pre>
-<p>After learning a topological basis, we can access topological metrics and basis in the <code>tg</code> object, and build different
-topological graphs.</p>
+<p>Note: <code>topo.ml</code> is the high-level model module which contains the <code>TopOGraph</code> object.</p>
+<p>After learning a topological basis, we can access topological metrics and basis in the <code>TopOGraph</code> object, and build different
+topological graphs. </p>
 <pre><code># Learn a topological graph. Again, the default is to use diffusion harmonics.
-tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
-
-# Graph layout optimization with UMAP (not so much 'uniform' in this case)
-topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
-
-emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
+tgraph = tg.transform(data) 
+</code></pre>
+<p>Then, it is possible to optimize the topological graph layout. The first option is to do so with
+our adaptation of UMAP (MAP), which will minimize the cross-entropy between the topological basis
+and its graph:</p>
+<pre><code># Graph layout optimization with MAP
+map_emb, aux = tp.MAP(tg.MSDiffMaps, tgraph)
+</code></pre>
+<p>The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
+custom MDE problems within the TopOGraph model :</p>
+<pre><code># Set up MDE problem
+mde = tg.MDE(tgraph)
+mde_emb = mde.embed()
 </code></pre>
               
             </div>
