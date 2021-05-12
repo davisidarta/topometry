@@ -3,7 +3,7 @@
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?label=Follow%20%40davisidarta&style=social)](https://twitter.com/davisidarta)
 
-![TopOMetry](https://github.com/davisidarta/topometry/logo.png)
+![](https://github.com/davisidarta/topometry/logo.png)
 
 ## TopOMetry - Topologically Optimized geoMetry
 
