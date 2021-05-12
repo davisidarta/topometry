@@ -4,7 +4,6 @@
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?label=Follow%20%40davisidarta&style=social)](https://twitter.com/davisidarta)
 
 ![logo](logo.png)
-
 ## TopOMetry - Topologically Optimized geoMetry
 
 **Table of Contents**

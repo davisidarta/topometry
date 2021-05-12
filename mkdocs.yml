@@ -7,7 +7,7 @@ nav:
     - The TopOGraph model: topograph.md
     - Diffusion harmonics: diffusor.md
 theme:
-    logo: assets/logo.png
+    logo: img/logo.png
     name: readthedocs
     highlightjs: true
     hljs_languages:
