@@ -33,6 +33,120 @@ except ImportError:
 
 
 class TopOGraph(TransformerMixin, BaseEstimator):
+    """
+
+     Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
+
+     From data, builds a topologically-oriented basis with  optimized diffusion maps or a continuous k-nearest-neighbors
+     Laplacian Eigenmap, and from this basis learns a topological graph (using a new diffusion process or a continuous 
+     kNN kernel). This model approximates the Laplace-Beltrami Operator multiple ways by different ways, depending on
+     the user setup. The topological graph can then be visualized in two or three dimensions with Minimum Distortion
+     Embeddings, which also allows for flexible setup and domain-adaptation. Alternatively, users can explore multiple
+     classes for graph layout optimization in `topo.layout`. 
+
+    Parameters
+     ----------
+     base_knn : int (optional, default 10).
+         Number of k-nearest-neighbors to compute the ``Diffusor`` base operator on.
+         The adaptive kernel will normalize distances by each cell distance of its median neighbor. Nonetheless,
+         this hyperparameter remains as an user input regarding the minimal sample neighborhood resolution that drives
+         the computation of the diffusion metrics. For practical purposes, the minimum amount of samples one would
+         expect to constitute a neighborhood of its own. Increasing `k` can generate more globally-comprehensive metrics
+         and maps, to a certain extend, however at the expense of fine-grained resolution. More generally,
+          consider this a calculus discretization threshold.
+
+     graph_knn : int (optional, default 10).
+         Number of k-nearest-neighbors to compute the graph operator on.
+         The adaptive kernel will normalize distances by each cell distance of its median neighbor. Nonetheless, this
+         hyperparameter remains as an user input regarding the minimal sample neighborhood resolution that drives the 
+         computation of the diffusion metrics. For practical purposes, the minimum amount of samples one would expect
+         to constitute a neighborhood of its own. Increasing `k` can generate more globally-comprehensive metrics 
+         and maps, to a certain extend,
+         however at the expense of fine-grained resolution. More generally, consider this a calculus
+         discretization threshold.
+
+     n_eigs : int (optional, default 50).
+         Number of components to compute. This number can be iterated to get different views
+         from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
+         computed diffusion components. If `basis` is set to `continuous`, this is the number of computed eigenvectors
+         of the Laplacian Eigenmaps from the continuous affinity matrix.
+
+     basis : 'diffusion' or 'continuous' (optional, default 'diffusion').
+         Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
+         diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
+         topological basis from the Laplacian Eigenmaps of such metric.
+
+     graph : 'diff' or 'cknn' (optional, default 'diff').
+         Which topological graph to learn from the built basis. If 'diff', uses a second-order diffusion process to learn
+         similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors algorithms. Both
+         algorithms learn graph-oriented topological metrics from the learned basis.
+
+     ann : bool (optional, default True).
+         Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
+
+     base_metric : str (optional, default 'cosine').
+         Distance metrics for building a approximate kNN graphs. Defaults to 'cosine'. Users are encouraged to explore
+         different metrics, such as 'cosine' and 'jaccard'. The 'hamming' and 'jaccard' distances are also available
+         for string vectors. Accepted metrics include NMSLib metrics and sklearn metrics. Some examples are:
+         
+         -'sqeuclidean'
+         
+         -'euclidean'
+         
+         -'l1'
+         
+         -'lp' - requires setting the parameter ``p``
+         
+         -'cosine'
+         
+         -'angular'
+         
+         -'negdotprod'
+         
+         -'levenshtein'
+         
+         -'hamming'
+         
+         -'jaccard'
+         
+         -'jansen-shan'
+         
+     graph_metric : str (optional, default 'cosine').
+         Exactly the same as base_matric, but used for building the topological graph.
+     
+     p : int or float (optional, default 11/16 )
+         P for the Lp metric, when `metric='lp'`.  Can be fractional. The default 11/16 approximates
+         an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
+
+     transitions : bool (optional, default False)
+         Whether to estimate the diffusion transitions graph. If `True`, maps a basis encoding neighborhood
+          transitions probability during eigendecomposition. If 'False' (default), maps the diffusion kernel.
+
+     alpha : int or float (optional, default 1)
+         Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
+             Defaults to 1, which is suitable for normalized data.
+
+     kernel_use : str (optional, default 'decay_adaptive')
+         Which type of kernel to use in the diffusion approach. There are four implemented, considering the adaptive 
+         decay and the neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
+         The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.
+         (https://doi.org/10.1016/j.acha.2005.07.004) and implemented in Setty et al. 
+         (https://doi.org/10.1038/s41587-019-0068-4).
+         The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
+         Those, followed by '_adaptive', apply the neighborhood expansion process. The default and recommended is 'decay_adaptive'.
+         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
+
+     transitions : bool (optional, default False).
+         Whether to decompose the transition graph when fitting the diffusion basis.
+     n_jobs : int.
+         Number of threads to use in calculations. Defaults to all but one.
+     verbose : bool (optional, default False).
+         Controls verbosity.
+     cache : bool (optional, default True).
+         Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).
+
+     """
+
     def __init__(self,
                  base_knn=15,
                  graph_knn=10,
@@ -121,109 +235,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         return msg
 
-    """""""""
-    Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
-
-    From data, builds a topologically-oriented basis with  optimized diffusion maps or a continuous k-nearest-neighbors
-    Laplacian Eigenmap, and from this basis learns a topological graph (using a new diffusion process or a continuous 
-    kNN kernel). This model approximates the Laplace-Beltrami Operator multiple ways by different ways, depending on
-    the user setup. The topological graph can then be visualized in two or three dimensions with Minimum Distortion
-    Embeddings, which also allows for flexible setup and domain-adaptation. Alternatively, users can explore multiple
-    classes for graph layout optimization in `topo.layout`. 
-
-   Parameters
-    ----------
-    base_knn : int (optional, default 10)
-        Number of k-nearest-neighbors to compute the ``Diffusor`` base operator on.
-        The adaptive kernel will normalize distances by each cell distance of its median neighbor. Nonetheless,
-        this hyperparameter remains as an user input regarding the minimal sample neighborhood resolution that drives
-        the computation of the diffusion metrics. For practical purposes, the minimum amount of samples one would
-        expect to constitute a neighborhood of its own. Increasing `k` can generate more globally-comprehensive metrics
-        and maps, to a certain extend, however at the expense of fine-grained resolution. More generally,
-         consider this a calculus discretization threshold.
-
-    graph_knn: int (optional, default 10)
-        Number of k-nearest-neighbors to compute the graph operator on.
-        The adaptive kernel will normalize distances by each cell
-        distance of its median neighbor. Nonetheless, this hyperparameter remains as an user input regarding
-        the minimal sample neighborhood resolution that drives the computation of the diffusion metrics. For
-        practical purposes, the minimum amount of samples one would expect to constitute a neighborhood of its
-        own. Increasing `k` can generate more globally-comprehensive metrics and maps, to a certain extend,
-        however at the expense of fine-grained resolution. More generally, consider this a calculus
-        discretization threshold.
-
-    n_eigs : int (optional, default 50)
-        Number of components to compute. This number can be iterated to get different views
-        from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
-        computed diffusion components. If `basis` is set to `continuous`, this is the number of computed eigenvectors
-        of the Laplacian Eigenmaps from the continuous affinity matrix.
-
-    basis: `diffusion` or `continuous` (optional, default `diffusion`)
-        Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
-        diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
-        topological basis from the Laplacian Eigenmaps of such metric.
-
-    graph: 'diff' or 'cknn' (optional, default 'diff')
-        Which topological graph to learn from the built basis. If 'diff', uses a second-order diffusion process to learn
-        similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors algorithms. Both
-        algorithms learn graph-oriented topological metrics from the learned basis.
-
-    ann : bool (optional, default True)
-        Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
-
-    graph_metric, base_metric : str (optional, default 'cosine')
-        Distance metrics for building a approximate kNN graphs. Defaults to 'cosine'. Users are encouraged to explore
-        different metrics, such as 'cosine' and 'jaccard'. The 'hamming' and 'jaccard' distances are also available
-        for string vectors. Accepted metrics include NMSLib metrics and sklearn metrics. Some examples are:
-        -'sqeuclidean'
-        -'euclidean'
-        -'l1'
-        -'lp' - requires setting the parameter ``p``
-        -'cosine'
-        -'angular'
-        -'negdotprod'
-        -'levenshtein'
-        -'hamming'
-        -'jaccard'
-        -'jansen-shan'
-
-    p: int or float (optional, default 11/16 )
-        P for the Lp metric, when `metric='lp'`.  Can be fractional. The default 11/16 approximates
-        an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
-        See https://en.wikipedia.org/wiki/Lp_space for some context.
-
-    transitions: bool (optional, default False)
-        Whether to estimate the diffusion transitions graph. If `True`, maps a basis encoding neighborhood
-         transitions probability during eigendecomposition. If 'False' (default), maps the diffusion kernel.
-
-    alpha : int or float (optional, default 1)
-        Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
-            Defaults to 1, which is suitable for normalized data.
-
-    kernel_use: str (optional, default 'decay_adaptive')
-        Which type of kernel to use in the diffusion approach. There are four implemented, considering the adaptive 
-        decay and the neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
-
-        - The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.
-        (https://doi.org/10.1016/j.acha.2005.07.004) and implemented in Setty et al. 
-        (https://doi.org/10.1038/s41587-019-0068-4).
-
-        - The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
-
-        Those, followed by '_adaptive', apply the neighborhood expansion process. The default and recommended is 'decay_adaptive'.
-        The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
-
-    transitions: bool (optional, default False)
-        Whether to decompose the transition graph when fitting the diffusion basis.
-    n_jobs : int
-        Number of threads to use in calculations. Defaults to all but one.
-    verbose : bool (optional, default False)
-        Controls verbosity.
-    cache: bool (optional, default True)
-        Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).
-
-    """""""""
-
     def fit(self, data):
         """
         Learn topological distances with diffusion harmonics and continuous metrics. Computes affinity operators
@@ -231,18 +242,18 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         Parameters
         ----------
-        data:
+        data :
             High-dimensional data matrix. Currently, supports only data from similar type (i.e. all bool, all float)
 
         Returns
         -------
 
         TopoGraph instance with several slots, populated as per user settings.
-            If `basis=diffusion`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
+        If `basis=diffusion`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
                 `TopoGraph.DiffBasis` with a fitted `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics
                 and transition probabilities, respectively stored in TopoGraph.DiffBasis.K and TopoGraph.DiffBasis.T
 
-            If `basis=continuous`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
+        If `basis=continuous`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
                 `TopoGraph.ContBasis` with a continuous-k-nearest-neighbors model, containing continuous metrics and
                 adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
 
@@ -304,21 +315,25 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         return self
 
-    def transform(self):
+    def transform(self, base):
         """
-
         Learns new affinity, topological operators from chosen basis.
+
+        Parameters
+        ----------
+        self :
+            TopOGraph instance.
+
+        base : str, optional.
+            Base to use when building the topological graph. Defaults to the active base ( `TopOGraph.basis`)
+
 
         Returns
         -------
-        If `graph` is 'dgraph' or 'diffcknn', returns  a tuple containing the kernel and the transition matrices
-            i.e. kgraph, tgraph = tg.transform(), and if `cache=True`, writes the topological graph to
-            `TopoGraph.DiffGraph` or `TopoGraph.DiffCknnGraph'
-        If `graph` is 'cknn' or 'cdiff', returns a topologically weighted k-nearest-neighbors graph, and if
-            `cache=True`, writes the topological graph to `TopoGraph.CknnGraph` or `TopoGraph.CDiffGraph'.
-
+        scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.
 
         """
+
         print('Building topological graph...')
         start = time.time()
         if self.basis == 'continuous':
@@ -364,7 +379,28 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         else:
             return self
 
-    def spectral_layout(self, data, dim=2):
+    def spectral_layout(self, data, target, dim=2):
+        """
+
+        Performs a multicomponent spectral layout of the data and the target similarity matrix.
+
+        Parameters
+        ----------
+        data :
+            input data
+        target : scipy.sparse.csr.csr_matrix.
+            target similarity matrix.
+        dim : int (optional, default 2)
+            number of dimensions to embed into.
+
+        Returns
+        -------
+        np.ndarray containing the resulting embedding.
+
+        """
+
+
+
         if self.basis == 'diffusion':
             spt_layout = spt.spectral_layout(
                 data,
@@ -402,7 +438,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             dim=2,
             n_neighbors=None,
             type='isomorphic',
-            constraint=constraints.Standardized(),
+            constraint='standardized',
             init='quadratic',
             attractive_penalty=penalties.Log1p,
             repulsive_penalty=penalties.Log,
@@ -412,7 +448,70 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             device='cpu',
             verbose=False
             ):
+        """
+        This function constructs an MDE problem for preserving the
+        structure of original data. This MDE problem is well-suited for
+        visualization (using ``dim`` 2 or 3), but can also be used to
+        generate features for machine learning tasks (with ``dim`` = 10,
+        50, or 100, for example). It yields embeddings in which similar items
+        are near each other, and dissimilar items are not near each other.
+        The original data can either be a data matrix, or a graph.
+        Data matrices should be torch Tensors, NumPy arrays, or scipy sparse
+        matrices; graphs should be instances of ``pymde.Graph``.
+        The MDE problem uses distortion functions derived from weights (i.e.,
+        penalties).
+        To obtain an embedding, call the ``embed`` method on the returned ``MDE``
+        object. To plot it, use ``pymde.plot``.
 
+
+
+
+        Parameters
+        ----------
+        data : torch.Tensor, numpy.ndarray, scipy.sparse matrix or pymde.Graph.
+            The original data, a data matrix of shape ``(n_items, n_features)`` or
+            a graph. Neighbors are computed using Euclidean distance if the data is
+            a matrix, or the shortest-path metric if the data is a graph.
+        dim : int.
+            The embedding dimension. Use 2 or 3 for visualization.
+        attractive_penalty : pymde.Function class (or factory).
+            Callable that constructs a distortion function, given positive
+            weights. Typically one of the classes from ``pymde.penalties``,
+            such as ``pymde.penalties.log1p``, ``pymde.penalties.Huber``, or
+            ``pymde.penalties.Quadratic``.
+        repulsive_penalty : pymde.Function class (or factory).
+            Callable that constructs a distortion function, given negative
+            weights. (If ``None``, only positive weights are used.) For example,
+            ``pymde.penalties.Log`` or ``pymde.penalties.InversePower``.
+        constraint : str (optional), default 'standardized'.
+            Constraint to use when optimizing the embedding. Options are 'standardized',
+            'centered', `None` or a `pymde.constraints.Constraint()` function.
+        n_neighbors : int (optional)
+            The number of nearest neighbors to compute for each row (item) of
+            ``data``. A sensible value is chosen by default, depending on the
+            number of items.
+        repulsive_fraction : float (optional)
+            How many repulsive edges to include, relative to the number
+            of attractive edges. ``1`` means as many repulsive edges as attractive
+            edges. The higher this number, the more uniformly spread out the
+            embedding will be. Defaults to ``0.5`` for standardized embeddings, and
+            ``1`` otherwise. (If ``repulsive_penalty`` is ``None``, this argument
+            is ignored.)
+        max_distance : float (optional)
+            If not None, neighborhoods are restricted to have a radius
+            no greater than ``max_distance``.
+        init : str or np.ndarray (optional, default 'quadratic')
+            Initialization strategy; np.ndarray, 'quadratic' or 'random'.
+        device : str (optional)
+            Device for the embedding (eg, 'cpu', 'cuda').
+        verbose : bool
+            If ``True``, print verbose output.
+
+        Returns
+        -------
+        torch.tensor
+            A ``pymde.MDE`` object, based on the original data.
+        """
         graph = Graph(target)
 
         if init == 'spectral':
@@ -421,13 +520,20 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 init = 'quadratic'
             else:
                 init = self.spectral_layout(data, dim)
-
+        if constraint == 'standardized':
+            constraint_use = constraints.Standardized()
+        elif constraint == 'centered':
+            constraint_use = constraints.Centered()
+        elif isinstance(constraint, constraints.Constraint()):
+            constraint_use = constraint
+        else:
+            constraint_use = None
         if type == 'isomorphic':
             emb = mde.IsomorphicMDE(graph,
                                     attractive_penalty=attractive_penalty,
                                     repulsive_penalty=repulsive_penalty,
                                     embedding_dim=dim,
-                                    constraint=constraint,
+                                    constraint=constraint_use,
                                     n_neighbors=n_neighbors,
                                     repulsive_fraction=repulsive_fraction,
                                     max_distance=max_distance,
@@ -441,13 +547,13 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             emb = mde.IsometricMDE(graph,
                                    embedding_dim=dim,
                                    loss=loss,
-                                   constraint=constraint,
+                                   constraint=constraint_use,
                                    max_distances=max_distance,
                                    device=device,
                                    verbose=verbose
                                    )
 
-        return emb
+        return np.array(emb)
 
     def MAP(self, data, graph,
             dims=2,
