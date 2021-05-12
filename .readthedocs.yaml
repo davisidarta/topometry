@@ -3,8 +3,7 @@ version: 2
 python:
   version: 3.7
   install:
-    - requirements: docs/requirements.txt
-
+    - requirements: requirements.txt
 mkdocs:
   configuration: mkdocs.yml
   fail_on_warning: false
