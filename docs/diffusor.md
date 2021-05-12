@@ -1,6 +1,6 @@
 # Documentation for `Diffusor`
 
-::: topo.tpgraph.diffusion.Diffusor
+::: topo.tpgraph.Diffusor
     handler: python
     selection:
       members:

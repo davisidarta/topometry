@@ -86,29 +86,37 @@ From a large data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), y
 import topo.models as tp
    
 # Learn topological metrics and basis from data. The default is to use diffusion harmonics.
-tg = tp.TopoGraph()
+tg = tp.TopOGraph()
 tg = tg.fit(data)
-
 ```
+Note: `topo.ml` is the high-level model module which contains the `TopOGraph` object.
 
-After learning a topological basis, we can access topological metrics and basis in the ``tg`` object, and build different
-topological graphs.
+After learning a topological basis, we can access topological metrics and basis in the ``TopOGraph`` object, and build different
+topological graphs. 
 ```
 # Learn a topological graph. Again, the default is to use diffusion harmonics.
-tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
-   
-# Graph layout optimization with UMAP (not so much 'uniform' in this case)
-topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
+tgraph = tg.transform(data) 
+ ```
+Then, it is possible to optimize the topological graph layout. The first option is to do so with
+our adaptation of UMAP (MAP), which will minimize the cross-entropy between the topological basis
+and its graph:
 
-emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
+```
+# Graph layout optimization MAP
+map_emb, aux = tp.MAP(tg.MSDiffMaps, tgraph)
+```
+The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
+custom MDE problems within the TopOGraph model:
+
+```
+# Set up MDE problem
+mde = tg.MDE(tgraph)
+mde_emb = mde.embed()
 ```
 
 ## Tutorials and examples
 
-Coming soon! For now, check these 
-jupyter notebooks ([1](https://github.com/davisidarta/topometry/blob/master/docs/TopOMetry_Intro_pbmc.ipynb),
-[2](https://github.com/davisidarta/topometry/blob/master/docs/TopOMetry_Intro.ipynb))
- showing how apply TopOMetry to single-cell data analysis.
+Coming soon! For now, our extended documentation at [ReadTheDocs](https://topometry.readthedocs.io/en/latest/)
 
 ## Contributing
 
