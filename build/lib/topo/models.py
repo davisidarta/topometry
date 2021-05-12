@@ -315,7 +315,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         return self
 
-    def transform(self, base):
+    def transform(self, base=None):
         """
         Learns new affinity, topological operators from chosen basis.
 

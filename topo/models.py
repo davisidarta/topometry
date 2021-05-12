@@ -554,7 +554,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                    verbose=verbose
                                    )
 
-        return np.array(emb)
+        return emb
 
     def MAP(self, data, graph,
             dims=2,
