@@ -1,3 +1,4 @@
+mkdocstrings >= 0.14.0
 numpy~=1.19.2
 nmslib~=2.0.6
 scikit-learn~=0.23.1
@@ -9,5 +10,4 @@ annoy~=1.16.3
 kneed>=0.6
 pymde>=0.1.5
 setuptools~=45.2.0
-igraph>=0.1.10
-topo>=0.1
+topometry>=0.1
