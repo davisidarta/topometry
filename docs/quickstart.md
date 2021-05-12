@@ -8,22 +8,26 @@ import topo.models as tp
 tg = tp.TopOGraph()
 tg = tg.fit(data)
 ```
+
 Note: `topo.ml` is the high-level model module which contains the `TopOGraph` object.
 
 After learning a topological basis, we can access topological metrics and basis in the ``TopOGraph`` object, and build different
 topological graphs. 
+
 ```
 # Learn a topological graph. Again, the default is to use diffusion harmonics.
 tgraph = tg.transform(data) 
- ```
+```
+
 Then, it is possible to optimize the topological graph layout. The first option is to do so with
 our adaptation of UMAP (MAP), which will minimize the cross-entropy between the topological basis
 and its graph:
 
 ```
-# Graph layout optimization MAP
+# Graph layout optimization with MAP
 map_emb, aux = tp.MAP(tg.MSDiffMaps, tgraph)
 ```
+
 The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
 custom MDE problems within the TopOGraph model:
 
