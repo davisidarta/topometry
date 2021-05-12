@@ -15,5 +15,6 @@ theme:
         - bash
 
 plugins:
-- search
-- mkdocstrings
+    - search
+    - mkdocstrings
+    -
