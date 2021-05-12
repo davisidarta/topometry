@@ -3,6 +3,7 @@
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?label=Follow%20%40davisidarta&style=social)](https://twitter.com/davisidarta)
 
+![TopOMetry](https://github.com/davisidarta/topometry/logo.png)
 
 ## TopOMetry - Topologically Optimized geoMetry
 
@@ -56,53 +57,52 @@ inherited from [scikit-learn](https://github.com/scikit-learn/scikit-learn)
 * [pyMDE](https://github.com/cvxgrp/pymde) - for optimizing layouts
 
 Prior to installing TopOMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
-   ```
-   sudo apt-get install cmake
-   pip3 install scikit-build setuptools
-   ```
+```
+sudo apt-get install cmake
+pip3 install scikit-build setuptools
+```
 We're also going to need NMSlib for really fast approximate nearest-neighborhood search across different distance metrics.
 If your CPU supports advanced instructions, we recommend you install nmslib separately for better performance:
-   ```
-   pip3 install --no-binary :all: nmslib
-   ```
+```
+pip3 install --no-binary :all: nmslib
+```
 Then, you can install TopOMetry and its other requirements with pip:
-   ```
-   pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
-   ```
-   ```
-   pip3 install topometry
-   ```
+```
+pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
+```
+```
+pip3 install topometry
+```
 Alternatevely, clone this repo and build from source:
-   ```
-   git clone https://github.com/davisidarta/topometry
-   cd topometry
-   pip3 install .
-   ```
+```
+git clone https://github.com/davisidarta/topometry
+cd topometry
+pip3 install .
+```
 ## Quick-start 
 
 From a large data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` with default parameters: 
 
-   ```
-   import topo.models as tp
+```
+import topo.models as tp
    
-   # Learn topological metrics and basis from data. The default is to use diffusion harmonics.
-   tg = tp.TopoGraph()
-   tg = tg.fit(data)
+# Learn topological metrics and basis from data. The default is to use diffusion harmonics.
+tg = tp.TopoGraph()
+tg = tg.fit(data)
 
-   ```
+```
 
 After learning a topological basis, we can access topological metrics and basis in the ``tg`` object, and build different
 topological graphs.
-   ```
-   # Learn a topological graph. Again, the default is to use diffusion harmonics.
-   tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
+```
+# Learn a topological graph. Again, the default is to use diffusion harmonics.
+tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
    
-   # Graph layout optimization with UMAP (not so much 'uniform' in this case)
-   topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
+# Graph layout optimization with UMAP (not so much 'uniform' in this case)
+topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
 
-   emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
-  
-   ```
+emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
+```
 
 ## Tutorials and examples
 
