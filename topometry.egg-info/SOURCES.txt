@@ -22,14 +22,8 @@ dist/topometry-0.0.2-py3-none-any.whl
 dist/topometry-0.0.2-py3.8.egg
 dist/topometry-0.0.2.tar.gz
 docs/Makefile
-docs/TopOMetry_Intro.ipynb
-docs/TopOMetry_Intro_pbmc.ipynb
 docs/make.bat
-docs/modules.rst
-docs/readme.md
 docs/setup.rst
-docs/images/Digits.png
-docs/images/benchmark.png
 topo/__init__.py
 topo/_utils.py
 topo/models.py

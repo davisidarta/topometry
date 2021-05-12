@@ -22,8 +22,11 @@ import matplotlib.pyplot as plt
 
 class Diffusor(TransformerMixin):
     """
-    Sklearn estimator for using fast anisotropic diffusion with an anisotropic
-    adaptive algorithm as proposed by Setty et al, 2018, and optimized by Sidarta-Oliveira, 2020.
+    Sklearn-compatible estimator for using fast anisotropic diffusion with an adaptive neighborhood search algorithm. The
+    Diffusion Maps algorithm was initially proposed by Coifman et al in 2005, and was augmented by the work of many.
+    This implementation aggregates recent advances in diffusion harmonics, and innovates only by implementing an
+    adaptively decaying kernel (the rate of decay is dependent on neighborhood density)
+    and an adaptive neighborhood estimation approach.
 
     Parameters
     ----------
@@ -31,7 +34,7 @@ class Diffusor(TransformerMixin):
         Number of diffusion components to compute. This number can be iterated to get different views
         from data at distinct spectral resolution.
 
-    use_eigs: int or str (optional, default 'knee')
+    use_eigs : int or str (optional, default 'knee')
         Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
         (reach of numerical precision), else to the maximum amount of computed components.
         If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
@@ -67,12 +70,12 @@ class Diffusor(TransformerMixin):
         -'jaccard'
         -'jansen-shan'
 
-    p: int or float (optional, default 11/16 )
+    p : int or float (optional, default 11/16 )
         P for the Lp metric, when ``metric='lp'``.  Can be fractional. The default 11/16 approximates
         an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
         See https://en.wikipedia.org/wiki/Lp_space for some context.
 
-    transitions: bool (optional, default False)
+    transitions : bool (optional, default False)
         Whether to estimate the diffusion transitions graph. If `True`, maps a basis encoding neighborhood
          transitions probability during eigendecomposition. If 'False' (default), maps the diffusion kernel.
 
@@ -80,39 +83,31 @@ class Diffusor(TransformerMixin):
         Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
             Defaults to 1, which is suitable for normalized data.
 
-    kernel_use: str (optional, default 'decay_adaptive')
+    kernel_use : str (optional, default 'decay_adaptive')
         Which type of kernel to use. There are four implemented, considering the adaptive decay and the
-        neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
-
-        - The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.(https://doi.org/10.1016/j.acha.2005.07.004)
-        and implemented in Setty et al. (https://doi.org/10.1038/s41587-019-0068-4).
-
-        - The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
-
-        Those, followed by '_adaptive', apply the neighborhood expansion process. The default and recommended is 'decay_adaptive'.
+        neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'. The first, 'simple'
+        , is a locally-adaptive kernel similar to that proposed by Nadler et al.(https://doi.org/10.1016/j.acha.2005.07.004)
+        and implemented in Setty et al. (https://doi.org/10.1038/s41587-019-0068-4). The 'decay' option applies an
+        adaptive decay rate, but no neighborhood expansion. Those, followed by '_adaptive', apply the neighborhood expansion process.
+         The default and recommended is 'decay_adaptive'.
         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
 
-    transitions: bool (optional, default False)
+    transitions : bool (optional, default False)
         Whether to decompose the transition graph when transforming.
-    norm: bool (optional, default True)
+    norm : bool (optional, default True)
         Whether to normalize the kernel transition probabilities to approximate the LPO.
-    eigengap: bool (optional, default True)
+    eigengap : bool (optional, default True)
         Whether to expand the eigendecomposition a bit and stop if eigenvalues sign shift (limit of float64). Used
         to guarantee numerical stability.
     n_jobs : int (optional, default 4)
         Number of threads to use in calculations. Defaults to 4 for safety, but performance
         scales dramatically when using more threads.
-    plot_spectrum: bool (optional, default False)
+    plot_spectrum : bool (optional, default False)
         Whether to plot the spectrum decay analysis.
     verbose : bool (optional, default False)
         Controls verbosity.
-    cache: bool (optional, default True)
+    cache : bool (optional, default True)
         Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).
-
-    Returns
-    -------------
-        Diffusion components ['EigenVectors'], associated eigenvalues ['EigenValues'] and suggested number of
-        resulting components to use during Multiscaling.
 
     Example
     -------------
@@ -122,15 +117,12 @@ class Diffusor(TransformerMixin):
     from scipy.sparse import csr_matrix
     from topo.tpgraph.diffusion import Diffusor
 
-    # Load the MNIST digits data, convert to sparse for speed
     digits = load_digits()
     data = csr_matrix(digits)
 
-    # Fit the anisotropic diffusion process
-    tpgraph = Diffusor().fit(data)
+    diff = Diffusor().fit(data)
 
-    # Find multiscale diffusion components
-    mds = tpgraph.transform(data)
+    msdiffmap = diff.transform(data)
 
     """
 
@@ -200,7 +192,7 @@ class Diffusor(TransformerMixin):
 
         Parameters
         ----------
-        X
+        X :
             input data. Takes in numpy arrays and scipy csr sparse matrices.
         Use with sparse data for top performance. You can adjust a series of
         parameters that can make the process faster and more informational depending
@@ -354,9 +346,17 @@ class Diffusor(TransformerMixin):
         """
         Fits the renormalized Laplacian approximating the Laplace Beltrami-Operator
         in a discrete eigendecomposition. Then multiscales the resulting components.
+        Parameters
+        ----------
+        X :
+            input data. Takes in numpy arrays and scipy csr sparse matrices.
+        Use with sparse data for top performance. You can adjust a series of
+        parameters that can make the process faster and more informational depending
+        on your dataset.
 
         Returns
         -------
+
        ``Diffusor.res['MultiscaleComponents']]``
 
         """
@@ -442,7 +442,7 @@ class Diffusor(TransformerMixin):
 
         Parameters
         ----------
-        data
+        data :
             Input data matrix (numpy array, pandas df, csr_matrix).
 
         n_components: int (optional, default None)
@@ -450,6 +450,7 @@ class Diffusor(TransformerMixin):
 
         Returns
         -------
+        A tuple containing neighborhood indices, distances, gradient and a knn graph.
 
         """
 
@@ -563,7 +564,9 @@ class Diffusor(TransformerMixin):
 
         Parameters
         ----------
-        n_eigs: int
+        self : Diffusor object.
+
+        n_eigs : int. Number of diffusion components to multiscale.
 
         Returns
         -------
@@ -582,7 +585,23 @@ class Diffusor(TransformerMixin):
         return mms
 
 
-    def spectrum_plot(self):
+    def spectrum_plot(self, bla=None):
+        """
+        Plot the decay spectra.
+
+        Parameters
+        ----------
+        self : Diffusor object.
+
+        bla : Here only for autodoc's sake.
+
+        Returns
+        -------
+
+        A nice plot of the diffusion spectra.
+
+        """
+
         if self.kn is None:
             msc, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                  n_eigs=self.use_eigs,
@@ -594,7 +613,7 @@ class Diffusor(TransformerMixin):
         ax1.set_ylabel('Eigenvalues')
         ax1.set_xlabel('Eigenvectors')
         ax1.vlines(
-            self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Multiscaled components'
+            self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Knee'
         )
         ax1.legend(loc='best')
 

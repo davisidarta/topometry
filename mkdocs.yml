@@ -1,9 +1,19 @@
-site_name: TopOMetry
+site_name: TopOMetry Documentation
 nav:
-    - Home: readme.md
+    - Welcome!: index.md
+    - Installation: installation.md
+    - Quick-start: quickstart.md
+    - Single-cell analysis: TopOMetry_Intro_pbmc_10k.md
+    - The TopOGraph model: topograph.md
+    - Diffusion harmonics: diffusor.md
 theme:
+    logo: assets/logo.png
     name: readthedocs
     highlightjs: true
     hljs_languages:
         - python
         - bash
+
+plugins:
+- search
+- mkdocstrings
