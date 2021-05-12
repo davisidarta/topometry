@@ -29,7 +29,7 @@ map_emb, aux = tp.MAP(tg.MSDiffMaps, tgraph)
 ```
 
 The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
-custom MDE problems within the TopOGraph model:
+custom MDE problems within the TopOGraph model :
 
 ```
 # Set up MDE problem
