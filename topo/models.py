@@ -333,7 +333,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.
 
         """
-
+        if base is not None:
+            self.basis = base
         print('Building topological graph...')
         start = time.time()
         if self.basis == 'continuous':
