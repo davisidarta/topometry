@@ -5,9 +5,9 @@
 
 import time
 from topo.tpgraph.diffusion import Diffusor
-from topo.tpgraph.cknn import CkNearestNeighbors, cknn_graph
+from topo.tpgraph.cknn import cknn_graph
 from topo.spectral import spectral as spt
-from topo.layouts import uni, mde
+from topo.layouts import uni, mde, Graph
 from sklearn.base import TransformerMixin, BaseEstimator
 import numpy as np
 from pymde.functions import penalties, losses
@@ -30,6 +30,7 @@ except ImportError:
 
         class Literal(metaclass=LiteralMeta):
             pass
+
 
 class TopOGraph(TransformerMixin, BaseEstimator):
     def __init__(self,
@@ -161,7 +162,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
         diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
         topological basis from the Laplacian Eigenmaps of such metric.
-    
+
     graph: 'diff' or 'cknn' (optional, default 'diff')
         Which topological graph to learn from the built basis. If 'diff', uses a second-order diffusion process to learn
         similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors algorithms. Both
@@ -411,6 +412,9 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             device='cpu',
             verbose=False
             ):
+
+        graph = Graph(target)
+
         if init == 'spectral':
             if data is None:
                 print('Spectral initialization requires input data as argument. Falling back to quadratic...')
@@ -419,22 +423,22 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 init = self.spectral_layout(data, dim)
 
         if type == 'isomorphic':
-            emb = mde.IsomorphicMDE(target,
-                          attractive_penalty=attractive_penalty,
-                          repulsive_penalty=repulsive_penalty,
-                          embedding_dim=dim,
-                          constraint=constraint,
-                          n_neighbors=n_neighbors,
-                          repulsive_fraction=repulsive_fraction,
-                          max_distance=max_distance,
-                          init=init,
-                          device=device,
-                          verbose=verbose)
+            emb = mde.IsomorphicMDE(graph,
+                                    attractive_penalty=attractive_penalty,
+                                    repulsive_penalty=repulsive_penalty,
+                                    embedding_dim=dim,
+                                    constraint=constraint,
+                                    n_neighbors=n_neighbors,
+                                    repulsive_fraction=repulsive_fraction,
+                                    max_distance=max_distance,
+                                    init=init,
+                                    device=device,
+                                    verbose=verbose)
 
         elif type == 'isometric':
             if max_distance is None:
                 max_distance = 5e7
-            emb = mde.IsometricMDE(target,
+            emb = mde.IsometricMDE(graph,
                                    embedding_dim=dim,
                                    loss=loss,
                                    constraint=constraint,
@@ -468,7 +472,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             output_dens=False,
             ):
         """""
-        
+
         Manifold Approximation and Projection, as proposed by Leland McInnes with an uniform distribution assumption in
         the seminal [UMAP algorithm](https://umap-learn.readthedocs.io/en/latest/index.html). Perform a fuzzy simplicial set embedding, using a
         specified initialisation method and then minimizing the fuzzy set cross entropy between the 1-skeletons of the high
@@ -476,7 +480,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         Leland McInnes in UMAP (see `umap-learn <https://github.com/lmcinnes/umap>`). Here we're using it only for the
         projection (layout optimization) by minimizing the cross-entropy between a phenotypic map (i.e. data, TopOMetry latent mappings)
         and its graph topological representation.
-        
+
 
         Parameters
         ----------
