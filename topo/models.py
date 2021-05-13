@@ -7,12 +7,14 @@ import time
 from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.cknn import cknn_graph
 from topo.spectral import spectral as spt
-from topo.layouts import uni, mde, Graph
+from topo.layouts import map, mde, Graph
+from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from sklearn.base import TransformerMixin, BaseEstimator
 import numpy as np
 from pymde.functions import penalties, losses
 from pymde import constraints
 from numpy import random
+import torch
 
 try:
     from typing import Literal
@@ -35,14 +37,20 @@ except ImportError:
 class TopOGraph(TransformerMixin, BaseEstimator):
     """
 
-     Convenient TopOMetry class for building, clustering and visualizing n-order topological graphs.
+     Main TopOMetry class for building, clustering and visualizing n-order topological graphs.
 
-     From data, builds a topologically-oriented basis with  optimized diffusion maps or a continuous k-nearest-neighbors
-     Laplacian Eigenmap, and from this basis learns a topological graph (using a new diffusion process or a continuous 
-     kNN kernel). This model approximates the Laplace-Beltrami Operator multiple ways by different ways, depending on
-     the user setup. The topological graph can then be visualized in two or three dimensions with Minimum Distortion
-     Embeddings, which also allows for flexible setup and domain-adaptation. Alternatively, users can explore multiple
-     classes for graph layout optimization in `topo.layout`. 
+     From data, builds a topologically-oriented basis and from this basis learns a topological graph. Users can choose
+     different models to achieve these topological representations, combinining either diffusion harmonics,
+     continuous k-nearest-neighbors or fuzzy simplicial sets to approximate the Laplace-Beltrami Operator.
+     The topological graphs can then be visualized with multiple layout tools.
+
+     TopOGraph has three built-in options
+     of previously proposed, state-of-the-art algorithms for graph layout: spectral layouts (multicomponent [Laplacian
+     Eigenmaps](http://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf)),
+     Manifold Approximation and Projection (a generalization of the seminal and robust
+     [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html)) and
+     [Minimum Distortion Embedding](https://pymde.org/). When properly tuned, these algorithms tend to reach
+     very similar layouts.
 
     Parameters
      ----------
@@ -79,7 +87,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
      graph : 'diff' or 'cknn' (optional, default 'diff').
          Which topological graph to learn from the built basis. If 'diff', uses a second-order diffusion process to learn
          similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors algorithms. Both
-         algorithms learn graph-oriented topological metrics from the learned basis.
+         algorithms learn graph-oriented topological metrics from the learned basis. If 'fuzzy', builds a fuzzy simplicial
+         set from the active basis.
 
      ann : bool (optional, default True).
          Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
@@ -210,6 +219,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.random_state = random_state
         self.N = None
         self.M = None
+        self.fitted_MAP = None
+        self.MDE_problem = None
+        self.SpecLayout = None
+        self.FuzzyBasis = None
+        self.FuzzyLapMap = None
+        self.FuzzyGraph = None
 
     def __repr__(self):
         if (self.N is not None) and (self.M is not None):
@@ -220,14 +235,26 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             msg = msg + " \n    Diffusion basis fitted - .DiffBasis"
         if self.ContBasis is not None:
             msg = msg + " \n    Continuous basis fitted - .ContBasis"
+        if self.FuzzyBasis is not None:
+            msg = msg + " \n    Fuzzy basis fitted - .FuzzyBasis"
         if self.MSDiffMap is not None:
             msg = msg + " \n    Multiscale Diffusion Maps fitted - .MSDiffMap"
         if self.CLapMap is not None:
             msg = msg + " \n    Continuous Laplacian Eigenmaps fitted - .CLapMap"
+        if self.FuzzyLapMap is not None:
+            msg = msg + " \n    Fuzzy Laplacian Eigenmaps fitted - .FuzzyLapMap"
         if self.DiffGraph is not None:
             msg = msg + " \n    Diffusion graph fitted - .DiffGraph"
         if self.CknnGraph is not None:
             msg = msg + " \n    Continuous graph fitted - .CknnGraph"
+        if self.FuzzyGraph is not None:
+            msg = msg + " \n    Fuzzy graph fitted - .FuzzyGraph"
+        if self.fitted_MAP is not None:
+            msg = msg + " \n    Manifold Approximation and Projection fitted - .fitted_MAP"
+        if self.MDE_problem is not None:
+            msg = msg + " \n    Minimum Distortion Embedding set up - .MDE_problem"
+        if self.SpecLayout is not None:
+            msg = msg + " \n    Spectral layout fitted - .SpecLayout"
         if self.clusters is not None:
             msg = msg + " \n    Clustering fitted"
         msg = msg + " \n Active basis: " + str(self.basis) + ' basis.'
@@ -249,13 +276,16 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         -------
 
         TopoGraph instance with several slots, populated as per user settings.
-        If `basis=diffusion`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
+        If `basis='diffusion'`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
                 `TopoGraph.DiffBasis` with a fitted `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics
                 and transition probabilities, respectively stored in TopoGraph.DiffBasis.K and TopoGraph.DiffBasis.T
 
-        If `basis=continuous`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
+        If `basis='continuous'`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
                 `TopoGraph.ContBasis` with a continuous-k-nearest-neighbors model, containing continuous metrics and
                 adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
+
+        If `basis='fuzzy'`, populates `TopoGraph.FuzzyLapMap` with a fuzzy Laplacian Eigenmapping of data, and
+                `TopoGraph.FuzzyBasis` with a fuzzy simplicial set model, containing continuous metrics.
 
         """
         self.N = data.shape[0]
@@ -313,9 +343,40 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             end = time.time()
             print('Topological basis fitted with continuous mappings in %f (sec)' % (end - start))
 
+        elif self.basis == 'fuzzy':
+            start = time.time()
+            self.FuzzyBasis = fuzzy_simplicial_set_ann(data,
+                                                  self.base_knn,
+                                                  knn_indices=None,
+                                                  knn_dists=None,
+                                                  nmslib_metric=self.base_metric,
+                                                  nmslib_n_jobs=self.n_jobs,
+                                                  nmslib_efC=self.efC,
+                                                  nmslib_efS=self.efS,
+                                                  nmslib_M=self.M,
+                                                  verbose=self.verbose)
+            self.FuzzyBasis = self.FuzzyBasis[0]
+            self.FuzzyLapMap = self.spectral_layout(data,
+                                                    target=self.FuzzyBasis,
+                                                    dim=self.n_eigs,
+                                                    metric=self.base_metric)
+            expansion = 10.0 / np.abs(self.FuzzyLapMap).max()
+            self.FuzzyLapMap = (self.FuzzyLapMap * expansion).astype(
+                np.float32
+            ) + self.random_state.normal(
+                scale=0.0001, size=[self.FuzzyBasis.shape[0], self.n_eigs]
+            ).astype(
+                np.float32
+            )
+            end = time.time()
+            print('Topological basis fitted with fuzzy mappings in %f (sec)' % (end - start))
+
+        else:
+            return print('\'basis\' must be either \'diffusion\', \'continuous\' or \'fuzzy\'! Returning empty TopOGraph.')
+
         return self
 
-    def transform(self, base=None):
+    def transform(self, basis=None):
         """
         Learns new affinity, topological operators from chosen basis.
 
@@ -325,7 +386,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             TopOGraph instance.
 
         base : str, optional.
-            Base to use when building the topological graph. Defaults to the active base ( `TopOGraph.basis`)
+            Base to use when building the topological graph. Defaults to the active base ( `TopOGraph.basis`).
+            Setting this updates the active base.
 
 
         Returns
@@ -333,14 +395,18 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.
 
         """
-        if base is not None:
-            self.basis = base
+        if basis is not None:
+            self.basis = basis
         print('Building topological graph...')
         start = time.time()
         if self.basis == 'continuous':
             use_basis = self.CLapMap
         elif self.basis == 'diffusion':
             use_basis = self.MSDiffMap
+        elif self.basis == 'fuzzy':
+            use_basis = self.FuzzyLapMap
+        else:
+            return print('No computed basis available! Compute a topological basis before fitting a topological graph.')
         if self.graph == 'diff':
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
                                  alpha=self.alpha,
@@ -361,7 +427,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                  ).fit(use_basis)
             if self.cache_graph:
                 self.DiffGraph = DiffGraph.T
-        if self.graph == 'cknn':
+        elif self.graph == 'cknn':
             CknnGraph = cknn_graph(use_basis,
                                    n_neighbors=self.graph_knn,
                                    delta=self.delta,
@@ -371,75 +437,253 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                    is_sparse=True)
             if self.cache_graph:
                 self.CknnGraph = CknnGraph
+
+        elif self.graph == 'fuzzy':
+            FuzzyGraph = fuzzy_simplicial_set_ann(use_basis,
+                                                  self.graph_knn,
+                                                  knn_indices=None,
+                                                  knn_dists=None,
+                                                  nmslib_metric=self.graph_metric,
+                                                  nmslib_n_jobs=self.n_jobs,
+                                                  nmslib_efC=self.efC,
+                                                  nmslib_efS=self.efS,
+                                                  nmslib_M=self.M,
+                                                  verbose=self.verbose)
+            FuzzyGraph = FuzzyGraph[0]
+            if self.cache_graph:
+                self.FuzzyGraph = FuzzyGraph
+        else:
+            return print('\'graph\' must be \'diff\', \'cknn\' or \'fuzzy\'!')
+
         end = time.time()
         print('Topological graph extracted in = %f (sec)' % (end - start))
         if self.graph == 'diff':
             return DiffGraph.T
         elif self.graph == 'cknn':
             return CknnGraph
+        elif self.graph == 'fuzzy':
+            return FuzzyGraph
         else:
             return self
 
-    def spectral_layout(self, data, target, dim=2):
+    def spectral_layout(self, basis=None, target=None, dim=2, metric='cosine', cache=True):
         """
 
         Performs a multicomponent spectral layout of the data and the target similarity matrix.
 
         Parameters
         ----------
-        data :
-            input data
+        basis :
+            which basis to use.
         target : scipy.sparse.csr.csr_matrix.
-            target similarity matrix.
-        dim : int (optional, default 2)
+            target similarity matrix. If None (default), computes a fuzzy simplicial set with default parameters.
+        dim : int (optional, default 2).
             number of dimensions to embed into.
-
+        cache : bool (optional, default True).
+            Whether to cache the embedding to the `TopOGraph` object.
         Returns
         -------
         np.ndarray containing the resulting embedding.
 
         """
+        if basis is None:
+            basis = self.basis
+        if target is None:
+            if self.FuzzyGraph is None:
+                target = self.fuzzy_graph(basis)
+            else:
+                target = self.FuzzyGraph
+        if basis == 'diffusion':
+            if self.MSDiffMap is None:
+                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+            else:
+                X = self.MSDiffMap
+        elif basis == 'continuous':
+            if self.CLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.CLapMap
+        elif basis == 'fuzzy':
+            if self.FuzzyLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.FuzzyLapMap
+        else:
+            return print('No computed basis or data is provided!')
 
-
-
-        if self.basis == 'diffusion':
-            spt_layout = spt.spectral_layout(
-                data,
-                self.DiffBasis.T,
-                dim,
-                self.random_state,
-                metric="precomputed",
-            )
-            expansion = 10.0 / np.abs(spt_layout).max()
-            spt_layout = (spt_layout * expansion).astype(
-                np.float32
-            ) + self.random_state.normal(
-                scale=0.0001, size=[self.DiffBasis.T.shape[0], dim]
-            ).astype(
-                np.float32
-            )
-        elif self.basis == 'continuous':
-            spt_layout = spt.LapEigenmap(
-                self.ContBasis.K,
-                dim,
-                self.random_state,
-                metric="precomputed",
-            )
-            expansion = 10.0 / np.abs(spt_layout).max()
-            spt_layout = (spt_layout * expansion).astype(
-                np.float32
-            ) + self.random_state.normal(
-                scale=0.0001, size=[self.ContBasis.K.shape[0], dim]
-            ).astype(
-                np.float32
-            )
+        spt_layout = spt.spectral_layout(X, target, dim, self.random_state, metric=metric, metric_kwds={})
+        expansion = 10.0 / np.abs(spt_layout).max()
+        spt_layout = (spt_layout * expansion).astype(
+            np.float32
+        ) + self.random_state.normal(
+            scale=0.0001, size=[target.shape[0], dim]
+        ).astype(
+            np.float32
+        )
+        if cache:
+            self.SpecLayout = spt_layout
         return spt_layout
 
-    def MDE(self, target, data=None,
+
+    def fuzzy_graph(self,
+                    basis=None,
+                    graph_knn=None,
+                    knn_indices=None,
+                    knn_dists=None,
+                    nmslib_metric=None,
+                    nmslib_n_jobs=None,
+                    nmslib_efC=None,
+                    nmslib_efS=None,
+                    nmslib_M=None,
+                    set_op_mix_ratio=1.0,
+                    local_connectivity=1.0,
+                    apply_set_operations=True,
+                    verbose=None,
+                    cache=True):
+        """
+        Given a topological basis, a neighborhood size, and a measure of distance
+            compute the fuzzy simplicial set (here represented as a fuzzy graph in
+            the form of a sparse matrix) associated to the data. This is done by
+            locally approximating geodesic distance at each point, creating a fuzzy
+            simplicial set for each such point, and then combining all the local
+            fuzzy simplicial sets into a global one via a fuzzy union.
+            Parameters
+            ----------
+            basis : str, 'diffusion' or 'continuous'.
+                The basis to be modelled as a fuzzy simplicial set. Defaults to active `TopOGraph.basis`
+            graph_knn : int.
+                The number of neighbors to use to approximate geodesic distance.
+                Larger numbers induce more global estimates of the manifold that can
+                miss finer detail, while smaller values will focus on fine manifold
+                structure to the detriment of the larger picture. Defaults to `TopOGraph.graph_knn`
+            nmslib_metric : str (optional, default `TopOGraph.graph_knn`).
+                accepted NMSLIB metrics. Accepted metrics include:
+                        -'sqeuclidean'
+                        -'euclidean'
+                        -'l1'
+                        -'l1_sparse'
+                        -'cosine'
+                        -'angular'
+                        -'negdotprod'
+                        -'levenshtein'
+                        -'hamming'
+                        -'jaccard'
+                        -'jansen-shan'
+            nmslib_n_jobs : int (optional, default None).
+                Number of threads to use for approximate-nearest neighbor search.
+            nmslib_efC : int (optional, default 100).
+                increasing this value improves the quality of a constructed graph and leads to higher
+                accuracy of search. However this also leads to longer indexing times. A reasonable
+                range is 100-2000.
+            nmslib_efS : int (optional, default 100).
+                similarly to efC, improving this value improves recall at the expense of longer
+                retrieval time. A reasonable range is 100-2000.
+            nmslib_M : int (optional, default 30).
+                defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+                (Hierarchical Navigable Small World Graph). However, the actual default maximum number
+                of neighbors for the zero layer is 2*M. For more information on HSNW, please check
+                https://arxiv.org/abs/1603.09320. HSNW is implemented in python via NMSLIB. Please check
+                more about NMSLIB at https://github.com/nmslib/nmslib .    n_epochs: int (optional, default None)
+                The number of training epochs to be used in optimizing the
+                low dimensional embedding. Larger values result in more accurate
+                embeddings. If None is specified a value will be selected based on
+                the size of the input dataset (200 for large datasets, 500 for small).
+            knn_indices : array of shape (n_samples, n_neighbors) (optional).
+                If the k-nearest neighbors of each point has already been calculated
+                you can pass them in here to save computation time. This should be
+                an array with the indices of the k-nearest neighbors as a row for
+                each data point.
+            knn_dists : array of shape (n_samples, n_neighbors) (optional).
+                If the k-nearest neighbors of each point has already been calculated
+                you can pass them in here to save computation time. This should be
+                an array with the distances of the k-nearest neighbors as a row for
+                each data point.
+            set_op_mix_ratio : float (optional, default 1.0).
+                Interpolate between (fuzzy) union and intersection as the set operation
+                used to combine local fuzzy simplicial sets to obtain a global fuzzy
+                simplicial sets. Both fuzzy set operations use the product t-norm.
+                The value of this parameter should be between 0.0 and 1.0; a value of
+                1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
+                intersection.
+            local_connectivity : int (optional, default 1).
+                The local connectivity required -- i.e. the number of nearest
+                neighbors that should be assumed to be connected at a local level.
+                The higher this value the more connected the manifold becomes
+                locally. In practice this should be not more than the local intrinsic
+                dimension of the manifold.
+            verbose : bool (optional, default False).
+                Whether to report information on the current progress of the algorithm.
+            cache: bool
+
+            Returns
+            -------
+            fuzzy_simplicial_set : coo_matrix
+            A fuzzy simplicial set represented as a sparse matrix. The (i,
+            j) entry of the matrix represents the membership strength of the
+            1-simplex between the ith and jth sample points.
+        """
+
+        if verbose is None:
+            verbose = self.verbose
+        if basis is None:
+            basis = self.basis
+        if graph_knn is None:
+            graph_knn = self.graph_knn
+        if nmslib_metric is None:
+            nmslib_metric = self.graph_metric
+        if nmslib_n_jobs is None:
+            nmslib_n_jobs = self.n_jobs
+        if nmslib_efC is None:
+            nmslib_efC = self.efC
+        if nmslib_efS is None:
+            nmslib_efS = self.efS
+        if nmslib_M is None:
+            nmslib_M = self.M
+
+        if basis == 'diffusion':
+            if self.MSDiffMap is None:
+                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+            else:
+                X = self.MSDiffMap
+        elif basis == 'continuous':
+            if self.CLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.CLapMap
+        elif basis == 'fuzzy':
+            if self.FuzzyLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.FuzzyLapMap
+        else:
+            return print('No computed basis or data is provided!')
+
+        fuzzy_set = fuzzy_simplicial_set_ann(
+            X,
+            graph_knn,
+            knn_indices=knn_indices,
+            knn_dists=knn_dists,
+            nmslib_metric=nmslib_metric,
+            nmslib_n_jobs=nmslib_n_jobs,
+            nmslib_efC=nmslib_efC,
+            nmslib_efS=nmslib_efS,
+            nmslib_M=nmslib_M,
+            set_op_mix_ratio=set_op_mix_ratio,
+            local_connectivity=local_connectivity,
+            apply_set_operations=apply_set_operations,
+            verbose=verbose)
+        if cache:
+            self.FuzzyGraph = fuzzy_set[0]
+        return fuzzy_set[0]
+
+
+    def MDE(self,
+            basis=None,
+            target=None,
             dim=2,
             n_neighbors=None,
             type='isomorphic',
-            constraint='standardized',
+            constraint=constraints.Standardized(),
             init='quadratic',
             attractive_penalty=penalties.Log1p,
             repulsive_penalty=penalties.Log,
@@ -447,7 +691,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             repulsive_fraction=None,
             max_distance=None,
             device='cpu',
-            verbose=False
+            verbose=None,
+            cache=True
             ):
         """
         This function constructs an MDE problem for preserving the
@@ -464,15 +709,13 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         To obtain an embedding, call the ``embed`` method on the returned ``MDE``
         object. To plot it, use ``pymde.plot``.
 
-
-
-
         Parameters
         ----------
-        data : torch.Tensor, numpy.ndarray, scipy.sparse matrix or pymde.Graph.
-            The original data, a data matrix of shape ``(n_items, n_features)`` or
-            a graph. Neighbors are computed using Euclidean distance if the data is
-            a matrix, or the shortest-path metric if the data is a graph.
+        basis :  str ('diffusion', 'continuous' or 'fuzzy').
+            Which basis to use when computing the embedding. Defaults to the active basis.
+        target : scipy.sparse matrix
+            The affinity matrix to embedd with. Defaults to the active graph. If init = 'spectral',
+            a fuzzy simplicial set is used, and this argument is ignored.
         dim : int.
             The embedding dimension. Use 2 or 3 for visualization.
         attractive_penalty : pymde.Function class (or factory).
@@ -513,28 +756,68 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         torch.tensor
             A ``pymde.MDE`` object, based on the original data.
         """
-        graph = Graph(target)
-
-        if init == 'spectral':
-            if data is None:
-                print('Spectral initialization requires input data as argument. Falling back to quadratic...')
-                init = 'quadratic'
+        X = None
+        if basis is not None:
+            self.basis = basis
+        if self.basis == 'diffusion':
+            if self.MSDiffMap is None:
+                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
             else:
-                init = self.spectral_layout(data, dim)
-        if constraint == 'standardized':
-            constraint_use = constraints.Standardized()
-        elif constraint == 'centered':
-            constraint_use = constraints.Centered()
-        elif isinstance(constraint, constraints.Constraint()):
-            constraint_use = constraint
+                X = self.MSDiffMap
+        elif self.basis == 'continuous':
+            if self.CLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.CLapMap
+        elif self.basis == 'fuzzy':
+            if self.FuzzyLapMap is None:
+                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+            else:
+                X = self.FuzzyLapMap
         else:
-            constraint_use = None
+            return print('No computed basis or data is provided!')
+
+        if isinstance(init, str) and init == 'spectral':
+            if self.SpecLayout is None:
+                if verbose:
+                    print('Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...')
+                if self.FuzzyGraph is None:
+                    target = self.fuzzy_graph(X)
+                    init = self.spectral_layout(X, target, dim, metric=self.graph_metric)
+                else:
+                    target = self.FuzzyGraph
+                    init = self.spectral_layout(X, target, dim, metric=self.graph_metric)
+            else:
+                init = self.SpecLayout
+
+        if target is None:
+            if self.graph == 'diff':
+                if self.DiffGraph is None:
+                    return print('Graph set to \'diff\', but the diffusion graph is not computed!')
+                else:
+                    target = self.DiffGraph
+            elif self.graph == 'cknn':
+                if self.CknnGraph is None:
+                    return print('Graph set to \'cknn\', but the continuous graph is not computed!')
+                else:
+                    target = self.CknnGraph
+            elif self.graph == 'fuzzy':
+                if self.FuzzyGraph is None:
+                    return print('Graph set to \'fuzzy\', but the fuzzy graph is not computed!')
+                else:
+                    target = self.FuzzyGraph
+            elif X is not None:
+                target = self.fuzzy_graph(X)
+            else:
+                return print('Could not find a computed graph or basis!')
+
+        graph = Graph(target)
         if type == 'isomorphic':
             emb = mde.IsomorphicMDE(graph,
                                     attractive_penalty=attractive_penalty,
                                     repulsive_penalty=repulsive_penalty,
                                     embedding_dim=dim,
-                                    constraint=constraint_use,
+                                    constraint=constraint,
                                     n_neighbors=n_neighbors,
                                     repulsive_fraction=repulsive_fraction,
                                     max_distance=max_distance,
@@ -548,21 +831,30 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             emb = mde.IsometricMDE(graph,
                                    embedding_dim=dim,
                                    loss=loss,
-                                   constraint=constraint_use,
+                                   constraint=constraint,
                                    max_distances=max_distance,
                                    device=device,
                                    verbose=verbose
                                    )
+        else:
+            return print('The tg.MDE problem must be \'isomorphic\' or \'isometric\'. Alternatively, build your own '
+                         'MDE problem with `pyMDE` (i.g. pymde.MDE())')
+
+        if cache:
+            self.MDE_problem = emb
 
         return emb
 
-    def MAP(self, data, graph,
+
+    def MAP(self,
+            data=None,
+            graph=None,
             dims=2,
             min_dist=0.3,
             spread=1.2,
             initial_alpha=1,
             n_epochs=500,
-            metric='cosine',
+            metric=None,
             metric_kwds={},
             output_metric='euclidean',
             output_metric_kwds={},
@@ -577,6 +869,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             densmap=False,
             densmap_kwds={},
             output_dens=False,
+            cache=True
             ):
         """""
 
@@ -591,86 +884,129 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         Parameters
         ----------
-        data: array of shape (n_samples, n_features)
-            The source data to be embedded by UMAP.
-        graph: sparse matrix
+        data : array of shape (n_samples, n_features)
+            The source data to be embedded by UMAP. If `None` (default), the active basis will be used.
+        graph : sparse matrix
             The 1-skeleton of the high dimensional fuzzy simplicial set as
             represented by a graph for which we require a sparse matrix for the
-            (weighted) adjacency matrix.
-        n_components: int
+            (weighted) adjacency matrix. If `None` (default), a fuzzy simplicial set 
+            is computed with default parameters.
+        n_components : int
             The dimensionality of the euclidean space into which to embed the data.
         initial_alpha: float
             Initial learning rate for the SGD.
-        a: float
+        a : float
             Parameter of differentiable approximation of right adjoint functor
-        b: float
+        b : float
             Parameter of differentiable approximation of right adjoint functor
-        gamma: float
+        gamma : float
             Weight to apply to negative samples.
-        negative_sample_rate: int (optional, default 5)
+        negative_sample_rate : int (optional, default 5)
             The number of negative samples to select per positive sample
             in the optimization process. Increasing this value will result
             in greater repulsive force being applied, greater optimization
             cost, but slightly more accuracy.
-        n_epochs: int (optional, default 0)
+        n_epochs : int (optional, default 0)
             The number of training epochs to be used in optimizing the
             low dimensional embedding. Larger values result in more accurate
             embeddings. If 0 is specified a value will be selected based on
             the size of the input dataset (200 for large datasets, 500 for small).
-        init: string
+        init : string
             How to initialize the low dimensional embedding. Options are:
                 * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
                 * 'random': assign initial embedding positions at random.
                 * A numpy array of initial embedding positions.
-        random_state: numpy RandomState or equivalent
+        random_state : numpy RandomState or equivalent
             A state capable being used as a numpy random state.
-        metric: string or callable
+        metric : string or callable
             The metric used to measure distance in high dimensional space; used if
-            multiple connected components need to be layed out.
-        metric_kwds: dict
+            multiple connected components need to be layed out. Defaults to `TopOGraph.graph_metric`.
+        metric_kwds : dict
             Key word arguments to be passed to the metric function; used if
             multiple connected components need to be layed out.
-        densmap: bool
+        densmap : bool
             Whether to use the density-augmented objective function to optimize
             the embedding according to the densMAP algorithm.
-        densmap_kwds: dict
+        densmap_kwds : dict
             Key word arguments to be used by the densMAP optimization.
-        output_dens: bool
+        output_dens : bool
             Whether to output local radii in the original data and the embedding.
-        output_metric: function
+        output_metric : function
             Function returning the distance between two points in embedding space and
             the gradient of the distance wrt the first argument.
-        output_metric_kwds: dict
+        output_metric_kwds : dict
             Key word arguments to be passed to the output_metric function.
-        euclidean_output: bool
+        euclidean_output : bool
             Whether to use the faster code specialised for euclidean output metrics
-        parallel: bool (optional, default False)
+        parallel : bool (optional, default False)
             Whether to run the computation using numba parallel.
             Running in parallel is non-deterministic, and is not used
             if a random seed has been set, to ensure reproducibility.
-        return_init: bool , (optional, default False)
+        return_init : bool , (optional, default False)
             Whether to also return the multicomponent spectral initialization.
-        verbose: bool (optional, default False)
+        verbose : bool (optional, default False)
             Whether to report information on the current progress of the algorithm.
         Returns
         -------
-        embedding: array of shape (n_samples, n_components)
+        embedding : array of shape (n_samples, n_components)
             The optimized of ``graph`` into an ``n_components`` dimensional
             euclidean space.
-        aux_data: dict
+        aux_data : dict
             Auxiliary dictionary output returned with the embedding.
             ``aux_data['Y_init']``: array of shape (n_samples, n_components)
                 The spectral initialization of ``graph`` into an ``n_components`` dimensional
                 euclidean space.
 
-            When densMAP extension is turned on, this dictionary includes local radii in the original
-            data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
+        When densMAP extension is turned on, this dictionary includes local radii in the original
+        data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
 
 
         """""
 
+
+        if metric is None:
+            metric = self.graph_metric
+        if data is None:
+            if self.basis == 'diffusion':
+                if self.MSDiffMap is None:
+                    return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+                else:
+                    data = self.MSDiffMap
+            elif self.basis == 'continuous':
+                if self.CLapMap is None:
+                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                else:
+                    data = self.CLapMap
+            elif self.basis == 'fuzzy':
+                if self.FuzzyLapMap is None:
+                    return print('Basis set to \'fuzzy\', but the diffusion basis is not computed!')
+                else:
+                    data = self.FuzzyLapMap
+            else:
+                return print('No computed basis or data is provided!')
+        if graph is None:
+            if self.graph == 'diff':
+                if self.DiffGraph is None:
+                    return print('Graph set to \'diff\', but the diffusion graph is not computed!')
+                else:
+                    graph = self.DiffGraph
+            elif self.graph == 'cknn':
+                if self.CknnGraph is None:
+                    return print('Graph set to \'cknn\', but the continuous graph is not computed!')
+                else:
+                    graph = self.CknnGraph
+            elif self.graph == 'fuzzy':
+                if self.FuzzyGraph is None:
+                    return print('Graph set to \'fuzzy\', but the fuzzy simplicial set graph is not computed!')
+                else:
+                    graph = self.FuzzyGraph
+            else:
+                print('Could not find a computed graph! Computing a fuzzy simplicial'
+                      ' set graph with default parameters on the active basis.')
+                graph = self.fuzzy_graph()
+
         start = time.time()
-        results = uni.fuzzy_embedding(data, graph,
+        results = map.fuzzy_embedding(data, graph,
                                       n_components=dims,
                                       initial_alpha=initial_alpha,
                                       min_dist=min_dist,
@@ -696,6 +1032,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         end = time.time()
         print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
+        if cache:
+            self.fitted_MAP = results
         return results
 
 

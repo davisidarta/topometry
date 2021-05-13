@@ -154,6 +154,8 @@ def fuzzy_simplicial_set_ann(
         dimension of the manifold.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+    return_dists : bool or None (optional, default none)
+        Whether to return the pairwise distance associated with each edge.
     Returns
     -------
     fuzzy_simplicial_set: coo_matrix
@@ -162,8 +164,9 @@ def fuzzy_simplicial_set_ann(
         1-simplex between the ith and jth sample points.
     """
     if knn_indices is None or knn_dists is None:
-        print('Running fast approximate nearest neighbors with NMSLIB using HNSW...')
-        if nmslib_metric is not {'sqeuclidean',
+        if verbose:
+            print('Running fast approximate nearest neighbors with NMSLIB using HNSW...')
+        if nmslib_metric not in ['sqeuclidean',
                                  'euclidean',
                                  'l1',
                                  'cosine',
@@ -172,7 +175,7 @@ def fuzzy_simplicial_set_ann(
                                  'levenshtein',
                                  'hamming',
                                  'jaccard',
-                                 'jansen-shan'}:
+                                 'jansen-shan']:
             print('Please input a metric compatible with NMSLIB when use_nmslib is set to True')
         knn_indices, knn_dists = approximate_n_neighbors(X,
                                                          n_neighbors=n_neighbors,
@@ -227,7 +230,7 @@ def compute_diff_connectivities(
         efC=100,
         efS=100,
         knn_dist='euclidean',
-        kernel_use='sidarta',
+        kernel_use='simple_adaptive',
         sensitivity=1,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
@@ -431,7 +434,8 @@ def approximate_n_neighbors(data,
 
 
     """
-    print("Finding Approximate Nearest Neighbors...")
+    if verbose:
+        print("Finding Approximate Nearest Neighbors...")
     from scipy.sparse import csr_matrix, issparse
     if issparse(data):
         data = data.tocsr()
@@ -555,7 +559,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
                 rho[i] = non_zero_dists[index - 1]
                 if interpolation > SMOOTH_K_TOLERANCE:
                     rho[i] += interpolation * (
-                            non_zero_dists[index] - non_zero_dists[index - 1]
+                        non_zero_dists[index] - non_zero_dists[index - 1]
                     )
             else:
                 rho[i] = interpolation * non_zero_dists[0]
@@ -890,7 +894,7 @@ def simplicial_set_embedding(
         (knn_indices, knn_dists, rp_forest,) = fast_knn_indices(
             embedding,
             densmap_kwds["n_neighbors"],
-            "euclidean",
+            metric,
             {},
             False,
             random_state,
@@ -901,7 +905,7 @@ def simplicial_set_embedding(
             embedding,
             densmap_kwds["n_neighbors"],
             random_state,
-            "euclidean",
+            metric,
             {},
             knn_indices,
             knn_dists,

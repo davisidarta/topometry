@@ -425,7 +425,9 @@ class Diffusor(TransformerMixin):
         self.res['EigenVectors'] = pd.DataFrame(self.res['EigenVectors'])
         self.res["EigenValues"] = pd.Series(self.res["EigenValues"])
 
-        self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res, verbose=self.verbose)
+        self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
+                                                                                            n_eigs=self.use_eigs,
+                                                                                            verbose=self.verbose)
 
         end = time.time()
         if self.verbose:
