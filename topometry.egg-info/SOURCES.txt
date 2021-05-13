@@ -169,15 +169,14 @@ topo/diag/id_est.py
 topo/diag/__pycache__/__init__.cpython-38.pyc
 topo/layouts/__init__.py
 topo/layouts/graph_utils.py
+topo/layouts/map.py
 topo/layouts/mde.py
-topo/layouts/uni.py
 topo/layouts/__pycache__/__init__.cpython-38.pyc
 topo/layouts/__pycache__/graph_utils.cpython-38.pyc
 topo/layouts/__pycache__/mde.cpython-38.pyc
 topo/layouts/__pycache__/net.cpython-38.pyc
 topo/layouts/__pycache__/umap_layouts.rdist-32.py38.1.nbc
 topo/layouts/__pycache__/umap_layouts.rdist-32.py38.nbi
-topo/layouts/__pycache__/uni.cpython-38.pyc
 topo/spectral/__init__.py
 topo/spectral/spectral.py
 topo/spectral/umap_layouts.py

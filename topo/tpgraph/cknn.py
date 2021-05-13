@@ -114,7 +114,7 @@ class CkNearestNeighbors(object):
         if self.K is not None:
             msg = msg + " \n    Continuous kernel fitted - CkNearestNeighbors.K"
         if self.A is not None:
-            msg = msg + " \n    Adjacency matrix fitted - CkNearestNeighbors.T"
+            msg = msg + " \n    Adjacency matrix fitted - CkNearestNeighbors.A"
         return msg
 
     def __init__(self, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
