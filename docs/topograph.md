@@ -1,4 +1,4 @@
-# Documentation for `TopOGraph`
+# The `TopOGraph` class
 
 ::: topo.models.TopOGraph
     handler: python

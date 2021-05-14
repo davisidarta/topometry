@@ -1,4 +1,4 @@
-# Documentation for `Diffusor`
+# The `Diffusor` class
 
 ::: topo.tpgraph.Diffusor
     handler: python
