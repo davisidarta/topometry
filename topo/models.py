@@ -495,12 +495,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                     X = self.MSDiffMap
             elif basis == 'continuous':
                 if self.CLapMap is None:
-                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'continuous\', but the continuous basis is not computed!')
                 else:
                     X = self.CLapMap
             elif basis == 'fuzzy':
                 if self.FuzzyLapMap is None:
-                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
                 else:
                     X = self.FuzzyLapMap
             if target is None:
@@ -527,6 +527,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
     def fuzzy_graph(self,
                     X=None,
+                    basis=None,
                     graph_knn=None,
                     knn_indices=None,
                     knn_dists=None,
@@ -625,6 +626,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         if verbose is None:
             verbose = self.verbose
+        if basis is None:
+            basis = self.basis
         if graph_knn is None:
             graph_knn = self.graph_knn
         if nmslib_metric is None:
@@ -638,19 +641,19 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         if nmslib_M is None:
             nmslib_M = self.M
         if X is None:
-            if self.basis == 'diffusion':
+            if basis == 'diffusion':
                 if self.MSDiffMap is None:
                     return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
                 else:
                     X = self.MSDiffMap
-            elif self.basis == 'continuous':
+            elif basis == 'continuous':
                 if self.CLapMap is None:
-                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'continuous\', but the continuous basis is not computed!')
                 else:
                     X = self.CLapMap
-            elif self.basis == 'fuzzy':
+            elif basis == 'fuzzy':
                 if self.FuzzyLapMap is None:
-                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
                 else:
                     X = self.FuzzyLapMap
             else:
@@ -762,12 +765,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 X = self.MSDiffMap
         elif self.basis == 'continuous':
             if self.CLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                return print('Basis set to \'continuous\', but the continuous basis is not computed!')
             else:
                 X = self.CLapMap
         elif self.basis == 'fuzzy':
             if self.FuzzyLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
             else:
                 X = self.FuzzyLapMap
         else:
@@ -778,7 +781,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if verbose:
                     print('Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...')
                 if self.FuzzyGraph is None:
-                    target = self.fuzzy_graph(X)
+                    target = self.fuzzy_graph(X, basis='fuzzy')
                     init = self.spectral_layout(X, target, dim, metric=self.graph_metric)
                 else:
                     target = self.FuzzyGraph
@@ -957,9 +960,10 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         """""
 
-
         if metric is None:
             metric = self.graph_metric
+        if self.SpecLayout is not None:
+            init = self.SpecLayout
         if data is None:
             if self.basis == 'diffusion':
                 if self.MSDiffMap is None:
@@ -968,12 +972,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                     data = self.MSDiffMap
             elif self.basis == 'continuous':
                 if self.CLapMap is None:
-                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'continuous\', but the continuous basis is not computed!')
                 else:
                     data = self.CLapMap
             elif self.basis == 'fuzzy':
                 if self.FuzzyLapMap is None:
-                    return print('Basis set to \'fuzzy\', but the diffusion basis is not computed!')
+                    return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
                 else:
                     data = self.FuzzyLapMap
             else:
@@ -985,10 +989,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 else:
                     graph = self.DiffGraph
             elif self.graph == 'cknn':
-                if self.CknnGraph is None:
-                    return print('Graph set to \'cknn\', but the continuous graph is not computed!')
+                print('Graph set to \'cknn\', but the spectral initialisation requires \'diff\' or \'fuzzy\'!'
+                          '\n Computing layout with \'fuzzy\' graph...')
+                if self.FuzzyGraph is None:
+                    graph = self.fuzzy_graph(X=data)
                 else:
-                    graph = self.CknnGraph
+                    graph = self.FuzzyGraph
             elif self.graph == 'fuzzy':
                 if self.FuzzyGraph is None:
                     return print('Graph set to \'fuzzy\', but the fuzzy simplicial set graph is not computed!')
@@ -997,7 +1003,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             else:
                 print('Could not find a computed graph! Computing a fuzzy simplicial'
                       ' set graph with default parameters on the active basis.')
-                graph = self.fuzzy_graph()
+                graph = self.fuzzy_graph(X=data)
 
         start = time.time()
         results = map.fuzzy_embedding(data, graph,
@@ -1029,15 +1035,4 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         if cache:
             self.fitted_MAP = results
         return results
-
-
-
-
-
-
-
-
-
-
-
 
