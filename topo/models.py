@@ -259,7 +259,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             msg = msg + " \n    Clustering fitted"
         msg = msg + " \n Active basis: " + str(self.basis) + ' basis.'
         msg = msg + " \n Active graph: " + str(self.graph) + ' graph.'
-
         return msg
 
     def fit(self, data):
@@ -356,7 +355,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                                   nmslib_M=self.M,
                                                   verbose=self.verbose)
             self.FuzzyBasis = self.FuzzyBasis[0]
-            self.FuzzyLapMap = self.spectral_layout(data,
+            self.FuzzyLapMap = self.spectral_layout(X=data,
                                                     target=self.FuzzyBasis,
                                                     dim=self.n_eigs,
                                                     metric=self.base_metric)
@@ -466,7 +465,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         else:
             return self
 
-    def spectral_layout(self, basis=None, target=None, dim=2, metric='cosine', cache=True):
+    def spectral_layout(self, X=None, basis=None, target=None, dim=2, metric='cosine', cache=True):
         """
 
         Performs a multicomponent spectral layout of the data and the target similarity matrix.
@@ -486,30 +485,31 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         np.ndarray containing the resulting embedding.
 
         """
-        if basis is None:
-            basis = self.basis
-        if target is None:
-            if self.FuzzyGraph is None:
-                target = self.fuzzy_graph(basis)
+        if X is None:
+            if basis is None:
+                basis = self.basis
+            if basis == 'diffusion':
+                if self.MSDiffMap is None:
+                    return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+                else:
+                    X = self.MSDiffMap
+            elif basis == 'continuous':
+                if self.CLapMap is None:
+                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                else:
+                    X = self.CLapMap
+            elif basis == 'fuzzy':
+                if self.FuzzyLapMap is None:
+                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                else:
+                    X = self.FuzzyLapMap
+            if target is None:
+                if self.FuzzyGraph is None:
+                    target = self.fuzzy_graph(X)
+                else:
+                    target = self.FuzzyGraph
             else:
-                target = self.FuzzyGraph
-        if basis == 'diffusion':
-            if self.MSDiffMap is None:
-                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
-            else:
-                X = self.MSDiffMap
-        elif basis == 'continuous':
-            if self.CLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
-            else:
-                X = self.CLapMap
-        elif basis == 'fuzzy':
-            if self.FuzzyLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
-            else:
-                X = self.FuzzyLapMap
-        else:
-            return print('No computed basis or data is provided!')
+                return print('No computed basis or data is provided!')
 
         spt_layout = spt.spectral_layout(X, target, dim, self.random_state, metric=metric, metric_kwds={})
         expansion = 10.0 / np.abs(spt_layout).max()
@@ -526,7 +526,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
 
     def fuzzy_graph(self,
-                    basis=None,
+                    X=None,
                     graph_knn=None,
                     knn_indices=None,
                     knn_dists=None,
@@ -549,8 +549,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             fuzzy simplicial sets into a global one via a fuzzy union.
             Parameters
             ----------
-            basis : str, 'diffusion' or 'continuous'.
-                The basis to be modelled as a fuzzy simplicial set. Defaults to active `TopOGraph.basis`
+            X : str, 'diffusion' or 'continuous'.
+                The data to be modelled as a fuzzy simplicial set.
             graph_knn : int.
                 The number of neighbors to use to approximate geodesic distance.
                 Larger numbers induce more global estimates of the manifold that can
@@ -625,8 +625,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         if verbose is None:
             verbose = self.verbose
-        if basis is None:
-            basis = self.basis
         if graph_knn is None:
             graph_knn = self.graph_knn
         if nmslib_metric is None:
@@ -639,24 +637,24 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             nmslib_efS = self.efS
         if nmslib_M is None:
             nmslib_M = self.M
-
-        if basis == 'diffusion':
-            if self.MSDiffMap is None:
-                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+        if X is None:
+            if self.basis == 'diffusion':
+                if self.MSDiffMap is None:
+                    return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+                else:
+                    X = self.MSDiffMap
+            elif self.basis == 'continuous':
+                if self.CLapMap is None:
+                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                else:
+                    X = self.CLapMap
+            elif self.basis == 'fuzzy':
+                if self.FuzzyLapMap is None:
+                    return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
+                else:
+                    X = self.FuzzyLapMap
             else:
-                X = self.MSDiffMap
-        elif basis == 'continuous':
-            if self.CLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
-            else:
-                X = self.CLapMap
-        elif basis == 'fuzzy':
-            if self.FuzzyLapMap is None:
-                return print('Basis set to \'continuous\', but the diffusion basis is not computed!')
-            else:
-                X = self.FuzzyLapMap
-        else:
-            return print('No computed basis or data is provided!')
+                return print('No computed basis or data is provided!')
 
         fuzzy_set = fuzzy_simplicial_set_ann(
             X,
@@ -676,7 +674,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             self.FuzzyGraph = fuzzy_set[0]
         return fuzzy_set[0]
 
-
     def MDE(self,
             basis=None,
             target=None,
@@ -692,8 +689,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             max_distance=None,
             device='cpu',
             verbose=None,
-            cache=True
-            ):
+            cache=True ):
         """
         This function constructs an MDE problem for preserving the
         structure of original data. This MDE problem is well-suited for
@@ -834,12 +830,10 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                    constraint=constraint,
                                    max_distances=max_distance,
                                    device=device,
-                                   verbose=verbose
-                                   )
+                                   verbose=verbose)
         else:
             return print('The tg.MDE problem must be \'isomorphic\' or \'isometric\'. Alternatively, build your own '
                          'MDE problem with `pyMDE` (i.g. pymde.MDE())')
-
         if cache:
             self.MDE_problem = emb
 
