@@ -80,3 +80,5 @@ def poincare_disk_plot(emb, labels=None, pt_size=1, marker='o', opacity=1, cmap=
     ax.axis('off')
     plt.gca().set_aspect('equal', 'datalim')
     return plt.show()
+
+

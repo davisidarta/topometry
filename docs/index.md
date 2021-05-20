@@ -9,13 +9,13 @@ extreme topological diversity, such as those
 generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing), and can be used to perform topology-preserving 
 visualizations. 
 
-TopoMetry main class is the ``TopoGraph`` object. In a ``TopoGraph``, topological metrics are recovered with diffusion
+TopOMetry main class is the ``TopOGraph`` object. In a ``TopOGraph``, topological metrics are recovered with diffusion
 harmonics or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or 
 diffuse or continuous versions of Laplacian Eigenmaps). 
 
 On top of these basis, new graphs can be learned using k-nearest-neighbors
 graphs or additional topological operators. The learned metrics, basis and graphs are stored as different attributes of the
-``TopoGraph`` object. 
+``TopOGraph`` object. 
 
 Finally, different visualizations of the learned topology can be optimized with ``pyMDE`` by solving a 
 [Minimum-Distortion Embedding](https://github.com/cvxgrp/pymde) problem. TopOMetry also implements an adapted, non-uniform

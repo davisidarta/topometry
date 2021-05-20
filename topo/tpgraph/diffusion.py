@@ -11,7 +11,6 @@ from scipy.sparse import csr_matrix, find, issparse, dia_matrix
 from scipy.sparse.linalg import eigs, eigsh
 from sklearn.base import TransformerMixin
 from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import spectral_clustering
 from topo.base import ann
 from topo.tpgraph import multiscale
 import warnings
@@ -50,25 +49,39 @@ class Diffusor(TransformerMixin):
         however at the expense of fine-grained resolution. More generally, consider this a calculus
         discretization threshold.
 
-    ann : bool (optional, default True)
-        Whether to use approximate nearest neighbors for graph construction with NMSLib.
-        If `False`, uses `sklearn` default implementation.
+    backend : str (optional, default 'hnwslib')
+        Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
+        are 'hnwslib' (default) and 'nmslib'. For exact nearest-neighbors, use 'sklearn'.
 
     metric : str (optional, default 'cosine')
-        Distance metric for building an approximate kNN graph. Defaults to 'euclidean'. Users are encouraged to explore
-        different metrics, such as 'cosine' and 'jaccard'. The 'hamming' and 'jaccard' distances are also available
-        for string vectors. Accepted metrics include NMSLib metrics and sklearn metrics. Some examples are:
-        -'sqeuclidean'
-        -'euclidean'
-        -'l1'
-        -'lp' - requires setting the parameter ``p``
-        -'cosine'
-        -'angular'
-        -'negdotprod'
-        -'levenshtein'
-        -'hamming'
-        -'jaccard'
-        -'jansen-shan'
+        Distance metric for building an approximate kNN graph. Defaults to
+        'cosine'. Users are encouraged to explore different metrics, such as 'euclidean' and 'inner_product'.
+        The 'hamming' and 'jaccard' distances are also available for string vectors.
+         Accepted metrics include NMSLib*, HNSWlib** and sklearn metrics. Some examples are:
+
+        -'sqeuclidean' (*, **)
+
+        -'euclidean' (*, **)
+
+        -'l1' (*)
+
+        -'lp' - requires setting the parameter ``p`` (*) - similar to Minkowski
+
+        -'cosine' (*, **)
+
+        -'inner_product' (**)
+
+        -'angular' (*)
+
+        -'negdotprod' (*)
+
+        -'levenshtein' (*)
+
+        -'hamming' (*)
+
+        -'jaccard' (*)
+
+        -'jansen-shan' (*)
 
     p : int or float (optional, default 11/16 )
         P for the Lp metric, when ``metric='lp'``.  Can be fractional. The default 11/16 approximates
@@ -138,11 +151,11 @@ class Diffusor(TransformerMixin):
                  cache=False,
                  alpha=1,
                  n_jobs=10,
-                 ann=True,
+                 backend='hnswlib',
                  p=None,
-                 M=30,
-                 efC=100,
-                 efS=100,
+                 M=15,
+                 efC=50,
+                 efS=50,
                  norm=True,
                  transitions=False
                  ):
@@ -151,7 +164,7 @@ class Diffusor(TransformerMixin):
         self.use_eigs = use_eigs
         self.alpha = alpha
         self.n_jobs = n_jobs
-        self.ann = ann
+        self.backend = backend
         self.metric = metric
         self.p = p
         self.M = M
@@ -204,12 +217,16 @@ class Diffusor(TransformerMixin):
 
         """
         data = X
-        self.start_time = time.time()
+        start_time = time.time()
         self.N = data.shape[0]
         self.M = data.shape[1]
         if self.kernel_use not in ['simple', 'simple_adaptive', 'decay', 'decay_adaptive']:
-            raise Exception('Kernel must be either \'simple\', \'simple_adaptive\', \'decay\' or \'decay_adaptive\'.') 
-        if self.ann:
+            raise Exception('Kernel must be either \'simple\', \'simple_adaptive\', \'decay\' or \'decay_adaptive\'.')
+        if self.backend == 'hnswlib' and self.metric not in ['euclidean', 'sqeuclidean', 'cosine', 'inner_product']:
+            if self.verbose:
+                print('Metric ' + str(self.metric) + ' not compatible with \'hnslib\' backend. Changing to \'nmslib\' backend.')
+            self.backend = 'nmslib'
+        if self.backend == 'nmslib':
             # Construct an approximate k-nearest-neighbors graph
             anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
                                           metric=self.metric,
@@ -221,28 +238,28 @@ class Diffusor(TransformerMixin):
                                           efS=self.efS,
                                           verbose=self.verbose).fit(data)
             knn = anbrs.transform(data)
-            # X, y specific stds: Normalize by the distance of median nearest neighbor to account for neighborhood size.
-            median_k = np.floor(self.n_neighbors / 2).astype(np.int)
-            adap_sd = np.zeros(self.N)
-            for i in np.arange(len(adap_sd)):
-                adap_sd[i] = np.sort(knn.data[knn.indptr[i]: knn.indptr[i + 1]])[
-                    median_k - 1
-                    ]
+        elif self.backend == 'hnwslib':
+            anbrs = ann.HNSWlibTransformer(n_neighbors=self.n_neighbors,
+                                           metric=self.metric,
+                                           n_jobs=self.n_jobs,
+                                           M=self.M,
+                                           efC=self.efC,
+                                           efS=self.efS,
+                                           verbose=False).fit(data)
+            knn = anbrs.transform(data)
         else:
-            if self.metric == 'lp':
-                raise Exception('Generalized Lp distances are available only with `ann` set to True.')
-
             # Construct a k-nearest-neighbors graph
             nbrs = NearestNeighbors(n_neighbors=int(self.n_neighbors), metric=self.metric, n_jobs=self.n_jobs).fit(
                 data)
             knn = nbrs.kneighbors_graph(data, mode='distance')
-            # X, y specific stds: Normalize by the distance of median nearest neighbor to account for neighborhood size.
-            median_k = np.floor(self.n_neighbors / 2).astype(np.int)
-            adap_sd = np.zeros(self.N)
-            for i in np.arange(len(adap_sd)):
-                adap_sd[i] = np.sort(knn.data[knn.indptr[i]: knn.indptr[i + 1]])[
-                    median_k - 1
-                    ]
+
+        # X, y specific stds: Normalize by the distance of median nearest neighbor to account for neighborhood size.
+        median_k = np.floor(self.n_neighbors / 2).astype(np.int)
+        adap_sd = np.zeros(self.N)
+        for i in np.arange(len(adap_sd)):
+            adap_sd[i] = np.sort(knn.data[knn.indptr[i]: knn.indptr[i + 1]])[
+                median_k - 1
+                ]
 
         # Distance metrics
         x, y, dists = find(knn)  # k-nearest-neighbor distances
@@ -260,15 +277,32 @@ class Diffusor(TransformerMixin):
         if self.kernel_use == 'simple_adaptive' or self.kernel_use == 'decay_adaptive':
             self.new_k = int(self.n_neighbors + (self.n_neighbors - pm.max()))
             # increase neighbor search:
-            anbrs_new = ann.NMSlibTransformer(n_neighbors=self.new_k,
+            if self.backend == 'nmslib':
+                # Construct an approximate k-nearest-neighbors graph
+                anbrs_new = ann.NMSlibTransformer(n_neighbors=self.new_k,
                                               metric=self.metric,
+                                              p=self.p,
                                               method='hnsw',
                                               n_jobs=self.n_jobs,
-                                              p=self.p,
                                               M=self.M,
                                               efC=self.efC,
-                                              efS=self.efS).fit(data)
-            knn_new = anbrs_new.transform(data)
+                                              efS=self.efS,
+                                              verbose=self.verbose).fit(data)
+                knn_new = anbrs_new.transform(data)
+            elif self.backend == 'hnwslib':
+                anbrs_new = ann.HNSWlibTransformer(n_neighbors=self.new_k,
+                                               metric=self.metric,
+                                               n_jobs=self.n_jobs,
+                                               M=self.M,
+                                               efC=self.efC,
+                                               efS=self.efS,
+                                               verbose=False).fit(data)
+                knn_new = anbrs_new.transform(data)
+            else:
+                # Construct a k-nearest-neighbors graph
+                anbrs_new = NearestNeighbors(n_neighbors=int(self.new_k), metric=self.metric, n_jobs=self.n_jobs).fit(
+                    data)
+                knn_new = anbrs_new.kneighbors_graph(data, mode='distance')
 
             x_new, y_new, dists_new = find(knn_new)
 
@@ -305,13 +339,15 @@ class Diffusor(TransformerMixin):
             W = csr_matrix((np.exp(-dists), (x_new, y_new)), shape=[self.N, self.N])
 
         # Kernel construction
-        kernel = (W + W.T) / 2
+        kernel = (W + W.T) / 2      # ensure symmetry
         self.K = kernel
+        # Guarantee zero diagonal
+        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 0
 
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
-        # Diffusion through Markov chain
 
+        # Diffusion through Markov chain
         D = np.ravel(self.K.sum(axis=1))
         if self.alpha > 0:
             # L_alpha
@@ -336,7 +372,7 @@ class Diffusor(TransformerMixin):
         end = time.time()
         if self.verbose:
             print('Diffusion time = %f (sec), per sample=%f (sec), per sample adjusted for thread number=%f (sec)' %
-                  (end - self.start_time, float(end - self.start_time) / self.N, self.n_jobs * float(end - self.start_time) / self.N))
+                  (end - start_time, float(end - start_time) / self.N, self.n_jobs * float(end - start_time) / self.N))
 
 
         return self
@@ -360,7 +396,7 @@ class Diffusor(TransformerMixin):
        ``Diffusor.res['MultiscaleComponents']]``
 
         """
-        self.start_time = time.time()
+        start_time = time.time()
         # Fit an optimal number of components based on the eigengap
         # Use user's  or default initial guess
         # initial eigen value decomposition
@@ -432,7 +468,7 @@ class Diffusor(TransformerMixin):
         end = time.time()
         if self.verbose:
             print('Multiscale decomposition time = %f (sec), per sample=%f (sec), per sample adjusted for thread number=%f (sec)' %
-                  (end - self.start_time, float(end - self.start_time) / self.N, self.n_jobs * float(end - self.start_time) / self.N))
+                  (end - start_time, float(end - start_time) / self.N, self.n_jobs * float(end - start_time) / self.N))
         if self.plot_spectrum:
             self.spectrum_plot()
 
@@ -456,7 +492,7 @@ class Diffusor(TransformerMixin):
 
         """
 
-        self.start_time = time.time()
+        start_time = time.time()
         # Fit an optimal number of components based on the eigengap
         # Use user's  or default initial guess
         multiplier = self.N // 10e4
@@ -527,23 +563,35 @@ class Diffusor(TransformerMixin):
                                                                                             n_eigs=self.use_eigs,
                                                                                             verbose=self.verbose)
 
-
-        anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
-                                      metric='cosine',
-                                      method='hnsw',
-                                      n_jobs=self.n_jobs,
-                                      M=self.M,
-                                      efC=self.efC,
-                                      efS=self.efS,
-                                      dense=True,
-                                      verbose=self.verbose
-                                      ).fit(self.res['MultiscaleComponents'])
-
-        ind, dists, grad, graph = anbrs.ind_dist_grad(self.res['MultiscaleComponents'])
-
+        if self.backend == 'nmslib':
+            # Construct an approximate k-nearest-neighbors graph
+            anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
+                                          metric=self.metric,
+                                          p=self.p,
+                                          method='hnsw',
+                                          n_jobs=self.n_jobs,
+                                          M=self.M,
+                                          efC=self.efC,
+                                          efS=self.efS,
+                                          verbose=self.verbose).fit(self.res['MultiscaleComponents'])
+            ind, dists, grad, graph = anbrs.ind_dist_grad(self.res['MultiscaleComponents'])
+        elif self.backend == 'hnwslib':
+            anbrs = ann.HNSWlibTransformer(n_neighbors=self.n_neighbors,
+                                           metric=self.metric,
+                                           n_jobs=self.n_jobs,
+                                           M=self.M,
+                                           efC=self.efC,
+                                           efS=self.efS,
+                                           verbose=False).fit(self.res['MultiscaleComponents'])
+            ind, dists, grad, graph = anbrs.ind_dist_grad(self.res['MultiscaleComponents'])
+        else:
+            # Construct a k-nearest-neighbors graph
+            nbrs = NearestNeighbors(n_neighbors=int(self.n_neighbors), metric=self.metric, n_jobs=self.n_jobs).fit(
+                data)
+            dists, ind = nbrs.kneighbors(data, mode='distance')
         end = time.time()
         print('Diffusion time = %f (sec), per sample=%f (sec), per sample adjusted for thread number=%f (sec)' %
-              (end - self.start_time, float(end - self.start_time) / self.N, self.n_jobs * float(end - self.start_time) / self.N))
+              (end - start_time, float(end - start_time) / self.N, self.n_jobs * float(end - start_time) / self.N))
         if self.plot_spectrum:
             self.spectrum_plot()
 
@@ -608,38 +656,50 @@ class Diffusor(TransformerMixin):
             msc, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                  n_eigs=self.use_eigs,
                                                  verbose=self.verbose)
+        if not isinstance(self.kn.knee, int):
+            ax1 = plt.subplot(1, 1, 1)
+            ax1.set_title('Spectrum decay and eigengap (%i)' % int(self.scaled_eigs))
+            ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
+            ax1.set_ylabel('Eigenvalues')
+            ax1.set_xlabel('Eigenvectors')
+            ax1.vlines(
+                self.scaled_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Multiscaled eigs'
+            )
+            ax1.legend(loc='best')
+            plt.tight_layout()
+            plt.show()
+        else:
+            ax1 = plt.subplot(2, 1, 1)
+            ax1.set_title('Spectrum decay and \'knee\' (%i)' % int(self.kn.knee))
+            ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
+            ax1.set_ylabel('Eigenvalues')
+            ax1.set_xlabel('Eigenvectors')
+            ax1.vlines(
+                self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Knee'
+            )
+            ax1.legend(loc='best')
 
-        ax1 = plt.subplot(2, 1, 1)
-        ax1.set_title('Spectrum decay and \'knee\' (%i)' % int(self.kn.knee))
-        ax1.plot(self.kn.x, self.kn.y, 'b', label='data')
-        ax1.set_ylabel('Eigenvalues')
-        ax1.set_xlabel('Eigenvectors')
-        ax1.vlines(
-            self.kn.knee, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Knee'
-        )
-        ax1.legend(loc='best')
+            ax2 = plt.subplot(2, 1, 2)
+            ax2.set_title('Curve analysis')
+            ax2.plot(self.kn.x_normalized, self.kn.y_normalized, "b", label="normalized")
+            ax2.plot(self.kn.x_difference, self.kn.y_difference, "r", label="differential")
+            ax2.set_xticks(
+                np.arange(self.kn.x_normalized.min(), self.kn.x_normalized.max() + 0.1, 0.1)
+            )
+            ax2.set_yticks(
+                np.arange(self.kn.y_difference.min(), self.kn.y_normalized.max() + 0.1, 0.1)
+            )
 
-        ax2 = plt.subplot(2, 1, 2)
-        ax2.set_title('Curve analysis')
-        ax2.plot(self.kn.x_normalized, self.kn.y_normalized, "b", label="normalized")
-        ax2.plot(self.kn.x_difference, self.kn.y_difference, "r", label="differential")
-        ax2.set_xticks(
-            np.arange(self.kn.x_normalized.min(), self.kn.x_normalized.max() + 0.1, 0.1)
-        )
-        ax2.set_yticks(
-            np.arange(self.kn.y_difference.min(), self.kn.y_normalized.max() + 0.1, 0.1)
-        )
-
-        ax2.vlines(
-            self.kn.norm_knee,
-            plt.ylim()[0],
-            plt.ylim()[1],
-            linestyles="--",
-            label="Knee",
-        )
-        ax2.legend(loc="best")
-        plt.tight_layout()
-        plt.show()
+            ax2.vlines(
+                self.kn.norm_knee,
+                plt.ylim()[0],
+                plt.ylim()[1],
+                linestyles="--",
+                label="Knee",
+            )
+            ax2.legend(loc="best")
+            plt.tight_layout()
+            plt.show()
         return plt
 
 

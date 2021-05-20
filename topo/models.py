@@ -2,13 +2,14 @@
 # Author: Davi Sidarta-Oliveira <davisidarta(at)gmail(dot)com>
 # School of Medical Sciences, University of Campinas, Brazil
 #
-
+import sys
 import time
 from topo.tpgraph.diffusion import Diffusor
-from topo.tpgraph.cknn import cknn_graph
+from topo.tpgraph.cknn import cknn_graph, CkNearestNeighbors
 from topo.spectral import spectral as spt
 from topo.layouts import map, mde, Graph
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+from topo.plot import scatter_plot
 from sklearn.base import TransformerMixin, BaseEstimator
 import numpy as np
 from pymde.functions import penalties, losses
@@ -90,35 +91,39 @@ class TopOGraph(TransformerMixin, BaseEstimator):
          algorithms learn graph-oriented topological metrics from the learned basis. If 'fuzzy', builds a fuzzy simplicial
          set from the active basis.
 
-     ann : bool (optional, default True).
-         Whether to use approximate nearest neighbors for graph construction. If `False`, uses `sklearn` default implementation.
+    backend : str (optional, default 'hnwslib')
+        Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
+        are 'hnwslib' (default) and 'nmslib'. For exact nearest-neighbors, use 'sklearn'.
 
-     base_metric : str (optional, default 'cosine').
-         Distance metrics for building a approximate kNN graphs. Defaults to 'cosine'. Users are encouraged to explore
-         different metrics, such as 'cosine' and 'jaccard'. The 'hamming' and 'jaccard' distances are also available
-         for string vectors. Accepted metrics include NMSLib metrics and sklearn metrics. Some examples are:
-         
-         -'sqeuclidean'
-         
-         -'euclidean'
-         
-         -'l1'
-         
-         -'lp' - requires setting the parameter ``p``
-         
-         -'cosine'
-         
-         -'angular'
-         
-         -'negdotprod'
-         
-         -'levenshtein'
-         
-         -'hamming'
-         
-         -'jaccard'
-         
-         -'jansen-shan'
+    base_metric : str (optional, default 'cosine')
+        Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
+        'cosine'. Users are encouraged to explore different metrics, such as 'euclidean' and 'inner_product'.
+        The 'hamming' and 'jaccard' distances are also available for string vectors.
+         Accepted metrics include NMSLib*, HNSWlib** and sklearn metrics. Some examples are:
+
+        -'sqeuclidean' (*, **)
+
+        -'euclidean' (*, **)
+
+        -'l1' (*)
+
+        -'lp' - requires setting the parameter ``p`` (*) - similar to Minkowski
+
+        -'cosine' (*, **)
+
+        -'inner_product' (**)
+
+        -'angular' (*)
+
+        -'negdotprod' (*)
+
+        -'levenshtein' (*)
+
+        -'hamming' (*)
+
+        -'jaccard' (*)
+
+        -'jansen-shan' (*)
          
      graph_metric : str (optional, default 'cosine').
          Exactly the same as base_matric, but used for building the topological graph.
@@ -157,13 +162,13 @@ class TopOGraph(TransformerMixin, BaseEstimator):
      """
 
     def __init__(self,
-                 base_knn=15,
+                 base_knn=10,
                  graph_knn=10,
-                 n_eigs=100,
+                 n_eigs=50,
                  basis='diffusion',
                  graph='diff',
-                 kernel_use='simple_adaptive',
-                 base_metric='cosine',
+                 kernel_use='decay_adaptive',
+                 base_metric='sqeuclidean',
                  graph_metric='cosine',
                  transitions=False,
                  alpha=1,
@@ -173,7 +178,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  t='inf',
                  p=11 / 16,
                  n_jobs=1,
-                 ann=True,
+                 backend='hnwslib',
                  M=30,
                  efC=100,
                  efS=100,
@@ -190,7 +195,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.graph_knn = graph_knn
         self.alpha = alpha
         self.n_jobs = n_jobs
-        self.ann = ann
+        self.backend = backend
         self.base_metric = base_metric
         self.graph_metric = graph_metric
         self.p = p
@@ -298,7 +303,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                       n_neighbors=self.base_knn,
                                       alpha=self.alpha,
                                       n_jobs=self.n_jobs,
-                                      ann=self.ann,
+                                      backend=self.backend,
                                       metric=self.base_metric,
                                       p=self.p,
                                       M=self.M,
@@ -317,14 +322,20 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         elif self.basis == 'continuous':
             start = time.time()
-            self.ContBasis = cknn_graph(data,
-                                        n_neighbors=self.base_knn,
-                                        delta=self.delta,
-                                        metric=self.base_metric,
-                                        t=self.t,
-                                        include_self=True,
-                                        is_sparse=True,
-                                        return_instance=True)
+            self.ContBasis = CkNearestNeighbors(data,
+                                                n_neighbors=self.base_knn,
+                                                delta=self.delta,
+                                                metric=self.base_metric,
+                                                t=self.t,
+                                                backend=self.backend,
+                                                n_jobs=self.n_jobs,
+                                                p=self.p,
+                                                M=self.M,
+                                                efC=self.efC,
+                                                efS=self.efS,
+                                                include_self=True,
+                                                is_sparse=True,
+                                                return_instance=True)
 
             self.CLapMap = spt.LapEigenmap(
                 self.ContBasis.K,
@@ -410,7 +421,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
                                  alpha=self.alpha,
                                  n_jobs=self.n_jobs,
-                                 ann=self.ann,
+                                 backend=self.backend,
                                  metric=self.graph_metric,
                                  p=self.p,
                                  M=self.M,
@@ -757,24 +768,31 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         """
         X = None
         if basis is not None:
-            self.basis = basis
-        if self.basis == 'diffusion':
-            if self.MSDiffMap is None:
-                return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+            if isinstance(basis, str):
+                self.basis = basis
+            elif isinstance(basis, np.ndarray):
+                X = basis
             else:
-                X = self.MSDiffMap
-        elif self.basis == 'continuous':
-            if self.CLapMap is None:
-                return print('Basis set to \'continuous\', but the continuous basis is not computed!')
-            else:
-                X = self.CLapMap
-        elif self.basis == 'fuzzy':
-            if self.FuzzyLapMap is None:
-                return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-            else:
-                X = self.FuzzyLapMap
-        else:
-            return print('No computed basis or data is provided!')
+                print('\'basis\' must be either a str (\'diffusion\', \'continuous\', \'fuzzy\') or a np.ndarray!'
+                      '\n Setting to default basis...')
+            if isinstance(basis, str):
+                if self.basis == 'diffusion':
+                    if self.MSDiffMap is None:
+                        return print('Basis set to \'diffusion\', but the diffusion basis is not computed!')
+                    else:
+                        X = self.MSDiffMap
+                elif self.basis == 'continuous':
+                    if self.CLapMap is None:
+                        return print('Basis set to \'continuous\', but the continuous basis is not computed!')
+                    else:
+                        X = self.CLapMap
+                elif self.basis == 'fuzzy':
+                    if self.FuzzyLapMap is None:
+                        return print('Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
+                    else:
+                        X = self.FuzzyLapMap
+                else:
+                    return print('No computed basis or data was provided!')
 
         if isinstance(init, str) and init == 'spectral':
             if self.SpecLayout is None:

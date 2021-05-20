@@ -38,28 +38,41 @@ def multiscale(res,
 
 
     """
+    use_eigs = 0
     if n_eigs == 'comp_gap':
         vals = np.array(res["EigenValues"])
         use_eigs = int(np.sum(vals > 0, axis=0))
-        kn = KneeLocator(range(0, len(vals)), vals, S=50,
+        use_eigs = int(use_eigs - 1)
+        kn = KneeLocator(range(0, len(vals)), vals, S=100,
                      curve='convex', direction='decreasing', interp_method='polynomial')
     else:
         vals = np.positive(np.array(res["EigenValues"]))
-        kn = KneeLocator(range(0, len(vals)), vals, S=50,
+        kn = KneeLocator(range(0, len(vals)), vals, S=100,
                      curve='convex', direction='decreasing', interp_method='polynomial')
         if n_eigs == 'knee':
-            use_eigs = int(kn.knee)
+            if not isinstance(kn.knee, int):
+                if verbose:
+                    print('Pathological knee! Using all computed eigs!')
+                n_eigs = 'max'
+                vals = np.positive(np.array(res["EigenValues"]))
+                kn = KneeLocator(range(0, len(vals)), vals, S=100,
+                                 curve='convex', direction='decreasing', interp_method='polynomial')
+            else:
+                use_eigs = int(kn.knee)
+            if use_eigs < 5:
+                n_eigs = 'max'
     if isinstance(n_eigs, int):
         use_eigs = int(n_eigs)
     elif n_eigs == 'max':
         use_eigs = int(np.sum(vals > 0, axis=0))
+        use_eigs = int(use_eigs - 1)
     if not isinstance(use_eigs, int):
         raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
-
     if use_eigs < 5:
-        print('Raising n_eigs...')
-        use_eigs = use_eigs + 5
-
+        if verbose:
+            print('Found knee < 5 ! Using all computed eigs!')
+        use_eigs = int(np.sum(vals > 0, axis=0))
+        use_eigs = int(use_eigs - 1)
     # Multiscale
     eigs_idx = list(range(1, int(use_eigs)))
     evals = np.positive(np.array(res["EigenValues"]))

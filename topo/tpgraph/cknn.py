@@ -30,7 +30,9 @@
 #
 import numpy as np
 from scipy.sparse import csr_matrix
+from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import pairwise_distances
+from topo.base import ann
 from topo.base.dists import \
     (euclidean,
      standardised_euclidean,
@@ -53,9 +55,14 @@ from topo.base.dists import \
      yule)
 from scipy.spatial.distance import squareform, pdist
 
-def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
-                       include_self=False, is_sparse=True,
-                       return_instance=False):
+def cknn_graph(X,
+               n_neighbors,
+               delta=1.0,
+               metric='euclidean',
+               t='inf',
+               include_self=False,
+               is_sparse=True,
+               return_instance=False):
 
     c_knn = CkNearestNeighbors(n_neighbors=n_neighbors, delta=delta,
                               metric=metric, t=t, include_self=include_self,
@@ -107,8 +114,8 @@ class CkNearestNeighbors(object):
         """
 
     def __repr__(self):
-        if (self.N is not None) and (self.M is not None):
-            msg = "CkNearestNeighbors() object with %i samples and %i observations" % (self.N, self.M) + " and:"
+        if (self.N is not None) and (self.m is not None):
+            msg = "CkNearestNeighbors() object with %i samples and %i observations" % (self.N, self.m) + " and:"
         else:
             msg = "CkNearestNeighbors() object object without any fitted data."
         if self.K is not None:
@@ -117,19 +124,37 @@ class CkNearestNeighbors(object):
             msg = msg + " \n    Adjacency matrix fitted - CkNearestNeighbors.A"
         return msg
 
-    def __init__(self, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
-                 include_self=False, is_sparse=True, return_adjacency=False):
+    def __init__(self,
+                 n_neighbors=10,
+                 delta=1.0,
+                 metric='euclidean',
+                 backend='hnswlib',
+                 n_jobs=10,
+                 p=None,
+                 M=15,
+                 efC=50,
+                 efS=50,
+                 t='inf',
+                 include_self=True,
+                 is_sparse=True,
+                 return_adjacency=False):
         self.n_neighbors = n_neighbors
         self.delta = delta
         self.metric = metric
         self.t = t
         self.include_self = include_self
         self.is_sparse = is_sparse
+        self.backend = backend
+        self.n_jobs = n_jobs
+        self.p = p
+        self.efC = efC
+        self.M = M
+        self.efS = efS
         self.K = None
         self.return_adjacency = return_adjacency
         self.A = None
         self.N = None
-        self.M = None
+        self.m = None
         if self.metric == 'euclidean':
             self.metric_fun = euclidean
         elif metric == 'standardised_euclidean':
@@ -197,12 +222,41 @@ class CkNearestNeighbors(object):
         if n_samples < 2:
             raise ValueError("At least 2 data points are required")
 
+        if self.backend == 'hnswlib' and self.metric not in ['euclidean', 'sqeuclidean', 'cosine', 'inner_product']:
+            if self.verbose:
+                print('Metric ' + str(self.metric) + ' not compatible with \'hnslib\' backend. Changing to \'nmslib\' backend.')
+            self.backend = 'nmslib'
+        if self.backend == 'nmslib':
+            # Construct an approximate k-nearest-neighbors graph
+            anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
+                                          metric=self.metric,
+                                          p=self.p,
+                                          method='hnsw',
+                                          n_jobs=self.n_jobs,
+                                          M=self.M,
+                                          efC=self.efC,
+                                          efS=self.efS,
+                                          verbose=self.verbose).fit(X)
+            dmatrix = anbrs.transform(X)
+        elif self.backend == 'hnwslib':
+            anbrs = ann.HNSWlibTransformer(n_neighbors=self.n_neighbors,
+                                           metric=self.metric,
+                                           n_jobs=self.n_jobs,
+                                           M=self.M,
+                                           efC=self.efC,
+                                           efS=self.efS,
+                                           verbose=False).fit(X)
+            dmatrix = anbrs.transform(X)
+        else:
+            # Construct a k-nearest-neighbors graph
+            nbrs = NearestNeighbors(n_neighbors=int(self.n_neighbors), metric=self.metric, n_jobs=self.n_jobs).fit(
+                X)
+            dmatrix = nbrs.kneighbors_graph(X, mode='distance')
+
         if metric == 'precomputed':
             if X.shape[0] != X.shape[1]:
                 raise ValueError("`X` must be square matrix")
             dmatrix = X
-        else:
-            dmatrix = pairwise_distances(X, metric=metric)
 
         darray_n_nbrs = np.partition(dmatrix, n_neighbors)[:, [n_neighbors]]
         ratio_matrix = dmatrix / np.sqrt(darray_n_nbrs.dot(darray_n_nbrs.T))
@@ -228,10 +282,12 @@ class CkNearestNeighbors(object):
             neigh = csr_matrix(dmatrix)
         if self.return_adjacency:
             return self.A
+        neigh[(np.arange(neigh.shape[0]), np.arange(neigh.shape[0]))] = 0
         if is_sparse:
             self.K = neigh
         else:
             self.K = neigh.toarray()
+
         return self.K
 
     def adjacency(self):
