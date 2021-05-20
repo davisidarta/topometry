@@ -1,3 +1,5 @@
+## Welcome to TopOMetry documentation!
+
 TopOMetry is a high-level python library to explore data topology.
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
 to visualize them with different layout optimization algorithms. The main objective is to achieve approximations of 
