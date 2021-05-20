@@ -26,13 +26,13 @@ extreme topological diversity, such as those
 generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing), and can be used to perform topology-preserving 
 visualizations. 
 
-TopoMetry main class is the ``TopoGraph`` object. In a ``TopoGraph``, topological metrics are recovered with diffusion
+TopOMetry main class is the ``TopOGraph`` object. In a ``TopOGraph``, topological metrics are recovered with diffusion
 harmonics or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or 
 diffuse or continuous versions of Laplacian Eigenmaps). 
 
 On top of these basis, new graphs can be learned using k-nearest-neighbors
 graphs or additional topological operators. The learned metrics, basis and graphs are stored as different attributes of the
-``TopoGraph`` object. 
+``TopOGraph`` object. 
 
 Finally, different visualizations of the learned topology can be optimized with ``pyMDE`` by solving a 
 [Minimum-Distortion Embedding](https://github.com/cvxgrp/pymde) problem. TopOMetry also implements an adapted, non-uniform
@@ -83,29 +83,40 @@ pip3 install .
 From a large data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` with default parameters: 
 
 ```
-import topo.models as tp
+import topo as tp
    
 # Learn topological metrics and basis from data. The default is to use diffusion harmonics.
-tg = tp.TopoGraph()
+tg = tp.ml.TopOGraph()
 tg = tg.fit(data)
 
 ```
+Note: `topo.ml` is the high-level model module which contains the `TopOGraph` class.
 
-After learning a topological basis, we can access topological metrics and basis in the ``tg`` object, and build different
-topological graphs.
+After learning a topological basis, we can access topological metrics and basis in the ``TopOGraph`` object, and build different
+topological graphs. 
+
 ```
 # Learn a topological graph. Again, the default is to use diffusion harmonics.
-tgraph = tg.transform(data) # tgraph.K is the affinity graph, and tgraph.T is the transition graph
-   
-# Graph layout optimization with UMAP (not so much 'uniform' in this case)
-topo_umap, aux = tp.MAP(tg.MSDiffMaps, tgraph.T)
-
-emb_t, aux = tp.MAP(tg.MSDiffMaps, traph)
+tgraph = tg.transform(data) 
 ```
 
+Then, it is possible to optimize the topological graph layout. The first option is to do so with
+our adaptation of UMAP (MAP), which will minimize the cross-entropy between the topological basis
+and its graph:
 
+```
+# Graph layout optimization with MAP
+map_emb, aux = tp.MAP()
+```
 
+The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
+custom MDE problems within the TopOGraph model :
 
+```
+# Set up MDE problem
+mde = tg.MDE()
+mde_emb = mde.embed()
+```
 
 
 ## Tutorials and examples
