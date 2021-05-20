@@ -38,44 +38,28 @@ def multiscale(res,
 
 
     """
-    use_eigs = 0
-    if n_eigs == 'comp_gap':
-        vals = np.array(res["EigenValues"])
-        use_eigs = int(np.sum(vals > 0, axis=0))
-        use_eigs = int(use_eigs - 1)
-        kn = KneeLocator(range(0, len(vals)), vals, S=100,
+    use_eigs = len(np.array(res["EigenValues"])) // 2
+    evals = np.positive(np.array(res["EigenValues"]))
+    kn = KneeLocator(range(0, len(evals)), evals, S=30,
                      curve='convex', direction='decreasing', interp_method='polynomial')
-    else:
-        vals = np.positive(np.array(res["EigenValues"]))
-        kn = KneeLocator(range(0, len(vals)), vals, S=100,
-                     curve='convex', direction='decreasing', interp_method='polynomial')
-        if n_eigs == 'knee':
-            if not isinstance(kn.knee, int):
-                if verbose:
-                    print('Pathological knee! Using all computed eigs!')
-                n_eigs = 'max'
-                vals = np.positive(np.array(res["EigenValues"]))
-                kn = KneeLocator(range(0, len(vals)), vals, S=100,
-                                 curve='convex', direction='decreasing', interp_method='polynomial')
-            else:
-                use_eigs = int(kn.knee)
-            if use_eigs < 5:
-                n_eigs = 'max'
+    if n_eigs == 'knee':
+        if kn.knee is None:
+            n_eigs = 'max'
+        else:
+            use_eigs = int(kn.knee)
     if isinstance(n_eigs, int):
         use_eigs = int(n_eigs)
-    elif n_eigs == 'max':
-        use_eigs = int(np.sum(vals > 0, axis=0))
-        use_eigs = int(use_eigs - 1)
-    if not isinstance(use_eigs, int):
-        raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
     if use_eigs < 5:
         if verbose:
-            print('Found knee < 5 ! Using all computed eigs!')
-        use_eigs = int(np.sum(vals > 0, axis=0))
-        use_eigs = int(use_eigs - 1)
+            print('Raising n_eigs to maximum computed!')
+        n_eigs = 'max'
+    if n_eigs == 'max':
+        use_eigs = int(len(evals) - 1)
+    if not isinstance(use_eigs, int):
+        raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
+
     # Multiscale
     eigs_idx = list(range(1, int(use_eigs)))
-    evals = np.positive(np.array(res["EigenValues"]))
     eig_vals = np.ravel(evals[eigs_idx])
 
     data = res['EigenVectors'].values[:, eigs_idx] * (eig_vals / (1 - eig_vals))
@@ -84,7 +68,7 @@ def multiscale(res,
     if verbose:
         if n_eigs == 'knee':
             print('Automatically selected and multiscaled ' + str(round(use_eigs)) +
-                 ' among ' + str(int(np.sum(vals > 0, axis=0))) + ' diffusion components.')
+                 ' among ' + str(int(np.sum(evals > 0, axis=0))) + ' diffusion components.')
         elif n_eigs == 'max':
             print('Multiscaled a maximum of ' + str(round(use_eigs)) +
                   ' computed diffusion components.')
