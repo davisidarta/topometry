@@ -335,14 +335,12 @@ class Diffusor(TransformerMixin):
 
         if self.kernel_use == 'decay_adaptive':
             # X, y specific stds
-            dists = (dists_new / (adap_nbr[x_new] + 1e-8)) ** np.power(2, (((int(self.n_neighbors + (self.n_neighbors - pm.max()))) - pm[x_new]) / pm[x_new]))  # Normalize by normalized contribution to neighborhood size.
+            dists = (dists_new / (adap_nbr[x_new] + 1e-10)) ** np.power(2, (((int(self.n_neighbors + (self.n_neighbors - pm.max()))) - pm[x_new]) / pm[x_new]))  # Normalize by normalized contribution to neighborhood size.
             W = csr_matrix((np.exp(-dists), (x_new, y_new)), shape=[self.N, self.N])
 
         # Kernel construction
-        kernel = (W + W.T)     # ensure symmetry
+        kernel = (W + W.T) / 2
         self.K = kernel
-        # Guarantee zero diagonal
-        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 0
 
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
@@ -366,7 +364,7 @@ class Diffusor(TransformerMixin):
             self.T = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N]).dot(self.K)
 
         # Guarantee symmetry
-        self.T = (self.T + self.T.T)
+        self.T = (self.T + self.T.T) / 2
         self.T[(np.arange(self.T.shape[0]), np.arange(self.T.shape[0]))] = 0
 
         end = time.time()
