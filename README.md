@@ -60,14 +60,20 @@ Prior to installing TopOMetry, make sure you have [cmake](https://cmake.org/), [
 sudo apt-get install cmake
 pip3 install scikit-build setuptools
 ```
-We're also going to need NMSlib for really fast approximate nearest-neighborhood search across different distance metrics.
-If your CPU supports advanced instructions, we recommend you install nmslib separately for better performance:
+TopOMetry uses either NMSlib or HNSWlib really fast approximate nearest-neighborhood search across different
+distance metrics. By default, it uses NMSlib. If your CPU supports advanced instructions, we recommend you install
+nmslib separately for better performance:
 ```
 pip3 install --no-binary :all: nmslib
 ```
+Alternatively, you can use HNSWlib for k-nearest-neighbor search backend:
+```
+pip3 install hnswlib
+```
+
 Then, you can install TopOMetry and its other requirements with pip:
 ```
-pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
+pip3 install numpy pandas scipy numba torch matplotlib scikit-learn kneed pymde
 ```
 ```
 pip3 install topometry
