@@ -339,8 +339,9 @@ class Diffusor(TransformerMixin):
             W = csr_matrix((np.exp(-dists), (x_new, y_new)), shape=[self.N, self.N])
 
         # Kernel construction
-        kernel = (W + W.T) / 2
+        kernel = W + W.T
         self.K = kernel
+        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 0
 
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
@@ -364,7 +365,7 @@ class Diffusor(TransformerMixin):
             self.T = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N]).dot(self.K)
 
         # Guarantee symmetry
-        self.T = (self.T + self.T.T) / 2
+        self.T = self.T + self.T.T
         self.T[(np.arange(self.T.shape[0]), np.arange(self.T.shape[0]))] = 0
 
         end = time.time()
