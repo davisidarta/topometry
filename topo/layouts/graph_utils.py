@@ -214,7 +214,7 @@ def fuzzy_simplicial_set_ann(
         knn_indices, knn_dists = approximate_n_neighbors(X,
                                                          n_neighbors=n_neighbors,
                                                          metric=metric,
-                                                         backend='hnswlib',
+                                                         backend=backend,
                                                          n_jobs=n_jobs,
                                                          efC=efC,
                                                          efS=efS,
@@ -533,7 +533,7 @@ def approximate_n_neighbors(data,
         # Construct a k-nearest-neighbors graph
         nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs).fit(
             data)
-        knn_distances, knn_inds = nbrs.kneighbors(data, mode='distance')
+        knn_distances, knn_inds = nbrs.kneighbors(data)
 
     return knn_inds, knn_distances
 

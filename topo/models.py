@@ -5,6 +5,8 @@
 import sys
 import time
 from topo.tpgraph.diffusion import Diffusor
+from sklearn.neighbors import NearestNeighbors
+from topo.base import ann
 from topo.tpgraph.cknn import cknn_graph, CkNearestNeighbors
 from topo.spectral import spectral as spt
 from topo.layouts import map, mde, Graph
@@ -167,16 +169,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  n_eigs=50,
                  basis='diffusion',
                  graph='diff',
-                 kernel_use='simple_adaptive',
                  base_metric='cosine',
                  graph_metric='cosine',
-                 transitions=False,
-                 alpha=1,
-                 plot_spectrum=False,
-                 eigengap=True,
-                 delta=1.0,
-                 t='inf',
-                 p=11 / 16,
                  n_jobs=1,
                  backend='hnwslib',
                  M=15,
@@ -185,7 +179,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  verbose=False,
                  cache_base=True,
                  cache_graph=True,
+                 kernel_use='simple_adaptive',
+                 alpha=1,
+                 plot_spectrum=False,
+                 eigengap=True,
+                 delta=1.0,
+                 t='inf',
+                 p=11 / 16,
                  norm=True,
+                 transitions=False,
                  random_state=None
                  ):
         self.graph = graph
@@ -322,21 +324,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         elif self.basis == 'continuous':
             start = time.time()
-            self.ContBasis = CkNearestNeighbors(data,
-                                                n_neighbors=self.base_knn,
-                                                delta=self.delta,
-                                                metric=self.base_metric,
-                                                t=self.t,
-                                                backend=self.backend,
-                                                n_jobs=self.n_jobs,
-                                                p=self.p,
-                                                M=self.M,
-                                                efC=self.efC,
-                                                efS=self.efS,
-                                                include_self=True,
-                                                is_sparse=True,
-                                                return_instance=True)
-
+            self.ContBasis = cknn_graph(data,
+                                        n_neighbors=self.base_knn,
+                                        delta=self.delta,
+                                        metric=self.base_metric,
+                                        t=self.t,
+                                        include_self=True,
+                                        is_sparse=True,
+                                        return_instance=True
+                                        )
             self.CLapMap = spt.LapEigenmap(
                 self.ContBasis.K,
                 self.n_eigs,
@@ -355,17 +351,22 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         elif self.basis == 'fuzzy':
             start = time.time()
-            self.FuzzyBasis = fuzzy_simplicial_set_ann(data,
-                                                  self.base_knn,
-                                                  knn_indices=None,
-                                                  knn_dists=None,
-                                                  nmslib_metric=self.base_metric,
-                                                  nmslib_n_jobs=self.n_jobs,
-                                                  nmslib_efC=self.efC,
-                                                  nmslib_efS=self.efS,
-                                                  nmslib_M=self.M,
-                                                  verbose=self.verbose)
-            self.FuzzyBasis = self.FuzzyBasis[0]
+            fuzzy_results = fuzzy_simplicial_set_ann(data,
+                                                       n_neighbors=self.base_knn,
+                                                       knn_indices=None,
+                                                       knn_dists=None,
+                                                       backend=self.backend,
+                                                       metric=self.base_metric,
+                                                       n_jobs=self.n_jobs,
+                                                       efC=self.efC,
+                                                       efS=self.efS,
+                                                       M=self.M,
+                                                       set_op_mix_ratio=1.0,
+                                                       local_connectivity=1.0,
+                                                       apply_set_operations=True,
+                                                       return_dists=True,
+                                                       verbose=self.verbose)
+            self.FuzzyBasis = fuzzy_results[0]
             self.FuzzyLapMap = self.spectral_layout(X=data,
                                                     target=self.FuzzyBasis,
                                                     dim=self.n_eigs,
@@ -450,14 +451,19 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         elif self.graph == 'fuzzy':
             FuzzyGraph = fuzzy_simplicial_set_ann(use_basis,
-                                                  self.graph_knn,
+                                                  n_neighbors=self.graph_knn,
                                                   knn_indices=None,
                                                   knn_dists=None,
-                                                  nmslib_metric=self.graph_metric,
-                                                  nmslib_n_jobs=self.n_jobs,
-                                                  nmslib_efC=self.efC,
-                                                  nmslib_efS=self.efS,
-                                                  nmslib_M=self.M,
+                                                  backend=self.backend,
+                                                  metric=self.graph_metric,
+                                                  n_jobs=self.n_jobs,
+                                                  efC=self.efC,
+                                                  efS=self.efS,
+                                                  M=self.M,
+                                                  set_op_mix_ratio=1.0,
+                                                  local_connectivity=1.0,
+                                                  apply_set_operations=True,
+                                                  return_dists=False,
                                                   verbose=self.verbose)
             FuzzyGraph = FuzzyGraph[0]
             if self.cache_graph:
@@ -542,15 +548,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                     graph_knn=None,
                     knn_indices=None,
                     knn_dists=None,
-                    nmslib_metric=None,
-                    nmslib_n_jobs=None,
-                    nmslib_efC=None,
-                    nmslib_efS=None,
-                    nmslib_M=None,
-                    set_op_mix_ratio=1.0,
-                    local_connectivity=1.0,
-                    apply_set_operations=True,
-                    verbose=None,
                     cache=True):
         """
         Given a topological basis, a neighborhood size, and a measure of distance
@@ -635,22 +632,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             1-simplex between the ith and jth sample points.
         """
 
-        if verbose is None:
-            verbose = self.verbose
-        if basis is None:
-            basis = self.basis
-        if graph_knn is None:
-            graph_knn = self.graph_knn
-        if nmslib_metric is None:
-            nmslib_metric = self.graph_metric
-        if nmslib_n_jobs is None:
-            nmslib_n_jobs = self.n_jobs
-        if nmslib_efC is None:
-            nmslib_efC = self.efC
-        if nmslib_efS is None:
-            nmslib_efS = self.efS
-        if nmslib_M is None:
-            nmslib_M = self.M
         if X is None:
             if basis == 'diffusion':
                 if self.MSDiffMap is None:
@@ -670,20 +651,21 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             else:
                 return print('No computed basis or data is provided!')
 
-        fuzzy_set = fuzzy_simplicial_set_ann(
-            X,
-            graph_knn,
-            knn_indices=knn_indices,
-            knn_dists=knn_dists,
-            nmslib_metric=nmslib_metric,
-            nmslib_n_jobs=nmslib_n_jobs,
-            nmslib_efC=nmslib_efC,
-            nmslib_efS=nmslib_efS,
-            nmslib_M=nmslib_M,
-            set_op_mix_ratio=set_op_mix_ratio,
-            local_connectivity=local_connectivity,
-            apply_set_operations=apply_set_operations,
-            verbose=verbose)
+        fuzzy_set = fuzzy_simplicial_set_ann(X,
+                                             n_neighbors=self.graph_knn,
+                                             knn_indices=knn_indices,
+                                             knn_dists=knn_dists,
+                                             backend=self.backend,
+                                             metric=self.graph_metric,
+                                             n_jobs=self.n_jobs,
+                                             efC=self.efC,
+                                             efS=self.efS,
+                                             M=self.M,
+                                             set_op_mix_ratio=1.0,
+                                             local_connectivity=1.0,
+                                             apply_set_operations=True,
+                                             return_dists=False,
+                                             verbose=self.verbose)
         if cache:
             self.FuzzyGraph = fuzzy_set[0]
         return fuzzy_set[0]
@@ -1007,12 +989,24 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 else:
                     graph = self.DiffGraph
             elif self.graph == 'cknn':
-                print('Graph set to \'cknn\', but the spectral initialisation requires \'diff\' or \'fuzzy\'!'
-                          '\n Computing layout with \'fuzzy\' graph...')
-                if self.FuzzyGraph is None:
-                    graph = self.fuzzy_graph(X=data)
+                if isinstance(init, str):
+                    if init == 'spectral':
+                        print('Graph set to \'cknn\', but the spectral initialisation requires \'diff\' or \'fuzzy\'!'
+                                  '\n Computing layout with \'fuzzy\' graph...')
+                        if self.FuzzyGraph is None:
+                            graph = self.fuzzy_graph(X=data)
+                        else:
+                            graph = self.FuzzyGraph
+                    else:
+                        if self.CknnGraph is None:
+                            return print('Graph set to \'cknn\', but the continuous graph is not computed!')
+                        else:
+                            graph = self.CknnGraph
                 else:
-                    graph = self.FuzzyGraph
+                    if self.CknnGraph is None:
+                        return print('Graph set to \'cknn\', but the continuous graph is not computed!')
+                    else:
+                        graph = self.CknnGraph
             elif self.graph == 'fuzzy':
                 if self.FuzzyGraph is None:
                     return print('Graph set to \'fuzzy\', but the fuzzy simplicial set graph is not computed!')
