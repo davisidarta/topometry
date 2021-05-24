@@ -39,7 +39,7 @@ def multiscale(res,
 
     """
     use_eigs = len(np.array(res["EigenValues"])) // 2
-    evals = np.positive(np.array(res["EigenValues"]))
+    evals = np.array(res["EigenValues"])
     kn = KneeLocator(range(0, len(evals)), evals, S=30,
                      curve='convex', direction='decreasing', interp_method='polynomial')
     if n_eigs == 'knee':
@@ -54,7 +54,7 @@ def multiscale(res,
             print('Raising n_eigs to maximum computed!')
         n_eigs = 'max'
     if n_eigs == 'max':
-        use_eigs = int(len(evals) - 1)
+        use_eigs = int(np.sum(evals > 0, axis=0))
     if not isinstance(use_eigs, int):
         raise Exception('Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
 
