@@ -3,7 +3,7 @@ nav:
     - Welcome!: index.md
     - Installation: installation.md
     - Quick-start: quickstart.md
-    - Single-cell analysis: TopOMetry_Intro_pbmc_10k.md
+    - Single-cell analysis: TopOMetry_Intro_pbmc_3k.md
     - The TopOGraph model: topograph.md
     - Diffusion harmonics: diffusor.md
 theme:

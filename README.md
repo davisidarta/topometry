@@ -49,11 +49,18 @@ inherited from [scikit-learn](https://github.com/scikit-learn/scikit-learn)
 ``BaseEstimator``, making it flexible and easy to apply and/or combine with different workflows on virtually any domain.
 
 
-* [scikit-learn](https://github.com/scikit-learn/scikit-learn) - for general algorithms
-* [ANNOY](https://github.com/spotify/annoy) - for optimized neighbor index search
-* [nmslib](https://github.com/nmslib/nmslib) - for fast and accurate k-nearest-neighbors
+Some general machine-learning libraries:
+* [numpy](https://numpy.org/)
+* [pandas](https://pandas.pydata.org/)
+* [numba](http://numba.pydata.org/)
+* [pytorch](https://pytorch.org/)
+* [scipy](https://www.scipy.org/)
+* [scikit-learn](https://github.com/scikit-learn/scikit-learn)
+
+And:
+* [hnswlib](https://github.com/nmslib/hnswlib) OR [nmslib](https://github.com/nmslib/nmslib) - for fast and accurate k-nearest-neighbors
 * [kneed](https://github.com/arvkevi/kneed) - for finding nice cuttofs
-* [pyMDE](https://github.com/cvxgrp/pymde) - for optimizing layouts
+* [pyMDE](https://github.com/cvxgrp/pymde) - for optimizing layouts with Minimum Distortion Embeddings
 
 Prior to installing TopOMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
 ```
