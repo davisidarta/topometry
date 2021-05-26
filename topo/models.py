@@ -179,7 +179,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  verbose=False,
                  cache_base=True,
                  cache_graph=True,
-                 kernel_use='simple_adaptive',
+                 kernel_use='decay_adaptive',
                  alpha=1,
                  plot_spectrum=False,
                  eigengap=True,
@@ -187,7 +187,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  t='inf',
                  p=11 / 16,
                  norm=True,
-                 transitions=False,
+                 transitions=True,
                  random_state=None
                  ):
         self.graph = graph
@@ -214,6 +214,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.t = t
         self.cache_base = cache_base
         self.cache_graph = cache_graph
+        self.random_state = random_state
         self.DiffBasis = None
         self.clusters = None
         self.computed_LapGraph = False
@@ -223,7 +224,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.DLapMap = None
         self.CknnGraph = None
         self.DiffGraph = None
-        self.random_state = random_state
         self.N = None
         self.M = None
         self.fitted_MAP = None

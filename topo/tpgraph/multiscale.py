@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def multiscale(res,
-                 n_eigs='knee',
+                 n_eigs='max',
                  verbose=True
                  ):
     """

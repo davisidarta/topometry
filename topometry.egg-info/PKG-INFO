@@ -1,3 +1,20 @@
+Metadata-Version: 2.1
+Name: topometry
+Version: 0.0.2.6
+Summary: Fast, accurate learning of data topology with self-adaptive metrics, graphs and layouts
+Home-page: https://github.com/davisidarta/topometry
+Author: Davi Sidarta-Oliveira
+Author-email: davisidarta@fcm.unicamp.br
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/davisidarta/topometry/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
 [![Latest PyPI version](https://img.shields.io/pypi/v/topometry.svg)](https://pypi.org/project/topometry/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
@@ -49,18 +66,11 @@ inherited from [scikit-learn](https://github.com/scikit-learn/scikit-learn)
 ``BaseEstimator``, making it flexible and easy to apply and/or combine with different workflows on virtually any domain.
 
 
-Some general machine-learning libraries:
-* [numpy](https://numpy.org/)
-* [pandas](https://pandas.pydata.org/)
-* [numba](http://numba.pydata.org/)
-* [pytorch](https://pytorch.org/)
-* [scipy](https://www.scipy.org/)
-* [scikit-learn](https://github.com/scikit-learn/scikit-learn)
-
-And:
-* [hnswlib](https://github.com/nmslib/hnswlib) OR [nmslib](https://github.com/nmslib/nmslib) - for fast and accurate k-nearest-neighbors
+* [scikit-learn](https://github.com/scikit-learn/scikit-learn) - for general algorithms
+* [ANNOY](https://github.com/spotify/annoy) - for optimized neighbor index search
+* [nmslib](https://github.com/nmslib/nmslib) - for fast and accurate k-nearest-neighbors
 * [kneed](https://github.com/arvkevi/kneed) - for finding nice cuttofs
-* [pyMDE](https://github.com/cvxgrp/pymde) - for optimizing layouts with Minimum Distortion Embeddings
+* [pyMDE](https://github.com/cvxgrp/pymde) - for optimizing layouts
 
 Prior to installing TopOMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
 ```
@@ -146,3 +156,5 @@ Contributions are very welcome! If you're interested in adding a new feature, ju
 Copyright (c) 2021 Davi Sidarta-Oliveira, davisidarta(at)gmail.com
 
  
+
+

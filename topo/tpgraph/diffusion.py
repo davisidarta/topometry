@@ -142,7 +142,7 @@ class Diffusor(TransformerMixin):
     def __init__(self,
                  n_neighbors=10,
                  n_components=50,
-                 use_eigs='knee',
+                 use_eigs='max',
                  metric='cosine',
                  kernel_use='simple_adaptive',
                  eigengap=True,
