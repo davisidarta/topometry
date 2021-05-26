@@ -25,7 +25,7 @@ and its graph:
 
 ```
 # Graph layout optimization with MAP
-map_emb, aux = tp.MAP(tg.MSDiffMaps, tgraph)
+map_emb, aux = tp.MAP()
 ```
 
 The second, albeit most interesting option is to use pyMDE to find a Minimum Distortion Embedding. TopOMetry implements some
@@ -33,6 +33,6 @@ custom MDE problems within the TopOGraph model :
 
 ```
 # Set up MDE problem
-mde = tg.MDE(tgraph)
+mde = tg.MDE()
 mde_emb = mde.embed()
 ```
