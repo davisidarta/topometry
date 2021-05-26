@@ -11,18 +11,24 @@ extreme topological diversity, such as those
 generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing), and can be used to perform topology-preserving 
 visualizations. 
 
+TopOMetry is designed to handle large-scale data matrices containing
+extreme topological diversity, such as those
+generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing), and can be used to perform topology-preserving
+visualizations.
+
 TopOMetry main class is the ``TopOGraph`` object. In a ``TopOGraph``, topological metrics are recovered with diffusion
-harmonics or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or 
-diffuse or continuous versions of Laplacian Eigenmaps). 
+harmonics, fuzzy simplicial sets or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or
+fuzzy or continuous versions of Laplacian Eigenmaps).
 
 On top of these basis, new graphs can be learned using k-nearest-neighbors
-graphs or additional topological operators. The learned metrics, basis and graphs are stored as different attributes of the
-``TopOGraph`` object. 
+graphs or with new topological metrics. The learned metrics, basis and graphs are stored as different attributes of the
+``TopOGraph`` object.
 
-Finally, different visualizations of the learned topology can be optimized with ``pyMDE`` by solving a 
+Finally, different visualizations of the learned topology can be optimized with ``pyMDE`` by solving a
 [Minimum-Distortion Embedding](https://github.com/cvxgrp/pymde) problem. TopOMetry also implements an adapted, non-uniform
-version of the seminal [Uniform Manifold Approximation and Projection (UMAP)](https://github.com/lmcinnes/umap) 
-for graph layout optimization (we call it MAP for short). 
+version of the seminal [Uniform Manifold Approximation and Projection (UMAP)](https://github.com/lmcinnes/umap)
+for graph layout optimization (we call it MAP for short, as it is not necessarily uniform).
 
 Alternatively, you can use TopOMetry to add topological information to your favorite workflow
-by using its dimensionality reduced basis to compute k-nearest-neighbors instead of PCA.
+by using its dimensionality reduced basis to compute k-nearest-neighbors instead of PCA, or its topological graphs as
+affinity matrices for other algorithms.
