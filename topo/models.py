@@ -36,6 +36,17 @@ except ImportError:
         class Literal(metaclass=LiteralMeta):
             pass
 
+try:
+    import hnswlib
+    _have_hnswlib = True
+except ImportError:
+    _have_hnswlib = False
+
+try:
+    import nmslib
+    _have_nmslib = True
+except ImportError:
+    _have_nmslib = False
 
 class TopOGraph(TransformerMixin, BaseEstimator):
     """
@@ -294,6 +305,19 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 `TopoGraph.FuzzyBasis` with a fuzzy simplicial set model, containing continuous metrics.
 
         """
+        if self.backend == 'hnswlib':
+            if not _have_hnswlib:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                else:
+                    self.backend == 'sklearn'
+        if self.backend == 'nmslib':
+            if not _have_nmslib:
+                if _have_hnswlib:
+                    self.backend == 'hnswlib'
+                else:
+                    self.backend == 'sklearn'
+
         self.N = data.shape[0]
         self.M = data.shape[1]
         if self.random_state is None:
