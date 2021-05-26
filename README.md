@@ -10,8 +10,8 @@
 
 - [What is TopOMetry and why it is useful](#topological-metrics-basis-graphs-and-layouts)
 - [Installation](#installation-and-dependencies)
+- [Documentation and tutorials](https://topometry.readthedocs.io/en/latest/)
 - [Quick-start](#quick-start)
-- [Tutorials](#tutorials-and-examples)
 
 ## Topological metrics, basis, graphs and layouts
 
@@ -130,10 +130,6 @@ custom MDE problems within the TopOGraph model :
 mde = tg.MDE()
 mde_emb = mde.embed()
 ```
-
-## Tutorials and examples
-
-Check the documentation at [ReadTheDocs](https://topometry.readthedocs.io/en/latest/)
 
 ## Contributing
 
