@@ -700,7 +700,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             dim=2,
             n_neighbors=None,
             type='isomorphic',
-            constraint=constraints.Standardized(),
+            constraint=None,
             init='quadratic',
             attractive_penalty=penalties.Log1p,
             repulsive_penalty=penalties.Log,

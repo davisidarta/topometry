@@ -5,7 +5,6 @@ import scipy.sparse.csgraph
 from sklearn.utils import as_float_array
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
-from sklearn.cluster._spectral import discretize
 from topo.base.dists import pairwise_special_metric, SPECIAL_METRICS
 from topo.base.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 

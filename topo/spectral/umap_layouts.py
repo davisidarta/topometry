@@ -3,6 +3,9 @@
 #
 # For more information on the original UMAP implementation, please see:
 # https://github.com/lmcinnes/umap, and https://umap-learn.readthedocs.io/  .
+
+# This is included here for MAP compatibility
+
 import numpy as np
 import numba
 from topo.base import dists as dist
