@@ -41,7 +41,60 @@ import numpy as np
 import numba
 from sklearn.utils.validation import check_is_fitted
 import scipy.sparse
+from sklearn.neighbors import KDTree
 
+@numba.njit(fastmath=True)
+def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
+    det = cov[0,0] * cov[1,1] - cov[0,1] * cov[1,0]
+    if det > 1e-16:
+        cov_inv = np.array([[cov[1,1], -cov[0,1]], [-cov[1,0], cov[0,0]]]) * 1.0 / det
+        diff = x - pos
+        m_dist = cov_inv[0,0] * diff[0]**2 - \
+            (cov_inv[0,1] + cov_inv[1,0]) * diff[0] * diff[1] + \
+            cov_inv[1,1] * diff[1]**2
+        return (np.exp(-0.5 * m_dist)) / (2 * np.pi * np.sqrt(np.abs(det)))
+    else:
+        return 0.0
+
+@numba.njit(fastmath=True)
+def eval_density_at_point(x, embedding):
+    result = 0.0
+    for i in range(embedding.shape[0]):
+        pos = embedding[i, :2]
+        t = embedding[i, 4]
+        U = np.array([[np.cos(t), np.sin(t)], [np.sin(t), -np.cos(t)]])
+        cov = U @ np.diag(embedding[i, 2:4]) @ U
+        result += eval_gaussian(x, pos=pos, cov=cov)
+    return result
+
+def create_density_plot(X, Y, embedding):
+    Z = np.zeros_like(X)
+    tree = KDTree(embedding[:, :2])
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            nearby_points = embedding[tree.query_radius([[X[i,j],Y[i,j]]], r=2)[0]]
+            Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
+    return Z / Z.sum()
+
+@numba.njit(fastmath=True)
+def torus_euclidean_grad(x, y, torus_dimensions=(2*np.pi,2*np.pi)):
+    """Standard euclidean distance.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+    """
+    distance_sqr = 0.0
+    g = np.zeros_like(x)
+    for i in range(x.shape[0]):
+        a = abs(x[i] - y[i])
+        if 2*a < torus_dimensions[i]:
+            distance_sqr += a ** 2
+            g[i] = (x[i] - y[i])
+        else:
+            distance_sqr += (torus_dimensions[i]-a) ** 2
+            g[i] = (x[i] - y[i]) * (a - torus_dimensions[i]) / a
+    distance = np.sqrt(distance_sqr)
+    return distance, g/(1e-6 + distance)
 
 @numba.njit(parallel=True)
 def fast_knn_indices(X, n_neighbors):
