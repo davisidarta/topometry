@@ -4,20 +4,31 @@
 #
 import sys
 import time
-from topo.tpgraph.diffusion import Diffusor
 from sklearn.neighbors import NearestNeighbors
-from topo.base import ann
-from topo.tpgraph.cknn import cknn_graph, CkNearestNeighbors
-from topo.spectral import spectral as spt
-from topo.layouts import map, mde, Graph
-from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
-from topo.plot import scatter_plot
+
 from sklearn.base import TransformerMixin, BaseEstimator
 import numpy as np
 from pymde.functions import penalties, losses
 from pymde import constraints
 from numpy import random
 import torch
+from topo.utils.umap_utils import torus_euclidean_grad
+from topo.tpgraph.diffusion import Diffusor
+from topo.base import ann
+from topo.tpgraph.cknn import cknn_graph, CkNearestNeighbors
+from topo.spectral import spectral as spt
+from topo.layouts import map, mde, Graph
+from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+import topo.plot as pt
+
+
+
+
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print("Matplotlib is required for the plotting functions.")
+    sys.exit()
 
 try:
     from typing import Literal
@@ -31,8 +42,6 @@ except ImportError:
                 if not isinstance(values, tuple):
                     values = (values,)
                 return type('Literal_', (Literal,), dict(__args__=values))
-
-
         class Literal(metaclass=LiteralMeta):
             pass
 
@@ -197,7 +206,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  delta=1.0,
                  t='inf',
                  p=11 / 16,
-                 norm=True,
+                 norm=False,
                  transitions=True,
                  random_state=None
                  ):
@@ -700,6 +709,9 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             dim=2,
             n_neighbors=None,
             type='isomorphic',
+            Y_init=None,
+            n_epochs=500,
+            snapshot_every=30,
             constraint=None,
             init='quadratic',
             attractive_penalty=penalties.Log1p,
@@ -708,8 +720,9 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             repulsive_fraction=None,
             max_distance=None,
             device='cpu',
-            verbose=None,
-            cache=True ):
+            min_tool=10e-5,
+            mem_size=10,
+            verbose=False):
         """
         This function constructs an MDE problem for preserving the
         structure of original data. This MDE problem is well-suited for
@@ -861,11 +874,17 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         else:
             return print('The tg.MDE problem must be \'isomorphic\' or \'isometric\'. Alternatively, build your own '
                          'MDE problem with `pyMDE` (i.g. pymde.MDE())')
-        if cache:
-            self.MDE_problem = emb
-
-        return emb
-
+        self.MDE_problem = emb
+        if Y_init is not None:
+            Y_init = torch.tensor(Y_init)
+        emb_Y = emb.embed(X=Y_init,
+                          max_iter=n_epochs,
+                          memory_size=mem_size,
+                          snapshot_every=snapshot_every,
+                          eps=min_tool,
+                          verbose=verbose)
+        self.MDE_Y = emb_Y
+        return emb_Y
 
     def MAP(self,
             data=None,
@@ -890,7 +909,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             densmap=False,
             densmap_kwds={},
             output_dens=False,
-            cache=True
             ):
         """""
 
@@ -983,7 +1001,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
 
         """""
-
+        if output_metric == 'torus':
+            output_metric = torus_euclidean_grad
         if metric is None:
             metric = self.graph_metric
         if self.SpecLayout is not None:
@@ -1068,7 +1087,131 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         end = time.time()
         print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
-        if cache:
-            self.fitted_MAP = results
+        self.MAP_Y = results
         return results
+
+    def plot(self,
+             target=None,
+             space='2D',
+             labels=None,
+             title=None,
+             pt_size=1,
+             fontsize=18,
+             marker='o',
+             opacity=1,
+             cmap='Spectral',
+             **kwargs):
+        """
+
+        Utility function for plotting TopOGraph layouts. This is independent from the model
+        and can be used to plot arbitrary layouts. Wraps around [Leland McInnes non-euclidean space
+        embeddings](https://umap-learn.readthedocs.io/en/latest/embedding_space.html).
+
+        Parameters
+        ----------
+        target : np.ndarray (optional, default `None`).
+            np.ndarray containing the layout to be plotted. If `None` (default), looks for
+            available MDE and the MAP embedding, in this order.
+
+        space : str (optional, default '2D').
+            Projection space. Defaults to 2D space ('2D'). Options are:
+                - '2D' (default);
+                - '3D' ;
+                - 'hyperboloid_2d' (2D hyperboloid space);
+                - 'hyperboloid_3d' (3D hyperboloid space - note this uses a 2D input);
+                - 'poincare' (Poincare disk - note this uses a 2D input);
+                - 'spherical' (haversine-derived spherical space - note this uses a 2D input);
+                - 'toroid' ()
+                - 'gauss_potential'
+
+
+        labels
+        title
+        pt_size
+        fontsize
+        marker
+        opacity
+        cmap
+        kwargs
+
+        Returns
+        -------
+
+        """
+
+
+
+
+        if target is None:
+            if self.MDE_Y is not None:
+                target = self.MDE_Y
+                used_target = 'MDE'
+            elif self.MAP_Y is not None:
+                target = self.MAP_Y
+                used_target = 'MAP'
+            else:
+                raise Exception('Could not find a computed embedding at TopOGraph.MDE_Y '
+                                'or TopOGraph.MAP_Y.')
+        if space == '2d' or space == '3d':
+            if space == '2d':
+                return pt.scatter_plot(target,
+                                       cmap=cmap,
+                                       c=labels,
+                                       s=pt_size,
+                                       title=title,
+                                       fontsize=fontsize,
+                                       marker=marker,
+                                       alpha=opacity,
+                                       **kwargs)
+            else:
+                return pt.scatter_3d_plot(target,
+                                          cmap=cmap,
+                                          c=labels,
+                                          s=pt_size,
+                                          title=title,
+                                          fontsize=fontsize,
+                                          marker=marker,
+                                          alpha=opacity,
+                                          **kwargs)
+        elif space == 'hyperboloid':
+            return pt.hyperboloid_3d_plot(target,
+                                          cmap=cmap,
+                                          c=labels,
+                                          s=pt_size,
+                                          title=title,
+                                          fontsize=fontsize,
+                                          marker=marker,
+                                          alpha=opacity,
+                                          **kwargs)
+        elif space == 'hyperboloid_3d':
+            return pt.hyperboloid_3d_plot(target,
+                                          cmap=cmap,
+                                          c=labels,
+                                          s=pt_size,
+                                          title=title,
+                                          fontsize=fontsize,
+                                          marker=marker,
+                                          alpha=opacity,
+                                          **kwargs)
+        elif space == 'sphere_3d':
+            return pt.sphere_3d_plot(target,
+                                     cmap=cmap,
+                                     c=labels,
+                                     s=pt_size,
+                                     title=title,
+                                     fontsize=fontsize,
+                                     marker=marker,
+                                     alpha=opacity,
+                                     **kwargs)
+
+        elif space == 'toroid_3d':
+            return pt.toroid_3d_plot(target,
+                                     cmap=cmap,
+                                     c=labels,
+                                     s=pt_size,
+                                     title=title,
+                                     fontsize=fontsize,
+                                     marker=marker,
+                                     alpha=opacity,
+                                     **kwargs)
 
