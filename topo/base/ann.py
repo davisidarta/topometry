@@ -128,6 +128,21 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
 
     def fit(self, data):
         import nmslib
+        self.space = {
+            'sqeuclidean': 'l2_sparse',
+            'euclidean': 'l2_sparse',
+            'cosine': 'cosinesimil_sparse_fast',
+            'lp': 'lp_sparse',
+            'l1_sparse': 'l1_sparse',
+            'linf_sparse': 'linf_sparse',
+            'angular_sparse': 'angulardist_sparse_fast',
+            'negdotprod_sparse': 'negdotprod_sparse_fast',
+            'jaccard_sparse': 'jaccard_sparse',
+            'bit_jaccard': 'bit_jaccard',
+            'bit_hamming': 'bit_hamming',
+            'levenshtein': 'leven',
+            'normleven': 'normleven'
+        }[self.metric]
         start = time.time()
         # see more metrics in the manual
         # https://github.com/nmslib/nmslib/tree/master/manual
@@ -155,24 +170,16 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
         index_time_params = {'M': self.M, 'indexThreadQty': self.n_jobs, 'efConstruction': self.efC, 'post': 2}
 
         if issparse(data) and (not self.dense) and (not isinstance(data, np.ndarray)):
-            if self.metric not in ['levenshtein', 'jansen-shan']:
-                self.space = {
-                    'sqeuclidean': 'l2_sparse',
-                    'euclidean': 'l2_sparse',
-                    'cosine': 'cosinesimil_sparse_fast',
-                    'lp': 'lp_sparse',
-                    'l1_sparse': 'l1_sparse',
-                    'linf_sparse': 'linf_sparse',
-                    'angular_sparse': 'angulardist_sparse_fast',
-                    'negdotprod_sparse': 'negdotprod_sparse_fast',
-                    'jaccard_sparse': 'jaccard_sparse',
-                    'bit_jaccard': 'bit_jaccard',
-                    'bit_hamming': 'bit_hamming'
-                }[self.metric]
+            if self.metric not in ['levenshtein', 'normleven', 'jansen-shan']:
                 if self.metric == 'lp':
                     self.nmslib_ = nmslib.init(method=self.method,
                                                space=self.space,
                                                space_params={'p': self.p},
+                                               data_type=nmslib.DataType.SPARSE_VECTOR)
+                elif self.metric == 'jaccard_sparse':
+                    self.nmslib_ = nmslib.init(method=self.method,
+                                               space=self.space,
+                                               dtype=nmslib.DistType.INT,
                                                data_type=nmslib.DataType.SPARSE_VECTOR)
                 else:
                     self.nmslib_ = nmslib.init(method=self.method,
@@ -205,6 +212,11 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
                                            space=self.space,
                                            space_params={'p': self.p},
                                            data_type=nmslib.DataType.DENSE_VECTOR)
+            elif self.metric == 'bit_jaccard' or self.metric == 'bit_jaccard':
+                    self.nmslib_ = nmslib.init(method=self.method,
+                                               space=self.space,
+                                               dtype=nmslib.DistType.INT,
+                                               data_type=nmslib.DataType.DENSE_VECTOR)
             else:
                 self.nmslib_ = nmslib.init(method=self.method,
                                            space=self.space,
