@@ -176,11 +176,6 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
                                                space=self.space,
                                                space_params={'p': self.p},
                                                data_type=nmslib.DataType.SPARSE_VECTOR)
-                elif self.metric == 'jaccard_sparse':
-                    self.nmslib_ = nmslib.init(method=self.method,
-                                               space=self.space,
-                                               dtype=nmslib.DistType.INT,
-                                               data_type=nmslib.DataType.SPARSE_VECTOR)
                 else:
                     self.nmslib_ = nmslib.init(method=self.method,
                                                space=self.space,
