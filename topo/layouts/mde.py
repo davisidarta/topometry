@@ -8,12 +8,11 @@
 import numpy as np
 import scipy.sparse
 import torch
-from pymde.functions import penalties, losses
-from pymde import problem
-from pymde import quadratic
 from pymde import constraints
 from pymde import preprocess
-from topo.spectral import spectral as spt
+from pymde import problem
+from pymde import quadratic
+from pymde.functions import penalties, losses
 
 
 # Some custom minimum-distortion-embedding problems

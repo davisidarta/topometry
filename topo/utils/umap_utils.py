@@ -37,11 +37,11 @@
 
 import time
 
-import numpy as np
 import numba
-from sklearn.utils.validation import check_is_fitted
-import scipy.sparse
+import numpy as np
 from sklearn.neighbors import KDTree
+from sklearn.utils.validation import check_is_fitted
+
 
 @numba.njit(fastmath=True)
 def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):

@@ -37,16 +37,16 @@
 
 
 import numpy as np
-from scipy.sparse import coo_matrix
 from scipy.optimize import curve_fit
-from topo.base import ann
-from topo.utils import umap_utils
-from topo.tpgraph import diffusion
-from topo.spectral import spectral, umap_layouts
-from topo.base import dists as dist
+from scipy.sparse import coo_matrix
 from sklearn.neighbors import KDTree
 from sklearn.neighbors import NearestNeighbors
 
+from topo.base import ann
+from topo.base import dists as dist
+from topo.spectral import spectral, umap_layouts
+from topo.tpgraph import diffusion
+from topo.utils import umap_utils
 
 ts = umap_utils.ts
 csr_unique = umap_utils.csr_unique

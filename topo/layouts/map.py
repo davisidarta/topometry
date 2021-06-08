@@ -36,8 +36,9 @@
 
 
 import time
+
 from numpy import random
-from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+
 try:
     from typing import Literal
 except ImportError:

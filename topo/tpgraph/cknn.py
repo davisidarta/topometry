@@ -30,9 +30,8 @@
 #
 import numpy as np
 from scipy.sparse import csr_matrix
-from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import pairwise_distances
-from topo.base import ann
+
 from topo.base.dists import \
     (euclidean,
      standardised_euclidean,
@@ -53,7 +52,7 @@ from topo.base.dists import \
      sokal_michener,
      sokal_sneath,
      yule)
-from scipy.spatial.distance import squareform, pdist
+
 
 def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
                        include_self=False, is_sparse=True,

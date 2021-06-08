@@ -5,16 +5,18 @@
 # License: MIT
 ######################################
 import time
+import warnings
+
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix, find, issparse, dia_matrix
-from scipy.sparse.linalg import eigs, eigsh
+from scipy.sparse import (SparseEfficiencyWarning, csr_matrix, find, issparse)
+from scipy.sparse.linalg import eigs
 from sklearn.base import TransformerMixin
 from sklearn.neighbors import NearestNeighbors
+
 from topo.base import ann
 from topo.tpgraph import multiscale
-import warnings
-from scipy.sparse import (SparseEfficiencyWarning,csr_matrix, find, issparse)
+
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 import matplotlib.pyplot as plt
 

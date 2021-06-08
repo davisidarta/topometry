@@ -1,8 +1,7 @@
 import numpy as np
-from numpy import matlib as mb
-from kneed import KneeLocator
 import pandas as pd
-import matplotlib.pyplot as plt
+from kneed import KneeLocator
+
 
 def multiscale(res,
                  n_eigs='max',

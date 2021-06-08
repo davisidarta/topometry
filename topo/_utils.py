@@ -1,8 +1,9 @@
-from types import ModuleType, MethodType
-from functools import partial, wraps
-from weakref import WeakSet
-from typing import Union, Callable, Optional, Mapping, Any, Dict, Tuple
 import inspect
+from functools import partial
+from types import ModuleType, MethodType
+from typing import Union, Callable, Optional
+from weakref import WeakSet
+
 
 def _one_of_ours(obj, root: str):
     return (

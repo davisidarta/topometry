@@ -6,8 +6,9 @@
 
 # This is included here for MAP compatibility
 
-import numpy as np
 import numba
+import numpy as np
+
 from topo.base import dists as dist
 from topo.utils.umap_utils import tau_rand_int
 

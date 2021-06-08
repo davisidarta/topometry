@@ -7,12 +7,13 @@
 ######################################
 
 import time
-import sys
+
 import numpy as np
-from sklearn.base import TransformerMixin, BaseEstimator
 from scipy.sparse import csr_matrix, find, issparse
-from sklearn.neighbors import NearestNeighbors
+from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import NearestNeighbors
+
 
 class NMSlibTransformer(TransformerMixin, BaseEstimator):
     """

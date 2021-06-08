@@ -1,3 +1,3 @@
-from .diffusion import *
 from .cknn import *
+from .diffusion import *
 from .multiscale import multiscale
