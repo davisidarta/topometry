@@ -12,7 +12,7 @@ from pymde.functions import penalties, losses
 from sklearn.base import TransformerMixin, BaseEstimator
 
 import topo.plot as pt
-from topo.layouts import map, mde, Graph
+from topo.layouts import map, mde
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.spectral import spectral as spt
 from topo.tpgraph.cknn import cknn_graph
