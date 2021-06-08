@@ -476,11 +476,11 @@ class Diffusor(TransformerMixin):
         if self.eigengap:
             if len(residual) > 30:
                 while len(residual) > 29:
-                    self.n_eigs = len(pos) + 15
+                    target = self.n_components - 15
                     if self.transitions:
-                       D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
+                       D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
                     else:
-                        D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
+                        D, V = eigs(self.K, target, tol=1e-4, maxiter=self.N)
                     D = np.real(D)
                     V = np.real(V)
                     inds = np.argsort(D)[::-1]
@@ -490,7 +490,7 @@ class Diffusor(TransformerMixin):
                     for i in range(V.shape[1]):
                         vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
                     pos = np.sum(vals > 0, axis=0)
-                    target = int(target * 1.6)
+                    target = int(target * 0.6)
                     residual = np.sum(vals < 0, axis=0)
                 if residual < 1:
                     print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
