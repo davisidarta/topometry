@@ -154,7 +154,7 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
         index_time_params = {'M': self.M, 'indexThreadQty': self.n_jobs, 'efConstruction': self.efC, 'post': 2}
 
         if issparse(data) and (not self.dense) and (not isinstance(data, np.ndarray)):
-            if self.metric not in ['levenshtein', 'hamming', 'jansen-shan', 'jaccard']:
+            if self.metric not in ['levenshtein', 'jansen-shan']:
                 self.space = {
                     'sqeuclidean': 'l2_sparse',
                     'euclidean': 'l2_sparse',
@@ -164,6 +164,9 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
                     'linf_sparse': 'linf_sparse',
                     'angular_sparse': 'angulardist_sparse_fast',
                     'negdotprod_sparse': 'negdotprod_sparse_fast',
+                    'jaccard_sparse': 'jaccard_sparse',
+                    'bit_jaccard': 'bit_jaccard',
+                    'bit_hamming': 'bit_hamming'
                 }[self.metric]
                 if self.metric == 'lp':
                     self.nmslib_ = nmslib.init(method=self.method,
@@ -191,8 +194,9 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
                 'angular': 'angulardist',
                 'negdotprod': 'negdotprod',
                 'levenshtein': 'leven',
-                'hamming': 'bit_hamming',
-                'jaccard': 'bit_jaccard',
+                'jaccard_sparse': 'jaccard_sparse',
+                'bit_jaccard': 'bit_jaccard',
+                'bit_hamming': 'bit_hamming',
                 'jansen-shan': 'jsmetrfastapprox'
             }[self.metric]
             if self.metric == 'lp':
