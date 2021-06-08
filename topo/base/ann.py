@@ -212,7 +212,7 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
                                            space=self.space,
                                            space_params={'p': self.p},
                                            data_type=nmslib.DataType.DENSE_VECTOR)
-            elif self.metric == 'bit_hamming' or self.metric == 'bit_jaccard':
+            elif self.metric == 'bit_hamming':
                     self.nmslib_ = nmslib.init(method=self.method,
                                                space=self.space,
                                                dtype=nmslib.DistType.INT,
