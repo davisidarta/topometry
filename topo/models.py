@@ -4,25 +4,20 @@
 #
 import sys
 import time
-from sklearn.neighbors import NearestNeighbors
 
-from sklearn.base import TransformerMixin, BaseEstimator
 import numpy as np
-from pymde.functions import penalties, losses
-from pymde import constraints
-from numpy import random
 import torch
-from topo.utils.umap_utils import torus_euclidean_grad
-from topo.tpgraph.diffusion import Diffusor
-from topo.base import ann
-from topo.tpgraph.cknn import cknn_graph, CkNearestNeighbors
-from topo.spectral import spectral as spt
+from numpy import random
+from pymde.functions import penalties, losses
+from sklearn.base import TransformerMixin, BaseEstimator
+
+import topo.plot as pt
 from topo.layouts import map, mde, Graph
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
-import topo.plot as pt
-
-
-
+from topo.spectral import spectral as spt
+from topo.tpgraph.cknn import cknn_graph
+from topo.tpgraph.diffusion import Diffusor
+from topo.utils.umap_utils import torus_euclidean_grad
 
 try:
     import matplotlib.pyplot as plt
@@ -461,7 +456,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                  M=self.M,
                                  efC=self.efC,
                                  efS=self.efS,
-                                 kernel_use='simple',
+                                 kernel_use='simple_adaptive',
                                  norm=self.norm,
                                  transitions=self.transitions,
                                  eigengap=self.eigengap,
@@ -1093,6 +1088,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
     def plot(self,
              target=None,
              space='2D',
+             dims_gauss=None,
              labels=None,
              title=None,
              pt_size=1,
@@ -1117,29 +1113,28 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             Projection space. Defaults to 2D space ('2D'). Options are:
                 - '2D' (default);
                 - '3D' ;
-                - 'hyperboloid_2d' (2D hyperboloid space);
+                - 'hyperboloid_2d' (2D hyperboloid space, 'hyperboloid' );
                 - 'hyperboloid_3d' (3D hyperboloid space - note this uses a 2D input);
                 - 'poincare' (Poincare disk - note this uses a 2D input);
                 - 'spherical' (haversine-derived spherical space - note this uses a 2D input);
-                - 'toroid' ()
-                - 'gauss_potential'
+                - 'sphere_projection' (haversine-derived spherical space, projected to 2D);
+                - 'toroid' (custom toroidal space);
+                - 'gauss_potential' (gaussian potential, expects at least 5 dimensions, uses
+                  the additional parameter `dims_gauss`);
 
+        dims_gauss : list (optional, default [2,3,4]).
+            Which dimensions to use when plotting gaussian potential.
 
-        labels
-        title
-        pt_size
-        fontsize
-        marker
-        opacity
-        cmap
-        kwargs
+        labels : np.ndarray of int categories (optional).
+
+        kwargs : additional kwargs for matplotlib
 
         Returns
         -------
 
+        2D or 3D visualizations, depending on `space`.
+
         """
-
-
 
 
         if target is None:
@@ -1193,7 +1188,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                           marker=marker,
                                           alpha=opacity,
                                           **kwargs)
-        elif space == 'sphere_3d':
+        elif space == 'sphere':
             return pt.sphere_3d_plot(target,
                                      cmap=cmap,
                                      c=labels,
@@ -1204,7 +1199,19 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                      alpha=opacity,
                                      **kwargs)
 
-        elif space == 'toroid_3d':
+        elif space == 'sphere_projection':
+            return pt.sphere_projection(target,
+                                        cmap=cmap,
+                                        c=labels,
+                                        s=pt_size,
+                                        title=title,
+                                        fontsize=fontsize,
+                                        marker=marker,
+                                        alpha=opacity,
+                                        **kwargs)
+
+
+        elif space == 'toroid':
             return pt.toroid_3d_plot(target,
                                      cmap=cmap,
                                      c=labels,
@@ -1214,4 +1221,24 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                      marker=marker,
                                      alpha=opacity,
                                      **kwargs)
+
+        elif space == 'gauss_potential':
+            if dims_gauss is None:
+                if target.shape[1] >= 5:
+                    dims_gauss = [2, 3, 4]
+                else:
+                    return print('Error: could not find at least 5 dimensions.')
+
+            return pt.gaussian_potential_plot(target,
+                                              dims=dims_gauss,
+                                              cmap=cmap,
+                                              c=labels,
+                                              s=pt_size,
+                                              title=title,
+                                              fontsize=fontsize,
+                                              marker=marker,
+                                              alpha=opacity,
+                                              **kwargs)
+
+
 

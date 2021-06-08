@@ -1,5 +1,4 @@
 # Some utility functions
-import numpy as np
 from topo.base import ann
 
 def knn_graph(data, k=15, metric='cosine', n_jobs=10, M=30, efC=100, efS=100):

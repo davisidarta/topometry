@@ -1,6 +1,6 @@
 import sys
+
 import numpy as np
-from topo.utils.umap_utils import eval_gaussian, eval_density_at_point, create_density_plot
 from matplotlib.patches import Ellipse
 
 try:
@@ -140,10 +140,7 @@ def draw_simple_ellipse(position, width, height, angle,
                              angle, alpha=alpha, lw=0, color=color, **kwargs))
 
 
-def toroid_3d_plot(emb, labels=None, title=None, fontsize=18, pt_size=5, marker='o', opacity=1, cmap='Spectral', **kwargs):
-    R = 3  # Size of the doughnut circle
-    r = 1  # Size of the doughnut cross-section
-
+def toroid_3d_plot(emb, R=3, r=1, labels=None, title=None, fontsize=18, pt_size=5, marker='o', opacity=1, cmap='Spectral', **kwargs):
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
     y = (R + r * np.cos(emb[:, 0])) * np.sin(emb[:, 1])
     z = r * np.sin(emb[:, 0])

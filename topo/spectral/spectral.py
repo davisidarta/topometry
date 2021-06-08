@@ -1,12 +1,15 @@
 from warnings import warn
+
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-from sklearn.utils import as_float_array
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
+from sklearn.utils import as_float_array
+
 from topo.base.dists import pairwise_special_metric, SPECIAL_METRICS
 from topo.base.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
+
 
 def LapEigenmap(affinity_matrix, dim, random_state):
     if random_state is None:

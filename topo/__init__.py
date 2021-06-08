@@ -1,15 +1,14 @@
-from .base import ann
-from . import spectral as spt
-from . import tpgraph as tpg
+import sys
+
 from . import layouts as lt
-from . import utils
 from . import models as ml
 from . import plot as pl
-
+from . import spectral as spt
+from . import tpgraph as tpg
+from . import utils
 from ._utils import annotate_doc_types
+from .base import ann
 from .version import __version__
-
-import sys
 
 sys.modules.update({f'{__name__}.{m}': globals()[m] for m in ['ann', 'spt', 'tpg', 'lt', 'utils', 'ml', 'pl']})
 
