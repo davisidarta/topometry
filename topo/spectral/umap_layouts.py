@@ -11,7 +11,6 @@ import numba
 from topo.base import dists as dist
 from topo.utils.umap_utils import tau_rand_int
 
-
 @numba.njit()
 def clip(val):
     """Standard clamping of a value into a fixed range (in this case -4.0 to
