@@ -4,9 +4,9 @@
 #
 import sys
 import time
-
 import numpy as np
 import torch
+
 from numpy import random
 from pymde.functions import penalties, losses
 from sklearn.base import TransformerMixin, BaseEstimator
