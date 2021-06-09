@@ -322,8 +322,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 else:
                     self.backend == 'sklearn'
 
-        self.N = data.shape[0]
-        self.M = data.shape[1]
+        self.n = data.shape[0]
+        self.m = data.shape[1]
         if self.random_state is None:
             self.random_state = random.RandomState()
         print('Building topological basis...')
