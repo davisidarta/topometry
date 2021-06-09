@@ -10,6 +10,7 @@ import torch
 from numpy import random
 from pymde.functions import penalties, losses
 from sklearn.base import TransformerMixin, BaseEstimator
+from pymde.preprocess import Graph
 
 import topo.plot as pt
 from topo.layouts import map, mde
@@ -17,7 +18,6 @@ from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.spectral import spectral as spt
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
-from topo.utils.umap_utils import torus_euclidean_grad
 
 try:
     import matplotlib.pyplot as plt
@@ -197,7 +197,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  kernel_use='decay_adaptive',
                  alpha=1,
                  plot_spectrum=False,
-                 eigengap=True,
+                 eigen_expansion=True,
                  delta=1.0,
                  t='inf',
                  p=11 / 16,
@@ -222,7 +222,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.kernel_use = kernel_use
         self.norm = norm
         self.transitions = transitions
-        self.eigengap = eigengap
+        self.eigen_expansion = eigen_expansion
         self.verbose = verbose
         self.plot_spectrum = plot_spectrum
         self.delta = delta
@@ -239,8 +239,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.DLapMap = None
         self.CknnGraph = None
         self.DiffGraph = None
-        self.N = None
-        self.M = None
+        self.n = None
+        self.m = None
         self.fitted_MAP = None
         self.MDE_problem = None
         self.SpecLayout = None
@@ -249,8 +249,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.FuzzyGraph = None
 
     def __repr__(self):
-        if (self.N is not None) and (self.M is not None):
-            msg = "TopoGraph object with %i samples and %i observations" % (self.N, self.M) + " and:"
+        if (self.n is not None) and (self.m is not None):
+            msg = "TopoGraph object with %i samples and %i observations" % (self.n, self.m) + " and:"
         else:
             msg = "TopoGraph object without any fitted data."
         if self.DiffBasis is not None:
@@ -342,7 +342,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                       kernel_use=self.kernel_use,
                                       norm=self.norm,
                                       transitions=self.transitions,
-                                      eigengap=self.eigengap,
+                                      eigen_expansion=self.eigen_expansion,
                                       verbose=self.verbose,
                                       plot_spectrum=self.plot_spectrum,
                                       cache=self.cache_base)
@@ -459,7 +459,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                  kernel_use='simple_adaptive',
                                  norm=self.norm,
                                  transitions=self.transitions,
-                                 eigengap=self.eigengap,
+                                 eigen_expansion=self.eigen_expansion,
                                  verbose=self.verbose,
                                  plot_spectrum=self.plot_spectrum,
                                  cache=False
@@ -997,6 +997,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         """""
         if output_metric == 'torus':
+            from topo.utils.umap_utils import torus_euclidean_grad
             output_metric = torus_euclidean_grad
         if metric is None:
             metric = self.graph_metric

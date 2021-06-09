@@ -122,7 +122,7 @@ class Diffusor(TransformerMixin):
         Whether to decompose the transition graph when transforming.
     norm : bool (optional, default True)
         Whether to normalize the kernel transition probabilities to approximate the LPO.
-    eigengap : bool (optional, default True)
+    eigen_expansion : bool (optional, default True)
         Whether to expand the eigendecomposition a bit and stop if eigenvalues sign shift (limit of float64). Used
         to guarantee numerical stability.
     n_jobs : int (optional, default 4)
@@ -158,7 +158,7 @@ class Diffusor(TransformerMixin):
                  use_eigs='max',
                  metric='cosine',
                  kernel_use='decay_adaptive',
-                 eigengap=True,
+                 eigen_expansion=True,
                  plot_spectrum=False,
                  verbose=False,
                  cache=False,
@@ -186,7 +186,7 @@ class Diffusor(TransformerMixin):
         self.kernel_use = kernel_use
         self.norm = norm
         self.transitions = transitions
-        self.eigengap = eigengap
+        self.eigen_expansion = eigen_expansion
         self.verbose = verbose
         self.plot_spectrum = plot_spectrum
         self.cache = cache
@@ -444,7 +444,7 @@ class Diffusor(TransformerMixin):
         pos = np.sum(vals > 0, axis=0)
         residual = np.sum(vals < 0, axis=0)
 
-        if self.eigengap and len(residual) < 1:
+        if self.eigen_expansion and len(residual) < 1:
             #expand eigendecomposition
             target = self.n_components + 30
             while residual < 3:
@@ -470,13 +470,13 @@ class Diffusor(TransformerMixin):
 
                 if residual < 1:
                     print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
-                          ' Falling back to `eigengap=False`, will not attempt')
-                    self.eigengap = False
+                          ' Falling back to `eigen_expansion=False`, will not attempt')
+                    self.eigen_expansion = False
 
-        if self.eigengap:
+        if self.eigen_expansion:
             if len(residual) > 30:
+                target = self.n_components - 15
                 while len(residual) > 29:
-                    target = self.n_components - 15
                     if self.transitions:
                        D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
                     else:
@@ -490,13 +490,17 @@ class Diffusor(TransformerMixin):
                     for i in range(V.shape[1]):
                         vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
                     pos = np.sum(vals > 0, axis=0)
-                    target = int(target * 0.6)
                     residual = np.sum(vals < 0, axis=0)
+                    if residual < 15:
+                        break
+                    else:
+                        target = pos - int(residual // 2)
+
                 if residual < 1:
                     print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
-                              ' Falling back to `eigengap=False`, will not attempt')
-                    self.eigengap = False
-        if not self.eigengap:
+                              ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
+                    self.eigen_expansion = False
+        if not self.eigen_expansion:
             if self.transitions:
                 D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
             else:
@@ -553,12 +557,11 @@ class Diffusor(TransformerMixin):
         start_time = time.time()
         # Fit an optimal number of components based on the eigengap
         # Use user's  or default initial guess
-        multiplier = self.N // 10e4
         # initial eigen value decomposition
         if self.transitions:
-            D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
+            D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=(self.N // 10))
         else:
-            D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=self.N)
+            D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=(self.N // 10))
         D = np.real(D)
         V = np.real(V)
         inds = np.argsort(D)[::-1]
@@ -571,51 +574,85 @@ class Diffusor(TransformerMixin):
         pos = np.sum(vals > 0, axis=0)
         residual = np.sum(vals < 0, axis=0)
 
-        if self.eigengap and len(residual) < 1:
+        if self.eigen_expansion and len(residual) < 1:
             #expand eigendecomposition
-            target = self.n_components * multiplier
+            target = self.n_components + 30
             while residual < 3:
-                print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
-                      + str(target) + 'components.')
-                if self.transitions:
-                    D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
-                else:
-                    D, V = eigs(self.K, target, tol=1e-4, maxiter=self.N)
-                D = np.real(D)
-                V = np.real(V)
-                inds = np.argsort(D)[::-1]
-                D = D[inds]
-                V = V[:, inds]
-                # Normalize by the first diffusion component
-                for i in range(V.shape[1]):
-                    V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
-                vals = np.array(V)
-                residual = np.sum(vals < 0, axis=0)
-                target = target * 2
+                while target < 3 * self.n_components:
+                    print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
+                          + str(target) + 'components.')
+                    if self.transitions:
+                        D, V = eigs(self.T, target, tol=1e-4, maxiter=(self.N // 10))
+                    else:
+                        D, V = eigs(self.K, target, tol=1e-4, maxiter=(self.N // 10))
+                    D = np.real(D)
+                    V = np.real(V)
+                    inds = np.argsort(D)[::-1]
+                    D = D[inds]
+                    V = V[:, inds]
+                    # Normalize by the first diffusion component
+                    vals = np.array(V)
+                    for i in range(V.shape[1]):
+                        vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
+                    pos = np.sum(vals > 0, axis=0)
+                    target = int(target * 1.6)
+                    residual = np.sum(vals < 0, axis=0)
 
+                if residual < 1:
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                          ' Falling back to `eigen_expansion=False`, will not attempt')
+                    self.eigen_expansion = False
+
+        if self.eigen_expansion:
             if len(residual) > 30:
-                self.n_components = len(pos) + 15
-                # adapted eigen value decomposition
-                if self.transitions:
-                    D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
-                else:
-                    D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=self.N)
-                D = np.real(D)
-                V = np.real(V)
-                inds = np.argsort(D)[::-1]
-                D = D[inds]
-                V = V[:, inds]
-                # Normalize by the first diffusion component
-                for i in range(V.shape[1]):
-                    V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
+                target = self.n_components - 15
+                while len(residual) > 29:
+                    if self.transitions:
+                       D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
+                    else:
+                        D, V = eigs(self.K, target, tol=1e-4, maxiter=self.N)
+                    D = np.real(D)
+                    V = np.real(V)
+                    inds = np.argsort(D)[::-1]
+                    D = D[inds]
+                    V = V[:, inds]
+                    vals = np.array(V)
+                    for i in range(V.shape[1]):
+                        vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
+                    pos = np.sum(vals > 0, axis=0)
+                    residual = np.sum(vals < 0, axis=0)
+                    if residual < 15:
+                        break
+                    else:
+                        target = pos - int(residual // 2)
 
+                if residual < 1:
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                              ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
+                    self.eigen_expansion = False
+        if not self.eigen_expansion:
+            if self.transitions:
+                D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
+            else:
+                D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=self.N)
+            D = np.real(D)
+            V = np.real(V)
+            inds = np.argsort(D)[::-1]
+            D = D[inds]
+            V = V[:, inds]
+        # Normalize by the first diffusion component
+        for i in range(V.shape[1]):
+            V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
+
+        if not self.cache:
+            del self.K
+            del self.T
 
         # Create the results dictionary
         self.res = {'EigenVectors': V, 'EigenValues': D}
         self.res['EigenVectors'] = pd.DataFrame(self.res['EigenVectors'])
-        if not issparse(data):
-            self.res['EigenValues'] = pd.Series(self.res['EigenValues'])
         self.res["EigenValues"] = pd.Series(self.res["EigenValues"])
+
 
         self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                                                             n_eigs=self.use_eigs,
