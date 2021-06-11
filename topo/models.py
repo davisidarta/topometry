@@ -197,7 +197,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  kernel_use='decay_adaptive',
                  alpha=1,
                  plot_spectrum=False,
-                 eigen_expansion=True,
+                 eigen_expansion=False,
                  delta=1.0,
                  t='inf',
                  p=11 / 16,
@@ -715,7 +715,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             repulsive_fraction=None,
             max_distance=None,
             device='cpu',
-            min_tool=10e-5,
+            eps=10e-5,
             mem_size=10,
             verbose=False):
         """
@@ -780,11 +780,14 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         torch.tensor
             A ``pymde.MDE`` object, based on the original data.
         """
+        if n_neighbors is None:
+            n_neighbors = self.graph_knn
         X = None
         if basis is not None:
             if isinstance(basis, str):
                 self.basis = basis
             elif isinstance(basis, np.ndarray):
+                import torch
                 X = basis
             else:
                 print('\'basis\' must be either a str (\'diffusion\', \'continuous\', \'fuzzy\') or a np.ndarray!'
@@ -876,7 +879,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                           max_iter=n_epochs,
                           memory_size=mem_size,
                           snapshot_every=snapshot_every,
-                          eps=min_tool,
+                          eps=eps,
                           verbose=verbose)
         self.MDE_Y = emb_Y
         return emb_Y
@@ -1151,76 +1154,69 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         if space == '2d' or space == '3d':
             if space == '2d':
                 return pt.scatter_plot(target,
-                                       cmap=cmap,
-                                       c=labels,
-                                       s=pt_size,
+                                       labels=labels,
                                        title=title,
+                                       pt_size=pt_size,
                                        fontsize=fontsize,
                                        marker=marker,
-                                       alpha=opacity,
+                                       opacity=opacity,
                                        **kwargs)
             else:
                 return pt.scatter_3d_plot(target,
-                                          cmap=cmap,
-                                          c=labels,
-                                          s=pt_size,
+                                          labels=labels,
                                           title=title,
+                                          pt_size=pt_size,
                                           fontsize=fontsize,
                                           marker=marker,
-                                          alpha=opacity,
+                                          opacity=opacity,
                                           **kwargs)
         elif space == 'hyperboloid':
             return pt.hyperboloid_3d_plot(target,
-                                          cmap=cmap,
-                                          c=labels,
-                                          s=pt_size,
+                                          labels=labels,
                                           title=title,
+                                          pt_size=pt_size,
                                           fontsize=fontsize,
                                           marker=marker,
-                                          alpha=opacity,
+                                          opacity=opacity,
                                           **kwargs)
         elif space == 'hyperboloid_3d':
             return pt.hyperboloid_3d_plot(target,
-                                          cmap=cmap,
-                                          c=labels,
-                                          s=pt_size,
+                                          labels=labels,
                                           title=title,
+                                          pt_size=pt_size,
                                           fontsize=fontsize,
                                           marker=marker,
-                                          alpha=opacity,
+                                          opacity=opacity,
                                           **kwargs)
         elif space == 'sphere':
             return pt.sphere_3d_plot(target,
-                                     cmap=cmap,
-                                     c=labels,
-                                     s=pt_size,
+                                     labels=labels,
                                      title=title,
+                                     pt_size=pt_size,
                                      fontsize=fontsize,
                                      marker=marker,
-                                     alpha=opacity,
+                                     opacity=opacity,
                                      **kwargs)
 
         elif space == 'sphere_projection':
             return pt.sphere_projection(target,
-                                        cmap=cmap,
-                                        c=labels,
-                                        s=pt_size,
+                                        labels=labels,
                                         title=title,
+                                        pt_size=pt_size,
                                         fontsize=fontsize,
                                         marker=marker,
-                                        alpha=opacity,
+                                        opacity=opacity,
                                         **kwargs)
 
 
         elif space == 'toroid':
             return pt.toroid_3d_plot(target,
-                                     cmap=cmap,
-                                     c=labels,
-                                     s=pt_size,
+                                     labels=labels,
                                      title=title,
+                                     pt_size=pt_size,
                                      fontsize=fontsize,
                                      marker=marker,
-                                     alpha=opacity,
+                                     opacity=opacity,
                                      **kwargs)
 
         elif space == 'gauss_potential':
@@ -1231,14 +1227,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                     return print('Error: could not find at least 5 dimensions.')
 
             return pt.gaussian_potential_plot(target,
-                                              dims=dims_gauss,
-                                              cmap=cmap,
-                                              c=labels,
-                                              s=pt_size,
+                                              labels=labels,
                                               title=title,
+                                              pt_size=pt_size,
                                               fontsize=fontsize,
                                               marker=marker,
-                                              alpha=opacity,
+                                              opacity=opacity,
                                               **kwargs)
 
 

@@ -122,9 +122,8 @@ class Diffusor(TransformerMixin):
         Whether to decompose the transition graph when transforming.
     norm : bool (optional, default True)
         Whether to normalize the kernel transition probabilities to approximate the LPO.
-    eigen_expansion : bool (optional, default True)
-        Whether to expand the eigendecomposition a bit and stop if eigenvalues sign shift (limit of float64). Used
-        to guarantee numerical stability.
+    eigen_expansion : bool (optional, default False)
+        Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).
     n_jobs : int (optional, default 4)
         Number of threads to use in calculations. Defaults to 4 for safety, but performance
         scales dramatically when using more threads.
@@ -491,12 +490,12 @@ class Diffusor(TransformerMixin):
                         vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
                     pos = np.sum(vals > 0, axis=0)
                     residual = np.sum(vals < 0, axis=0)
-                    if residual < 15:
+                    if len(residual) < 15:
                         break
                     else:
                         target = pos - int(residual // 2)
 
-                if residual < 1:
+                if len(residual) < 1:
                     print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
                               ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
                     self.eigen_expansion = False
