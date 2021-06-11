@@ -9,15 +9,22 @@ except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def scatter_plot(res, **kwargs):
+def scatter_plot(res, labels=None, title=None, fontsize=18, pt_size=5, marker='o', opacity=1, cmap='Spectral', **kwargs):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.gca().set_aspect('equal', 'datalim')
     ax.scatter(
         res[:, 0],
         res[:, 1],
-    **kwargs
-    )
+        cmap=cmap,
+        c=labels,
+        s=pt_size,
+        title=title,
+        fontsize=fontsize,
+        marker=marker,
+        alpha=opacity,
+        **kwargs)
+
     return plt.show()
 
 def scatter_3d_plot(res, labels=None, title=None, fontsize=18, pt_size=5, marker='o', opacity=1, cmap='Spectral',  **kwargs):
