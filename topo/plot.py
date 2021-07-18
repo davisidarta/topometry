@@ -107,6 +107,7 @@ def sphere_projection(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='
                 alpha=opacity)
     return plt.show()
 
+
 def toroid(emb, R=3, r=1, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
     y = (R + r * np.cos(emb[:, 0])) * np.sin(emb[:, 1])
