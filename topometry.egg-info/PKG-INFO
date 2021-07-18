@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: topometry
-Version: 0.0.2.6
-Summary: Fast, accurate learning of data topology with self-adaptive metrics, graphs and layouts
+Version: 0.0.2.7
+Summary: Fast, accurate learning of data topological metrics, graphs and layouts
 Home-page: https://github.com/davisidarta/topometry
 Author: Davi Sidarta-Oliveira
 Author-email: davisidarta@fcm.unicamp.br
