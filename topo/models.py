@@ -887,7 +887,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
     def MAP(self,
             data=None,
             graph=None,
-            dims=2,
+            n_components=2,
             min_dist=0.3,
             spread=1.5,
             initial_alpha=1.5,
@@ -979,8 +979,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             Whether to run the computation using numba parallel.
             Running in parallel is non-deterministic, and is not used
             if a random seed has been set, to ensure reproducibility.
-        return_init : bool , (optional, default False)
-            Whether to also return the multicomponent spectral initialization.
+        return_aux : bool , (optional, default False)
+            Whether to also return the auxiliary data, i.e. initialization and local radii.
         verbose : bool (optional, default False)
             Whether to report information on the current progress of the algorithm.
         Returns
@@ -988,14 +988,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         embedding : array of shape (n_samples, n_components)
             The optimized of ``graph`` into an ``n_components`` dimensional
             euclidean space.
-        aux_data : dict
-            Auxiliary dictionary output returned with the embedding.
-            ``aux_data['Y_init']``: array of shape (n_samples, n_components)
-                The spectral initialization of ``graph`` into an ``n_components`` dimensional
-                euclidean space.
-
-        When densMAP extension is turned on, this dictionary includes local radii in the original
-        data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
+        
+        If return_aux is set to True :
+            aux_data : dict
+                Auxiliary dictionary output returned with the embedding.
+                ``aux_data['Y_init']``: array of shape (n_samples, n_components)
+                    The spectral initialization of ``graph`` into an ``n_components`` dimensional
+                    euclidean space.
+                When densMAP extension is turned on, this dictionary includes local radii in the original
+                data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
 
 
         """""
@@ -1061,7 +1062,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         start = time.time()
         results = map.fuzzy_embedding(data, graph,
-                                      n_components=dims,
+                                      n_components=n_components,
                                       initial_alpha=initial_alpha,
                                       min_dist=min_dist,
                                       spread=spread,
@@ -1099,8 +1100,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
              fontsize=18,
              marker='o',
              opacity=1,
-             cmap='Spectral',
-             **kwargs):
+             cmap='Spectral'
+             ):
         """
 
         Utility function for plotting TopOGraph layouts. This is independent from the model
@@ -1153,71 +1154,64 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                 'or TopOGraph.MAP_Y.')
         if space == '2d' or space == '3d':
             if space == '2d':
-                return pt.scatter_plot(target,
+                return pt.scatter(target,
                                        labels=labels,
-                                       title=title,
                                        pt_size=pt_size,
-                                       fontsize=fontsize,
                                        marker=marker,
                                        opacity=opacity,
-                                       **kwargs)
+                                       cmap=cmap
+                                       )
             else:
-                return pt.scatter_3d_plot(target,
+                return pt.scatter_3d(target,
                                           labels=labels,
-                                          title=title,
                                           pt_size=pt_size,
-                                          fontsize=fontsize,
                                           marker=marker,
                                           opacity=opacity,
-                                          **kwargs)
+                                          cmap=cmap
+                                          )
         elif space == 'hyperboloid':
-            return pt.hyperboloid_3d_plot(target,
+            return pt.hyperboloid_3d(target,
                                           labels=labels,
-                                          title=title,
                                           pt_size=pt_size,
-                                          fontsize=fontsize,
                                           marker=marker,
-                                          opacity=opacity,
-                                          **kwargs)
-        elif space == 'hyperboloid_3d':
-            return pt.hyperboloid_3d_plot(target,
-                                          labels=labels,
-                                          title=title,
-                                          pt_size=pt_size,
-                                          fontsize=fontsize,
-                                          marker=marker,
-                                          opacity=opacity,
-                                          **kwargs)
+                                          opacity=opacity
+                                          )
+
+        elif space == 'poincare':
+            return pt.poincare_disk(target,
+                                         labels=labels,
+                                         pt_size=pt_size,
+                                         marker=marker,
+                                         opacity=opacity,
+                                         cmap=cmap
+                                         )
         elif space == 'sphere':
-            return pt.sphere_3d_plot(target,
+            return pt.sphere_3d(target,
                                      labels=labels,
-                                     title=title,
                                      pt_size=pt_size,
-                                     fontsize=fontsize,
                                      marker=marker,
                                      opacity=opacity,
-                                     **kwargs)
+                                     cmap=cmap
+                                     )
 
         elif space == 'sphere_projection':
             return pt.sphere_projection(target,
                                         labels=labels,
-                                        title=title,
                                         pt_size=pt_size,
-                                        fontsize=fontsize,
                                         marker=marker,
                                         opacity=opacity,
-                                        **kwargs)
+                                        cmap=cmap
+                                        )
 
 
         elif space == 'toroid':
-            return pt.toroid_3d_plot(target,
+            return pt.toroid_3d(target,
                                      labels=labels,
-                                     title=title,
                                      pt_size=pt_size,
-                                     fontsize=fontsize,
                                      marker=marker,
                                      opacity=opacity,
-                                     **kwargs)
+                                     cmap=cmap
+                                     )
 
         elif space == 'gauss_potential':
             if dims_gauss is None:
@@ -1226,14 +1220,13 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 else:
                     return print('Error: could not find at least 5 dimensions.')
 
-            return pt.gaussian_potential_plot(target,
+            return pt.gaussian_potential(target,
+                                              dims=dims_gauss,
                                               labels=labels,
-                                              title=title,
                                               pt_size=pt_size,
-                                              fontsize=fontsize,
                                               marker=marker,
-                                              opacity=opacity,
-                                              **kwargs)
+                                              opacity=opacity
+                                              )
 
 
 

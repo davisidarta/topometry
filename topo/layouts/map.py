@@ -218,7 +218,7 @@ def fuzzy_embedding(data,
 
     return Y, Y_aux
 
-def MAP(self, data, graph,
+def MAP(data, graph,
         dims=2,
         min_dist=0.3,
         spread=1.2,
