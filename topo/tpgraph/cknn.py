@@ -206,7 +206,9 @@ class CkNearestNeighbors(object):
             dmatrix = pairwise_distances(X, metric=metric)
 
         darray_n_nbrs = np.partition(dmatrix, n_neighbors)[:, [n_neighbors]]
-        ratio_matrix = dmatrix / np.sqrt(darray_n_nbrs.dot(darray_n_nbrs.T))
+        # prevent approximately null results (div by 0)
+        div_matrix = np.sqrt(darray_n_nbrs.dot(darray_n_nbrs.T)) + 1e-12
+        ratio_matrix = dmatrix / div_matrix
         diag_ptr = np.arange(n_samples)
 
         if isinstance(delta, (int, float)):
