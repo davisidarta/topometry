@@ -291,27 +291,27 @@ def TriMAP(X,
     """
 
 
-    import trimap
     try:
         import trimap
         _have_trimap = True
-    except ImportError('TriMAP is needed for this embedding. Install it with `pip install trimap`').
+    except ImportError('TriMAP is needed for this embedding. Install it with `pip install trimap`'):
+        return print('TriMAP is needed for this embedding. Install it with `pip install trimap`')
 
     trimap_emb = trimap.TRIMAP(n_dims=n_dims,
-                           n_inliers=n_inliers,
-                           n_outliers=n_outliers,
-                           n_random=n_random,
-                           distance=distance,
-                           lr=lr,
-                           n_iters=n_iters,
-                           triplets=triplets,
-                           weights=weights,
-                           use_dist_matrix=use_dist_matrix,
-                           knn_tuple=knn_tuple,
-                           verbose=verbose,
-                           weight_adj=weight_adj,
-                           opt_method=opt_method,
-                           return_seq=return_seq).fit_transform(X, init=init)
+                               n_inliers=n_inliers,
+                               n_outliers=n_outliers,
+                               n_random=n_random,
+                               distance=distance,
+                               lr=lr,
+                               n_iters=n_iters,
+                               triplets=triplets,
+                               weights=weights,
+                               use_dist_matrix=use_dist_matrix,
+                               knn_tuple=knn_tuple,
+                               verbose=verbose,
+                               weight_adj=weight_adj,
+                               opt_method=opt_method,
+                               return_seq=return_seq).fit_transform(X, init=init)
 
 
 
