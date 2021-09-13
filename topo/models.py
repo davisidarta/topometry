@@ -97,20 +97,23 @@ class TopOGraph(TransformerMixin, BaseEstimator):
          computed diffusion components. If `basis` is set to `continuous`, this is the number of computed eigenvectors
          of the Laplacian Eigenmaps from the continuous affinity matrix.
 
-     basis : 'diffusion' or 'continuous' (optional, default 'diffusion').
+     basis : 'diffusion', 'continuous' or 'fuzzy' (optional, default 'diffusion').
          Which topological basis to build from data. If `diffusion`, performs an optimized, anisotropic, adaptive
          diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
          topological basis from the Laplacian Eigenmaps of such metric.
 
-     graph : 'diff' or 'cknn' (optional, default 'diff').
+     graph : 'diff', 'cknn' or 'fuzzy' (optional, default 'diff').
          Which topological graph to learn from the built basis. If 'diff', uses a second-order diffusion process to learn
          similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors algorithms. Both
          algorithms learn graph-oriented topological metrics from the learned basis. If 'fuzzy', builds a fuzzy simplicial
          set from the active basis.
 
-    backend : str (optional, default 'hnwslib')
+    backend : str 'hnwslib', 'nmslib' or 'sklearn' (optional, default 'hnwslib')
         Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
         are 'hnwslib' (default) and 'nmslib'. For exact nearest-neighbors, use 'sklearn'.
+        I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
+        is relatively sparse, you should consider using 'nmslib', which will automatically convert np.arrays to
+        a csr_matrix for performance.
 
     base_metric : str (optional, default 'cosine')
         Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
@@ -1230,3 +1233,63 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
 
 
+
+    def run_models(self, X,
+                   n_eigs=None,
+                   base_knn=None,
+                   graph_knn=None,
+                   verbose=None,
+                   basis=['diffusion', 'fuzzy', 'continuous'],
+                   graphs=['diff', 'cknn', 'fuzzy']):
+        if str('diffusion') in basis:
+            run_db = True
+        if str('continuous') in basis:
+            run_cb = True
+        if str('fuzzy') in basis:
+            run_fb = True
+        if str('diff') in graphs:
+            run_diff = True
+        if str('cknn') in basis:
+            run_cknn = True
+        if str('fuzzy') in basis:
+            run_fuzzy = True
+        if n_eigs is not None:
+            self.n_eigs = n_eigs
+        if base_knn is not None:
+            self.base_knn = base_knn
+        if n_eigs is not None:
+            self.graph_knn = graph_knn
+        if verbose is not None:
+            self.verbose = verbose
+        if run_db:
+            self.basis = 'diffusion'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
+        if run_cb:
+            self.basis = 'continuous'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
+        if run_fb:
+            self.basis = 'fuzzy'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
+
+        return self
