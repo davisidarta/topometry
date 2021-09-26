@@ -5,8 +5,6 @@ from topo.models import TopOGraph
 from topo.eval.global_scores import global_score_pca, global_score_laplacian
 from topo.eval.local_scores import geodesic_distance, knn_spearman_r, knn_kendall_tau
 
-filename = sys.argv[1]  # read filename from command line
-
 # Pipelines!
 
 def TopoMAP(data, *tg_kwargs, **map_kwargs):
