@@ -7,6 +7,8 @@ from topo.eval.local_scores import geodesic_distance, knn_spearman_r, knn_kendal
 
 filename = sys.argv[1]  # read filename from command line
 
+# Pipelines!
+
 def TopoMAP(data, *tg_kwargs, **map_kwargs):
     """""""""
     Easy, direct application of topological graphs (``TopoGraph``) and Manifold Approximation and Projection (``MAP``) for layout optimization with triple
