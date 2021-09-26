@@ -1832,6 +1832,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if run_tSNE:
                     fb_fuzzy_tSNE = self.tSNE()
                     self.fb_fuzzy_tSNE = self.tSNE_Y
+
         return self
 
 
