@@ -1658,7 +1658,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_diff:
                 self.graph = 'diff'
                 self.transform()
-                self.spectral_layout()
+                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
                 if run_MAP:
                     db_diff_MAP, aux = self.MAP()
                     self.db_diff_MAP = self.MAP_Y
@@ -1677,6 +1677,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_cknn:
                 self.graph = 'cknn'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
                 if run_MAP:
                     db_cknn_MAP, aux = self.MAP()
                     self.db_cknn_MAP = self.MAP_Y
@@ -1695,6 +1696,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
                 if run_MAP:
                     db_fuzzy_MAP, aux = self.MAP()
                     self.db_fuzzy_MAP = self.MAP_Y
@@ -1716,6 +1718,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_diff:
                 self.graph = 'diff'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
                 if run_MAP:
                     cb_diff_MAP, aux = self.MAP()
                     self.cb_diff_MAP = self.MAP_Y
@@ -1734,6 +1737,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_cknn:
                 self.graph = 'cknn'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
                 if run_MAP:
                     cb_cknn_MAP, aux = self.MAP()
                     self.cb_cknn_MAP = self.MAP_Y
@@ -1752,6 +1756,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
                 if run_MAP:
                     cb_fuzzy_MAP = map, aux = self.MAP()
                     self.cb_fuzzy_MAP = self.MAP_Y
@@ -1773,6 +1778,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_diff:
                 self.graph = 'diff'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
                 if run_MAP:
                     fb_diff_MAP, aux = self.MAP()
                     self.fb_diff_MAP = self.MAP_Y
@@ -1791,6 +1797,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_cknn:
                 self.graph = 'cknn'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
                 if run_MAP:
                     fb_cknn_MAP, aux = self.MAP()
                     self.fb_cknn_MAP = self.MAP_Y
@@ -1809,6 +1816,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.transform(X)
+                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
                 if run_MAP:
                     fb_fuzzy_MAP, aux = self.MAP()
                     self.fb_fuzzy_MAP = self.MAP_Y
