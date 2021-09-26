@@ -1554,276 +1554,276 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         return str(str(basis) + '_' + str(graph) + '_' + str(layout))
 
 
-def run_models(self, X,
-               basis=['diffusion', 'fuzzy', 'continuous'],
-               graphs=['diff', 'cknn', 'fuzzy']):
-    if str('diffusion') in basis:
-        run_db = True
-    if str('continuous') in basis:
-        run_cb = True
-    if str('fuzzy') in basis:
-        run_fb = True
-    if str('diff') in graphs:
-        run_diff = True
-    if str('cknn') in basis:
-        run_cknn = True
-    if str('fuzzy') in basis:
-        run_fuzzy = True
-    if run_db:
-        self.basis = 'diffusion'
-        self.fit(X)
-        if run_diff:
-            self.graph = 'diff'
-        if run_cknn:
-            self.graph = 'cknn'
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-        self.transform(X)
-    if run_cb:
-        self.basis = 'continuous'
-        self.fit(X)
-        if run_diff:
-            self.graph = 'diff'
-        if run_cknn:
-            self.graph = 'cknn'
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-        self.transform(X)
-    if run_fb:
-        self.basis = 'fuzzy'
-        self.fit(X)
-        if run_diff:
-            self.graph = 'diff'
-        if run_cknn:
-            self.graph = 'cknn'
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-        self.transform(X)
+    def run_models(self, X,
+                   basis=['diffusion', 'fuzzy', 'continuous'],
+                   graphs=['diff', 'cknn', 'fuzzy']):
+        if str('diffusion') in basis:
+            run_db = True
+        if str('continuous') in basis:
+            run_cb = True
+        if str('fuzzy') in basis:
+            run_fb = True
+        if str('diff') in graphs:
+            run_diff = True
+        if str('cknn') in basis:
+            run_cknn = True
+        if str('fuzzy') in basis:
+            run_fuzzy = True
+        if run_db:
+            self.basis = 'diffusion'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
+        if run_cb:
+            self.basis = 'continuous'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
+        if run_fb:
+            self.basis = 'fuzzy'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+            if run_cknn:
+                self.graph = 'cknn'
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+            self.transform(X)
 
-    return self
+        return self
 
 
-def run_layouts(self, X,
-                basis=['diffusion', 'fuzzy', 'continuous'],
-                graphs=['diff', 'cknn', 'fuzzy'],
-                layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP']):
-    if str('diffusion') in basis:
-        run_db = True
-    else:
-        run_db = False
-    if str('continuous') in basis:
-        run_cb = True
-    else:
-        run_cb = False
-    if str('fuzzy') in basis:
-        run_fb = True
-    else:
-        run_fb = False
-    if str('diff') in graphs:
-        run_diff = True
-    else:
-        run_diff = False
-    if str('cknn') in graphs:
-        run_cknn = True
-    else:
-        run_cknn = False
-    if str('fuzzy') in graphs:
-        run_fuzzy = True
-    else:
-        run_fuzzy = False
-    if str('tSNE') in layouts:
-        run_tSNE = True
-    else:
-        run_tSNE = False
-    if str('MAP') in layouts:
-        run_MAP = True
-    else:
-        run_MAP = False
-    if str('MDE') in layouts:
-        run_MDE = True
-    else:
-        run_MDE = False
-    if str('PaCMAP') in layouts:
-        run_PaCMAP = True
-    else:
-        run_PaCMAP = False
-    if str('TriMAP') in layouts:
-        run_TriMAP = True
-    else:
-        run_TriMAP = False
-    # Run all models and layouts
-    if run_db:
-        self.basis = 'diffusion'
-        self.fit(data=X)
-        if run_diff:
-            self.graph = 'diff'
-            self.transform()
-            self.spectral_layout()
-            if run_MAP:
-                db_diff_MAP, aux = self.MAP()
-                self.db_diff_MAP = self.MAP_Y
-            if run_MDE:
-                db_diff_MDE = self.MDE()
-                self.db_diff_MDE = self.MDE_Y
-            if run_TriMAP:
-                db_diff_TriMAP = self.TriMAP()
-                self.db_diff_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                db_diff_PaCMAP = self.PaCMAP()
-                self.db_diff_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                db_diff_tSNE = self.tSNE()
-                self.db_diff_tSNE = self.tSNE_Y
-        if run_cknn:
-            self.graph = 'cknn'
-            self.transform(X)
-            if run_MAP:
-                db_cknn_MAP, aux = self.MAP()
-                self.db_cknn_MAP = self.MAP_Y
-            if run_MDE:
-                db_cknn_MDE = self.MDE()
-                self.db_cknn_MDE = self.MDE_Y
-            if run_TriMAP:
-                db_cknn_TriMAP = self.TriMAP()
-                self.db_cknn_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                db_cknn_PaCMAP = self.PaCMAP()
-                self.db_cknn_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                db_cknn_tSNE = self.tSNE()
-                self.db_cknn_tSNE = self.tSNE_Y
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-            self.transform(X)
-            if run_MAP:
-                db_fuzzy_MAP, aux = self.MAP()
-                self.db_fuzzy_MAP = self.MAP_Y
-            if run_MDE:
-                db_fuzzy_MDE = self.MDE()
-                self.db_fuzzy_MDE = self.MDE_Y
-            if run_TriMAP:
-                db_fuzzy_TriMAP = self.TriMAP()
-                self.db_fuzzy_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                db_fuzzy_PaCMAP = self.PaCMAP()
-                self.db_fuzzy_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                db_fuzzy_tSNE = self.tSNE()
-                self.db_fuzzy_tSNE = self.tSNE_Y
-    if run_cb:
-        self.basis = 'continuous'
-        self.fit(X)
-        if run_diff:
-            self.graph = 'diff'
-            self.transform(X)
-            if run_MAP:
-                cb_diff_MAP, aux = self.MAP()
-                self.cb_diff_MAP = self.MAP_Y
-            if run_MDE:
-                cb_diff_MDE = self.MDE()
-                self.cb_diff_MDE = self.MDE_Y
-            if run_TriMAP:
-                cb_diff_TriMAP = self.TriMAP()
-                self.cb_diff_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                cb_diff_PaCMAP = self.PaCMAP()
-                self.cb_diff_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                cb_diff_tSNE = self.tSNE()
-                self.cb_diff_tSNE = self.tSNE_Y
-        if run_cknn:
-            self.graph = 'cknn'
-            self.transform(X)
-            if run_MAP:
-                cb_cknn_MAP, aux = self.MAP()
-                self.cb_cknn_MAP = self.MAP_Y
-            if run_MDE:
-                cb_cknn_MDE = self.MDE()
-                self.cb_cknn_MDE = self.MDE_Y
-            if run_TriMAP:
-                cb_cknn_TriMAP = self.TriMAP()
-                self.cb_cknn_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                cb_cknn_PaCMAP = self.PaCMAP()
-                self.cb_cknn_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                cb_cknn_tSNE = self.tSNE()
-                self.cb_cknn_tSNE = self.tSNE_Y
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-            self.transform(X)
-            if run_MAP:
-                cb_fuzzy_MAP = map, aux = self.MAP()
-                self.cb_fuzzy_MAP = self.MAP_Y
-            if run_MDE:
-                cb_fuzzy_MDE = self.MDE()
-                self.cb_fuzzy_MDE = self.MDE_Y
-            if run_TriMAP:
-                cb_fuzzy_TriMAP = self.TriMAP()
-                self.cb_fuzzy_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                cb_fuzzy_PaCMAP = self.PaCMAP()
-                self.cb_fuzzy_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                cb_fuzzy_tSNE = self.tSNE()
-                self.cb_fuzzy_tSNE = self.tSNE_Y
-    if run_fb:
-        self.basis = 'fuzzy'
-        self.fit(X)
-        if run_diff:
-            self.graph = 'diff'
-            self.transform(X)
-            if run_MAP:
-                fb_diff_MAP, aux = self.MAP()
-                self.fb_diff_MAP = self.MAP_Y
-            if run_MDE:
-                fb_diff_MDE = self.MDE()
-                self.fb_diff_MDE = self.MDE_Y
-            if run_TriMAP:
-                fb_diff_TriMAP = self.TriMAP()
-                self.fb_diff_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                fb_diff_PaCMAP = self.PaCMAP()
-                self.fb_diff_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                fb_diff_tSNE = self.tSNE()
-                self.fb_diff_tSNE = self.tSNE_Y
-        if run_cknn:
-            self.graph = 'cknn'
-            self.transform(X)
-            if run_MAP:
-                fb_cknn_MAP, aux = self.MAP()
-                self.fb_cknn_MAP = self.MAP_Y
-            if run_MDE:
-                fb_cknn_MDE = self.MDE()
-                self.fb_cknn_MDE = self.MDE_Y
-            if run_TriMAP:
-                fb_cknn_TriMAP = self.TriMAP()
-                self.fb_cknn_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                fb_cknn_PaCMAP = self.PaCMAP()
-                self.fb_cknn_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                fb_cknn_tSNE = self.tSNE()
-                self.fb_cknn_tSNE = self.tSNE_Y
-        if run_fuzzy:
-            self.graph = 'fuzzy'
-            self.transform(X)
-            if run_MAP:
-                fb_fuzzy_MAP, aux = self.MAP()
-                self.fb_fuzzy_MAP = self.MAP_Y
-            if run_MDE:
-                fb_fuzzy_MDE = self.MDE()
-                self.fb_fuzzy_MDE = self.MDE_Y
-            if run_TriMAP:
-                fb_fuzzy_TriMAP = self.TriMAP()
-                self.fb_fuzzy_TriMAP = self.TriMAP_Y
-            if run_PaCMAP:
-                fb_fuzzy_PaCMAP = self.PaCMAP()
-                self.fb_fuzzy_PaCMAP = self.PaCMAP_Y
-            if run_tSNE:
-                fb_fuzzy_tSNE = self.tSNE()
-                self.fb_fuzzy_tSNE = self.tSNE_Y
-    return self
+    def run_layouts(self, X,
+                    basis=['diffusion', 'fuzzy', 'continuous'],
+                    graphs=['diff', 'cknn', 'fuzzy'],
+                    layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP']):
+        if str('diffusion') in basis:
+            run_db = True
+        else:
+            run_db = False
+        if str('continuous') in basis:
+            run_cb = True
+        else:
+            run_cb = False
+        if str('fuzzy') in basis:
+            run_fb = True
+        else:
+            run_fb = False
+        if str('diff') in graphs:
+            run_diff = True
+        else:
+            run_diff = False
+        if str('cknn') in graphs:
+            run_cknn = True
+        else:
+            run_cknn = False
+        if str('fuzzy') in graphs:
+            run_fuzzy = True
+        else:
+            run_fuzzy = False
+        if str('tSNE') in layouts:
+            run_tSNE = True
+        else:
+            run_tSNE = False
+        if str('MAP') in layouts:
+            run_MAP = True
+        else:
+            run_MAP = False
+        if str('MDE') in layouts:
+            run_MDE = True
+        else:
+            run_MDE = False
+        if str('PaCMAP') in layouts:
+            run_PaCMAP = True
+        else:
+            run_PaCMAP = False
+        if str('TriMAP') in layouts:
+            run_TriMAP = True
+        else:
+            run_TriMAP = False
+        # Run all models and layouts
+        if run_db:
+            self.basis = 'diffusion'
+            self.fit(data=X)
+            if run_diff:
+                self.graph = 'diff'
+                self.transform()
+                self.spectral_layout()
+                if run_MAP:
+                    db_diff_MAP, aux = self.MAP()
+                    self.db_diff_MAP = self.MAP_Y
+                if run_MDE:
+                    db_diff_MDE = self.MDE()
+                    self.db_diff_MDE = self.MDE_Y
+                if run_TriMAP:
+                    db_diff_TriMAP = self.TriMAP()
+                    self.db_diff_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    db_diff_PaCMAP = self.PaCMAP()
+                    self.db_diff_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    db_diff_tSNE = self.tSNE()
+                    self.db_diff_tSNE = self.tSNE_Y
+            if run_cknn:
+                self.graph = 'cknn'
+                self.transform(X)
+                if run_MAP:
+                    db_cknn_MAP, aux = self.MAP()
+                    self.db_cknn_MAP = self.MAP_Y
+                if run_MDE:
+                    db_cknn_MDE = self.MDE()
+                    self.db_cknn_MDE = self.MDE_Y
+                if run_TriMAP:
+                    db_cknn_TriMAP = self.TriMAP()
+                    self.db_cknn_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    db_cknn_PaCMAP = self.PaCMAP()
+                    self.db_cknn_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    db_cknn_tSNE = self.tSNE()
+                    self.db_cknn_tSNE = self.tSNE_Y
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+                self.transform(X)
+                if run_MAP:
+                    db_fuzzy_MAP, aux = self.MAP()
+                    self.db_fuzzy_MAP = self.MAP_Y
+                if run_MDE:
+                    db_fuzzy_MDE = self.MDE()
+                    self.db_fuzzy_MDE = self.MDE_Y
+                if run_TriMAP:
+                    db_fuzzy_TriMAP = self.TriMAP()
+                    self.db_fuzzy_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    db_fuzzy_PaCMAP = self.PaCMAP()
+                    self.db_fuzzy_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    db_fuzzy_tSNE = self.tSNE()
+                    self.db_fuzzy_tSNE = self.tSNE_Y
+        if run_cb:
+            self.basis = 'continuous'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+                self.transform(X)
+                if run_MAP:
+                    cb_diff_MAP, aux = self.MAP()
+                    self.cb_diff_MAP = self.MAP_Y
+                if run_MDE:
+                    cb_diff_MDE = self.MDE()
+                    self.cb_diff_MDE = self.MDE_Y
+                if run_TriMAP:
+                    cb_diff_TriMAP = self.TriMAP()
+                    self.cb_diff_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    cb_diff_PaCMAP = self.PaCMAP()
+                    self.cb_diff_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    cb_diff_tSNE = self.tSNE()
+                    self.cb_diff_tSNE = self.tSNE_Y
+            if run_cknn:
+                self.graph = 'cknn'
+                self.transform(X)
+                if run_MAP:
+                    cb_cknn_MAP, aux = self.MAP()
+                    self.cb_cknn_MAP = self.MAP_Y
+                if run_MDE:
+                    cb_cknn_MDE = self.MDE()
+                    self.cb_cknn_MDE = self.MDE_Y
+                if run_TriMAP:
+                    cb_cknn_TriMAP = self.TriMAP()
+                    self.cb_cknn_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    cb_cknn_PaCMAP = self.PaCMAP()
+                    self.cb_cknn_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    cb_cknn_tSNE = self.tSNE()
+                    self.cb_cknn_tSNE = self.tSNE_Y
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+                self.transform(X)
+                if run_MAP:
+                    cb_fuzzy_MAP = map, aux = self.MAP()
+                    self.cb_fuzzy_MAP = self.MAP_Y
+                if run_MDE:
+                    cb_fuzzy_MDE = self.MDE()
+                    self.cb_fuzzy_MDE = self.MDE_Y
+                if run_TriMAP:
+                    cb_fuzzy_TriMAP = self.TriMAP()
+                    self.cb_fuzzy_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    cb_fuzzy_PaCMAP = self.PaCMAP()
+                    self.cb_fuzzy_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    cb_fuzzy_tSNE = self.tSNE()
+                    self.cb_fuzzy_tSNE = self.tSNE_Y
+        if run_fb:
+            self.basis = 'fuzzy'
+            self.fit(X)
+            if run_diff:
+                self.graph = 'diff'
+                self.transform(X)
+                if run_MAP:
+                    fb_diff_MAP, aux = self.MAP()
+                    self.fb_diff_MAP = self.MAP_Y
+                if run_MDE:
+                    fb_diff_MDE = self.MDE()
+                    self.fb_diff_MDE = self.MDE_Y
+                if run_TriMAP:
+                    fb_diff_TriMAP = self.TriMAP()
+                    self.fb_diff_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    fb_diff_PaCMAP = self.PaCMAP()
+                    self.fb_diff_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    fb_diff_tSNE = self.tSNE()
+                    self.fb_diff_tSNE = self.tSNE_Y
+            if run_cknn:
+                self.graph = 'cknn'
+                self.transform(X)
+                if run_MAP:
+                    fb_cknn_MAP, aux = self.MAP()
+                    self.fb_cknn_MAP = self.MAP_Y
+                if run_MDE:
+                    fb_cknn_MDE = self.MDE()
+                    self.fb_cknn_MDE = self.MDE_Y
+                if run_TriMAP:
+                    fb_cknn_TriMAP = self.TriMAP()
+                    self.fb_cknn_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    fb_cknn_PaCMAP = self.PaCMAP()
+                    self.fb_cknn_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    fb_cknn_tSNE = self.tSNE()
+                    self.fb_cknn_tSNE = self.tSNE_Y
+            if run_fuzzy:
+                self.graph = 'fuzzy'
+                self.transform(X)
+                if run_MAP:
+                    fb_fuzzy_MAP, aux = self.MAP()
+                    self.fb_fuzzy_MAP = self.MAP_Y
+                if run_MDE:
+                    fb_fuzzy_MDE = self.MDE()
+                    self.fb_fuzzy_MDE = self.MDE_Y
+                if run_TriMAP:
+                    fb_fuzzy_TriMAP = self.TriMAP()
+                    self.fb_fuzzy_TriMAP = self.TriMAP_Y
+                if run_PaCMAP:
+                    fb_fuzzy_PaCMAP = self.PaCMAP()
+                    self.fb_fuzzy_PaCMAP = self.PaCMAP_Y
+                if run_tSNE:
+                    fb_fuzzy_tSNE = self.tSNE()
+                    self.fb_fuzzy_tSNE = self.tSNE_Y
+        return self
 
 
