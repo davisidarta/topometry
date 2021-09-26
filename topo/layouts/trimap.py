@@ -2,9 +2,8 @@
 # TriMAP was originally implemented by Ehsan Amid at https://github.com/eamid/trimap.
 # This is rather a modular adaptation, and does not change much of the optimization algorithm.
 # The main change is the similarity metric used to learn the lower-dimensional layout.
-# License: BSD 3 clause
+# License: Apache
 #
-# For more information on the original UMAP implementation, please see: https://umap-learn.readthedocs.io/
 
  # Apache License
  #                           Version 2.0, January 2004
