@@ -11,6 +11,22 @@ except ImportError:
     sys.exit()
 
 def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+    """
+    Basic scatter plot function.
+
+    Parameters
+    ----------
+
+    labels
+    pt_size
+    marker
+    opacity
+    cmap
+
+    Returns
+    -------
+
+    """
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.gca().set_aspect('equal', 'datalim')
