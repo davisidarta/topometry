@@ -37,6 +37,8 @@ def TopoMAP(data, *tg_kwargs, **map_kwargs):
 
     return tg, emb
 
+
+
 def TopoMDE(data, *tg_kwargs, **mde_kwargs):
     """""""""
     Easy, direct application of topological graphs (``TopoGraph``) and Manifold Approximation and Projection (``MAP``) for layout optimization with triple
