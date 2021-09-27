@@ -245,6 +245,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.CLapMap = None
         self.DLapMap = None
         self.CknnGraph = None
+        self.FuzzyGraph = None
         self.DiffGraph = None
         self.n = None
         self.m = None
@@ -335,8 +336,8 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             msg = msg + " \n    Continuous graph fitted - .CknnGraph"
         if self.FuzzyGraph is not None:
             msg = msg + " \n    Fuzzy graph fitted - .FuzzyGraph"
-        if self.fitted_MAP is not None:
-            msg = msg + " \n    Manifold Approximation and Projection fitted - .fitted_MAP"
+        if self.MAP_Y is not None:
+            msg = msg + " \n    Manifold Approximation and Projection fitted - .MAP_Y"
         if self.MDE_problem is not None:
             msg = msg + " \n    Minimum Distortion Embedding set up - .MDE_problem"
         if self.SpecLayout is not None:
@@ -578,7 +579,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         else:
             return self
 
-    def spectral_layout(self, X=None, basis=None, target=None, dim=2, metric='cosine', cache=True):
+    def spectral_layout(self, X=None, basis=None, target=None, n_components=2, metric='cosine', cache=True):
         """
 
         Performs a multicomponent spectral layout of the data and the target similarity matrix.
@@ -589,7 +590,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             which basis to use.
         target : scipy.sparse.csr.csr_matrix.
             target similarity matrix. If None (default), computes a fuzzy simplicial set with default parameters.
-        dim : int (optional, default 2).
+        n_components : int (optional, default 2).
             number of dimensions to embed into.
         cache : bool (optional, default True).
             Whether to cache the embedding to the `TopOGraph` object.
@@ -624,12 +625,12 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             else:
                 return print('No computed basis or data is provided!')
 
-        spt_layout = spt.spectral_layout(X, target, dim, self.random_state, metric=metric, metric_kwds={})
+        spt_layout = spt.spectral_layout(X, target, n_components, self.random_state, metric=metric, metric_kwds={})
         expansion = 10.0 / np.abs(spt_layout).max()
         spt_layout = (spt_layout * expansion).astype(
             np.float32
         ) + self.random_state.normal(
-            scale=0.0001, size=[target.shape[0], dim]
+            scale=0.0001, size=[target.shape[0], n_components]
         ).astype(
             np.float32
         )
@@ -640,7 +641,6 @@ class TopOGraph(TransformerMixin, BaseEstimator):
     def fuzzy_graph(self,
                     X=None,
                     basis=None,
-                    graph_knn=None,
                     knn_indices=None,
                     knn_dists=None,
                     cache=True):
@@ -768,7 +768,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
     def MDE(self,
             basis=None,
             target=None,
-            dim=2,
+            n_components=2,
             n_neighbors=None,
             type='isomorphic',
             Y_init=None,
@@ -807,7 +807,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         target : scipy.sparse matrix
             The affinity matrix to embedd with. Defaults to the active graph. If init = 'spectral',
             a fuzzy simplicial set is used, and this argument is ignored.
-        dim : int.
+        n_components : int.
             The embedding dimension. Use 2 or 3 for visualization.
         attractive_penalty : pymde.Function class (or factory).
             Callable that constructs a distortion function, given positive
@@ -884,10 +884,10 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                     print('Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...')
                 if self.FuzzyGraph is None:
                     target = self.fuzzy_graph(X, basis='fuzzy')
-                    init = self.spectral_layout(X, target, dim, metric=self.graph_metric)
+                    init = self.spectral_layout(X, target, n_components, metric=self.graph_metric)
                 else:
                     target = self.FuzzyGraph
-                    init = self.spectral_layout(X, target, dim, metric=self.graph_metric)
+                    init = self.spectral_layout(X, target, n_components, metric=self.graph_metric)
             else:
                 init = self.SpecLayout
 
@@ -917,7 +917,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             emb = mde.IsomorphicMDE(graph,
                                     attractive_penalty=attractive_penalty,
                                     repulsive_penalty=repulsive_penalty,
-                                    embedding_dim=dim,
+                                    embedding_dim=n_components,
                                     constraint=constraint,
                                     n_neighbors=n_neighbors,
                                     repulsive_fraction=repulsive_fraction,
@@ -930,7 +930,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if max_distance is None:
                 max_distance = 5e7
             emb = mde.IsometricMDE(graph,
-                                   embedding_dim=dim,
+                                   embedding_dim=n_components,
                                    loss=loss,
                                    constraint=constraint,
                                    max_distances=max_distance,
@@ -979,6 +979,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             densmap=False,
             densmap_kwds={},
             output_dens=False,
+            return_aux=False
             ):
         """""
 
@@ -1160,7 +1161,11 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         end = time.time()
         print('Fuzzy layout optimization embedding in = %f (sec)' % (end - start))
         self.MAP_Y = results
-        return results
+
+        if return_aux:
+            return results
+        else:
+            return results[0]
 
     def PaCMAP(self, data=None,
                init=None,
@@ -1175,8 +1180,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                lr=1.0,
                num_iters=450,
                verbose=False,
-               intermediate=False,
-               random_state=None):
+               intermediate=False):
         from topo.layouts import pairwise
         if init is None:
             if self.SpecLayout is not None:
@@ -1201,7 +1205,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 return print('No computed basis or data is provided!')
 
         start = time.time()
-        results = pairwise.PaCMAP(X=data,
+        results = pairwise.PaCMAP(data=data,
                                   init=init,
                                   n_dims=n_dims,
                                   n_neighbors=n_neighbors,
@@ -1214,8 +1218,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                                   lr=lr,
                                   num_iters=num_iters,
                                   verbose=verbose,
-                                  intermediate=intermediate,
-                                  random_state=random_state)
+                                  intermediate=intermediate)
 
         end = time.time()
         print('Obtained PaCMAP embedding in = %f (sec)' % (end - start))
@@ -1604,18 +1607,18 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
 
     def run_layouts(self, X,
-                    basis=['diffusion', 'fuzzy', 'continuous'],
+                    bases=['diffusion', 'fuzzy', 'continuous'],
                     graphs=['diff', 'cknn', 'fuzzy'],
                     layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP']):
-        if str('diffusion') in basis:
+        if str('diffusion') in bases:
             run_db = True
         else:
             run_db = False
-        if str('continuous') in basis:
+        if str('continuous') in bases:
             run_cb = True
         else:
             run_cb = False
-        if str('fuzzy') in basis:
+        if str('fuzzy') in bases:
             run_fb = True
         else:
             run_fb = False
@@ -1657,181 +1660,136 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             self.fit(data=X)
             if run_diff:
                 self.graph = 'diff'
-                self.transform()
-                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
+                self.Diff_Diff_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Diff_Diff_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    db_diff_MAP, aux = self.MAP()
-                    self.db_diff_MAP = self.MAP_Y
+                    self.db_diff_MAP = self.MAP()
                 if run_MDE:
-                    db_diff_MDE = self.MDE()
-                    self.db_diff_MDE = self.MDE_Y
+                    self.db_diff_MDE = self.MDE()
                 if run_TriMAP:
-                    db_diff_TriMAP = self.TriMAP()
-                    self.db_diff_TriMAP = self.TriMAP_Y
+                    self.db_diff_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    db_diff_PaCMAP = self.PaCMAP()
-                    self.db_diff_PaCMAP = self.PaCMAP_Y
+                    self.db_diff_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    db_diff_tSNE = self.tSNE()
-                    self.db_diff_tSNE = self.tSNE_Y
+                    self.db_diff_tSNE = self.tSNE()
             if run_cknn:
                 self.graph = 'cknn'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
+                self.Diff_Cknn_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Diff_Cknn_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    db_cknn_MAP, aux = self.MAP()
-                    self.db_cknn_MAP = self.MAP_Y
+                    self.db_cknn_MAP = self.MAP()
                 if run_MDE:
-                    db_cknn_MDE = self.MDE()
-                    self.db_cknn_MDE = self.MDE_Y
+                    self.db_cknn_MDE = self.MDE()
                 if run_TriMAP:
-                    db_cknn_TriMAP = self.TriMAP()
-                    self.db_cknn_TriMAP = self.TriMAP_Y
+                    self.db_cknn_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    db_cknn_PaCMAP = self.PaCMAP()
-                    self.db_cknn_PaCMAP = self.PaCMAP_Y
+                    self.db_cknn_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    db_cknn_tSNE = self.tSNE()
-                    self.db_cknn_tSNE = self.tSNE_Y
+                    self.db_cknn_tSNE = self.tSNE()
             if run_fuzzy:
                 self.graph = 'fuzzy'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
+                self.Diff_Fuzzy_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Diff_Fuzzy_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    db_fuzzy_MAP, aux = self.MAP()
-                    self.db_fuzzy_MAP = self.MAP_Y
+                    self.db_fuzzy_MAP = self.MAP()
                 if run_MDE:
-                    db_fuzzy_MDE = self.MDE()
-                    self.db_fuzzy_MDE = self.MDE_Y
+                    self.db_fuzzy_MDE = self.MDE()
                 if run_TriMAP:
-                    db_fuzzy_TriMAP = self.TriMAP()
-                    self.db_fuzzy_TriMAP = self.TriMAP_Y
+                    self.db_fuzzy_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    db_fuzzy_PaCMAP = self.PaCMAP()
-                    self.db_fuzzy_PaCMAP = self.PaCMAP_Y
+                    self.db_fuzzy_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    db_fuzzy_tSNE = self.tSNE()
-                    self.db_fuzzy_tSNE = self.tSNE_Y
+                    self.db_fuzzy_tSNE = self.tSNE()
         if run_cb:
             self.basis = 'continuous'
             self.fit(X)
             if run_diff:
                 self.graph = 'diff'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
+                self.Cknn_Diff_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Diff_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    cb_diff_MAP, aux = self.MAP()
-                    self.cb_diff_MAP = self.MAP_Y
+                    self.cb_diff_MAP = self.MAP()
                 if run_MDE:
-                    cb_diff_MDE = self.MDE()
-                    self.cb_diff_MDE = self.MDE_Y
+                    self.cb_diff_MDE = self.MDE()
                 if run_TriMAP:
-                    cb_diff_TriMAP = self.TriMAP()
-                    self.cb_diff_TriMAP = self.TriMAP_Y
+                    self.cb_diff_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    cb_diff_PaCMAP = self.PaCMAP()
-                    self.cb_diff_PaCMAP = self.PaCMAP_Y
+                    self.cb_diff_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    cb_diff_tSNE = self.tSNE()
-                    self.cb_diff_tSNE = self.tSNE_Y
+                    self.cb_diff_tSNE = self.tSNE()
             if run_cknn:
                 self.graph = 'cknn'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
+                self.Cknn_Cknn_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Cknn_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    cb_cknn_MAP, aux = self.MAP()
-                    self.cb_cknn_MAP = self.MAP_Y
+                    self.cb_cknn_MAP = self.MAP()
                 if run_MDE:
-                    cb_cknn_MDE = self.MDE()
-                    self.cb_cknn_MDE = self.MDE_Y
+                    self.cb_cknn_MDE = self.MDE()
                 if run_TriMAP:
-                    cb_cknn_TriMAP = self.TriMAP()
-                    self.cb_cknn_TriMAP = self.TriMAP_Y
+                    self.cb_cknn_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    cb_cknn_PaCMAP = self.PaCMAP()
-                    self.cb_cknn_PaCMAP = self.PaCMAP_Y
+                    self.cb_cknn_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    cb_cknn_tSNE = self.tSNE()
-                    self.cb_cknn_tSNE = self.tSNE_Y
+                    self.cb_cknn_tSNE = self.tSNE()
             if run_fuzzy:
                 self.graph = 'fuzzy'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
+                self.Cknn_Fuzzy_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Fuzzy_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    cb_fuzzy_MAP = map, aux = self.MAP()
-                    self.cb_fuzzy_MAP = self.MAP_Y
+                    self.cb_fuzzy_MAP = self.MAP()
                 if run_MDE:
-                    cb_fuzzy_MDE = self.MDE()
-                    self.cb_fuzzy_MDE = self.MDE_Y
+                    self.cb_fuzzy_MDE = self.MDE()
                 if run_TriMAP:
-                    cb_fuzzy_TriMAP = self.TriMAP()
-                    self.cb_fuzzy_TriMAP = self.TriMAP_Y
+                    self.cb_fuzzy_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    cb_fuzzy_PaCMAP = self.PaCMAP()
-                    self.cb_fuzzy_PaCMAP = self.PaCMAP_Y
+                    self.cb_fuzzy_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    cb_fuzzy_tSNE = self.tSNE()
-                    self.cb_fuzzy_tSNE = self.tSNE_Y
+                    self.cb_fuzzy_tSNE = self.tSNE()
         if run_fb:
             self.basis = 'fuzzy'
             self.fit(X)
             if run_diff:
                 self.graph = 'diff'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.DiffGraph, metric=self.base_metric)
+                self.Fuzzy_Diff_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Diff_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    fb_diff_MAP, aux = self.MAP()
-                    self.fb_diff_MAP = self.MAP_Y
+                    self.fb_diff_MAP = self.MAP()
                 if run_MDE:
-                    fb_diff_MDE = self.MDE()
-                    self.fb_diff_MDE = self.MDE_Y
+                    self.fb_diff_MDE = self.MDE()
                 if run_TriMAP:
-                    fb_diff_TriMAP = self.TriMAP()
-                    self.fb_diff_TriMAP = self.TriMAP_Y
+                    self.fb_diff_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    fb_diff_PaCMAP = self.PaCMAP()
-                    self.fb_diff_PaCMAP = self.PaCMAP_Y
+                    self.fb_diff_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    fb_diff_tSNE = self.tSNE()
-                    self.fb_diff_tSNE = self.tSNE_Y
+                    self.fb_diff_tSNE = self.tSNE()
             if run_cknn:
                 self.graph = 'cknn'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.CknnGraph, metric=self.base_metric)
+                self.Fuzzy_Cknn_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Cknn_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    fb_cknn_MAP, aux = self.MAP()
-                    self.fb_cknn_MAP = self.MAP_Y
+                    self.fb_cknn_MAP = self.MAP()
                 if run_MDE:
-                    fb_cknn_MDE = self.MDE()
-                    self.fb_cknn_MDE = self.MDE_Y
+                    self.fb_cknn_MDE = self.MDE()
                 if run_TriMAP:
-                    fb_cknn_TriMAP = self.TriMAP()
-                    self.fb_cknn_TriMAP = self.TriMAP_Y
+                    self.fb_cknn_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    fb_cknn_PaCMAP = self.PaCMAP()
-                    self.fb_cknn_PaCMAP = self.PaCMAP_Y
+                    self.fb_cknn_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    fb_cknn_tSNE = self.tSNE()
-                    self.fb_cknn_tSNE = self.tSNE_Y
+                    self.fb_cknn_tSNE = self.tSNE()
             if run_fuzzy:
                 self.graph = 'fuzzy'
-                self.transform(X)
-                self.spectral_layout(basis=self.basis, target=self.FuzzyGraph, metric=self.base_metric)
+                self.Fuzzy_Fuzzy_Graph = self.transform()
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Fuzzy_Graph, metric=self.base_metric, dim=2)
                 if run_MAP:
-                    fb_fuzzy_MAP, aux = self.MAP()
-                    self.fb_fuzzy_MAP = self.MAP_Y
+                    self.fb_fuzzy_MAP = self.MAP()
                 if run_MDE:
-                    fb_fuzzy_MDE = self.MDE()
-                    self.fb_fuzzy_MDE = self.MDE_Y
+                    self.fb_fuzzy_MDE = self.MDE()
                 if run_TriMAP:
-                    fb_fuzzy_TriMAP = self.TriMAP()
-                    self.fb_fuzzy_TriMAP = self.TriMAP_Y
+                    self.fb_fuzzy_TriMAP = self.TriMAP()
                 if run_PaCMAP:
-                    fb_fuzzy_PaCMAP = self.PaCMAP()
-                    self.fb_fuzzy_PaCMAP = self.PaCMAP_Y
+                    self.fb_fuzzy_PaCMAP = self.PaCMAP()
                 if run_tSNE:
-                    fb_fuzzy_tSNE = self.tSNE()
-                    self.fb_fuzzy_tSNE = self.tSNE_Y
+                    self.fb_fuzzy_tSNE = self.tSNE()
 
         return self
 

@@ -209,3 +209,82 @@ def create_density_plot(X, Y, embedding):
             nearby_points = embedding[tree.query_radius([[X[i,j],Y[i,j]]], r=2)[0]]
             Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
     return Z / Z.sum()
+
+def plot_bases_scores(bases_scores):
+    keys = bases_scores.keys()
+    values = bases_scores.values()
+
+    pca_vals = list()
+    lap_vals = list()
+    r_vals = list()
+    t_vals = list()
+    for val in values:
+        pca_vals.append(val[0])
+        lap_vals.append(val[1])
+        r_vals.append(val[2])
+        t_vals.append(val[3])
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+    ax1.bar(keys, pca_vals)
+    ax1.set_title('PCA loss')
+    ax2.bar(keys, lap_vals)
+    ax2.set_title('LE loss')
+    ax3.bar(keys, r_vals)
+    ax3.set_title('Geodesic Spearman R')
+    ax4.bar(keys, t_vals)
+    ax4.set_title('Geodesic Kendall Tau')
+
+    return plt.show()
+
+
+def plot_graphs_scores(graphs_scores):
+    keys = graphs_scores.keys()
+    values = graphs_scores.values()
+
+    r_vals = list()
+    t_vals = list()
+    for val in values:
+        r_vals.append(val[0])
+        t_vals.append(val[1])
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+    fig.suptitle('Horizontally stacked subplots')
+    ax1.bar(keys, r_vals)
+    ax2.bar(keys, t_vals)
+
+    return plt.show()
+
+
+def plot_layouts_scores(layouts_scores):
+    keys = layouts_scores.keys()
+    values = layouts_scores.values()
+
+    pca_vals = list()
+    lap_vals = list()
+    r_vals = list()
+    t_vals = list()
+    for val in values:
+        pca_vals.append(val[0])
+        lap_vals.append(val[1])
+        r_vals.append(val[2])
+        t_vals.append(val[3])
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+    fig.suptitle('Horizontally stacked subplots')
+    ax1.bar(keys, pca_vals)
+    ax2.bar(keys, lap_vals)
+    ax3.bar(keys, r_vals)
+    ax4.bar(keys, t_vals)
+
+    return plt.show()
+
+
+
+
+
+
+
+
+
+
+

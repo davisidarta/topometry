@@ -1,4 +1,6 @@
 import matplotlib
+from scipy.sparse import issparse, csr_matrix
+
 matplotlib.use('Agg')  # plotting backend compatible with screen
 import sys
 from topo.models import TopOGraph
@@ -91,28 +93,53 @@ def local_scores(data, emb, k=10, metric='cosine', n_jobs=12, emb_is_graph=False
         _have_nmslib = True
     except ImportError:
         _have_nmslib = False
-    if _have_hnswlib:
-        if _have_hnswlib:
+
+    if issparse(data):
+        if _have_nmslib:
+            from topo.base.ann import NMSlibTransformer
+            data_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(data)
+            if not emb_is_graph:
+                emb = csr_matrix(emb)
+                emb_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(emb)
+        elif _have_hnswlib:
             from topo.base.ann import HNSWlibTransformer
+            data = data.toarray()
             data_graph = HNSWlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(data)
             if not emb_is_graph:
                 emb_graph = HNSWlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(emb)
-
-    elif _have_nmslib:
-        from topo.base.ann import NMSlibTransformer
-        data_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(data)
-        if not emb_is_graph:
-            emb_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(emb)
-
+        else:
+            from sklearn.neighbors import NearestNeighbors
+            data_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
+                                         metric=metric).fit(data)
+            data_graph = data_nbrs.kneighbors(data)
+            if not emb_is_graph:
+                emb_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
+                                            metric=metric).fit(emb)
+                emb_graph = emb_nbrs.kneighbors(emb)
     else:
-        from sklearn.neighbors import NearestNeighbors
-        data_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
-                                     metric=metric).fit(data)
-        data_graph = data_nbrs.kneighbors(data)
-        if not emb_is_graph:
-            emb_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
-                                        metric=metric).fit(emb)
-            emb_graph = emb_nbrs.kneighbors(emb)
+        if _have_hnswlib:
+            from topo.base.ann import HNSWlibTransformer
+            if issparse(data):
+                data = data.toarray()
+            data_graph = HNSWlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(data)
+            if not emb_is_graph:
+                emb_graph = HNSWlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(emb)
+        elif _have_nmslib:
+            from topo.base.ann import NMSlibTransformer
+            data = csr_matrix(data)
+            data_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(data)
+            if not emb_is_graph:
+                emb = csr_matrix(emb)
+                emb_graph = NMSlibTransformer(n_neighbors=k, n_jobs=n_jobs, metric=metric).fit_transform(emb)
+        else:
+            from sklearn.neighbors import NearestNeighbors
+            data_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
+                                         metric=metric).fit(data)
+            data_graph = data_nbrs.kneighbors(data)
+            if not emb_is_graph:
+                emb_nbrs = NearestNeighbors(n_neighbors=k, n_jobs=n_jobs,
+                                            metric=metric).fit(emb)
+                emb_graph = emb_nbrs.kneighbors(emb)
 
     if emb_is_graph:
         emb_graph = emb
@@ -122,31 +149,53 @@ def local_scores(data, emb, k=10, metric='cosine', n_jobs=12, emb_is_graph=False
     return local_scores_r, local_scores_tau
 
 def eval_models_layouts(TopOGraph, X,
-                basis=['diffusion', 'fuzzy', 'continuous'],
+                bases=['diffusion', 'fuzzy', 'continuous'],
                 graphs=['diff', 'cknn', 'fuzzy'],
                 layouts=['tSNE', 'MAP','MDE','PaCMAP','TriMAP']):
-    if str('diffusion') in basis:
+    if str('diffusion') in bases:
         eval_db = True
-    if str('continuous') in basis:
+    else:
+        eval_db = False
+    if str('continuous') in bases:
         eval_cb = True
-    if str('fuzzy') in basis:
+    else:
+        eval_cb = False
+    if str('fuzzy') in bases:
         eval_fb = True
+    else:
+        eval_fb = False
     if str('diff') in graphs:
         eval_diff = True
+    else:
+        eval_diff = False
     if str('cknn') in graphs:
         eval_cknn = True
+    else:
+        eval_cknn = False
     if str('fuzzy') in graphs:
         eval_fuzzy = True
+    else:
+        eval_fuzzy = False
     if str('tSNE') in layouts:
         eval_tSNE = True
+    else:
+        eval_tSNE = False
     if str('MAP') in layouts:
         eval_MAP = True
+    else:
+        eval_MAP = False
     if str('MDE') in layouts:
         eval_MDE = True
+    else:
+        eval_MDE = False
     if str('PaCMAP') in layouts:
         eval_PaCMAP = True
+    else:
+        eval_PaCMAP = False
     if str('TriMAP') in layouts:
         eval_TriMAP = True
+    else:
+        eval_TriMAP = False
 
     db_pca = None
     db_lap = None
@@ -178,21 +227,29 @@ def eval_models_layouts(TopOGraph, X,
     fb_cknn_t = None
     fb_fuzzy_r = None
     fb_fuzzy_t = None
+    db_diff_scores = None
+    db_cknn_scores = None
+    db_fuzzy_scores = None
+    cb_diff_scores = None
+    cb_cknn_scores = None
+    cb_fuzzy_scores = None
+    fb_diff_scores = None
+    fb_cknn_scores = None
+    fb_fuzzy_scores = None
+
 
     TopOGraph.run_layouts(X=X,
-                basis=basis,
+                bases=bases,
                 graphs=graphs,
                 layouts=layouts)
 
     if eval_db:
         db_pca, db_lap = global_scores(X, TopOGraph.MSDiffMap)
-        db_r, db_t = local_scores(X, TopOGraph.DiffBasis.K, emb_is_graph=True)
-
+        db_r, db_t = local_scores(X, TopOGraph.MSDiffMap)
         db_scores = db_pca, db_lap, db_r, db_t
 
         if eval_diff:
             db_diff_r, db_diff_t = local_scores(X, TopOGraph.Diff_Diff_Graph, emb_is_graph=True)
-
             db_diff_scores = db_diff_r, db_diff_t
 
             if eval_tSNE:
@@ -204,7 +261,6 @@ def eval_models_layouts(TopOGraph, X,
                 db_diff_MAP_r, db_diff_MAP_t = local_scores(X, TopOGraph.db_diff_MAP)
                 data_db_diff_MAP_scores = data_db_diff_MAP_pca, data_db_diff_MAP_pca, db_diff_MAP_r, db_diff_MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_db_diff_MDE_pca, data_db_diff_MDE_lap = global_scores(X, TopOGraph.db_diff_MDE)
                 db_diff_MDE_r, db_diff_MDE_t = local_scores(X, TopOGraph.db_diff_MDE)
                 data_db_diff_MDE_scores = data_db_diff_MDE_pca, data_db_diff_MDE_lap, db_diff_MDE_r, db_diff_MDE_t
@@ -229,7 +285,6 @@ def eval_models_layouts(TopOGraph, X,
                 db_cknn_MAP_r, db__MAP_t = local_scores(X, TopOGraph.db_cknn_MAP)
                 data_db_cknn_MAP_scores = data_db_cknn_MAP_pca, data_db_cknn_MAP_lap, db_cknn_MAP_r, db__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_db_cknn_MDE_pca, data_db_cknn_MDE_lap = global_scores(X, TopOGraph.db_cknn_MDE)
                 db_cknn_MDE_r, db_cknn_MDE_t = local_scores(X, TopOGraph.db_cknn_MDE)
                 data_db_cknn_MDE_scores = data_db_cknn_MDE_pca, data_db_cknn_MDE_lap, db_cknn_MDE_r, db_cknn_MDE_t
@@ -254,7 +309,6 @@ def eval_models_layouts(TopOGraph, X,
                 db_fuzzy_MAP_r, db__MAP_t = local_scores(X, TopOGraph.db_fuzzy_MAP)
                 data_db_fuzzy_MAP_scores = data_db_fuzzy_MAP_pca, data_db_fuzzy_MAP_lap, db_fuzzy_MAP_r, db__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap = global_scores(X, TopOGraph.db_fuzzy_MDE)
                 db_fuzzy_MDE_r, db_fuzzy_MDE_t = local_scores(X, TopOGraph.db_fuzzy_MDE)
                 data_db_fuzzy_MDE_scores = data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap, db_fuzzy_MDE_r, db_fuzzy_MDE_t
@@ -268,8 +322,8 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_fuzzy_PaCMAP_scores = data_db_fuzzy_PaCMAP_pca, data_db_fuzzy_PaCMAP_lap, db_fuzzy_PaCMAP_r, db_fuzzy_PaCMAP_t
 
     if eval_cb:
-        cb_pca, cb_lap = global_scores(X, TopOGraph.MSDiffMap)
-        cb_r, cb_t = local_scores(X, TopOGraph.DiffBasis.K, emb_is_graph=True)
+        cb_pca, cb_lap = global_scores(X, TopOGraph.CLapMap)
+        cb_r, cb_t = local_scores(X, TopOGraph.CLapMap)
 
         cb_scores = cb_pca, cb_lap, cb_r, cb_t
 
@@ -287,7 +341,6 @@ def eval_models_layouts(TopOGraph, X,
                 cb_diff_MAP_r, cb_diff_MAP_t = local_scores(X, TopOGraph.cb_diff_MAP)
                 data_cb_diff_MAP_scores = data_cb_diff_MAP_pca, data_cb_diff_MAP_pca, cb_diff_MAP_r, cb_diff_MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_cb_diff_MDE_pca, data_cb_diff_MDE_lap = global_scores(X, TopOGraph.cb_diff_MDE)
                 cb_diff_MDE_r, cb_diff_MDE_t = local_scores(X, TopOGraph.cb_diff_MDE)
                 data_cb_diff_MDE_scores = data_cb_diff_MDE_pca, data_cb_diff_MDE_lap, cb_diff_MDE_r, cb_diff_MDE_t
@@ -312,7 +365,6 @@ def eval_models_layouts(TopOGraph, X,
                 cb_cknn_MAP_r, cb__MAP_t = local_scores(X, TopOGraph.cb_cknn_MAP)
                 data_cb_cknn_MAP_scores = data_cb_cknn_MAP_pca, data_cb_cknn_MAP_lap, cb_cknn_MAP_r, cb__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap = global_scores(X, TopOGraph.cb_cknn_MDE)
                 cb_cknn_MDE_r, cb_cknn_MDE_t = local_scores(X, TopOGraph.cb_cknn_MDE)
                 data_cb_cknn_MDE_scores = data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap, cb_cknn_MDE_r, cb_cknn_MDE_t
@@ -337,7 +389,6 @@ def eval_models_layouts(TopOGraph, X,
                 cb_fuzzy_MAP_r, cb__MAP_t = local_scores(X, TopOGraph.cb_fuzzy_MAP)
                 data_cb_fuzzy_MAP_scores = data_cb_fuzzy_MAP_pca, data_cb_fuzzy_MAP_lap, cb_fuzzy_MAP_r, cb__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap = global_scores(X, TopOGraph.cb_fuzzy_MDE)
                 cb_fuzzy_MDE_r, cb_fuzzy_MDE_t = local_scores(X, TopOGraph.cb_fuzzy_MDE)
                 data_cb_fuzzy_MDE_scores = data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap, cb_fuzzy_MDE_r, cb_fuzzy_MDE_t
@@ -352,8 +403,8 @@ def eval_models_layouts(TopOGraph, X,
 
 
     if eval_fb:
-        fb_pca, fb_lap = global_scores(X, TopOGraph.MSDiffMap)
-        fb_r, fb_t = local_scores(X, TopOGraph.DiffBasis.K, emb_is_graph=True)
+        fb_pca, fb_lap = global_scores(X, TopOGraph.FuzzyLapMap)
+        fb_r, fb_t = local_scores(X, TopOGraph.FuzzyLapMap)
 
         fb_scores = fb_pca, fb_lap, fb_r, fb_t
 
@@ -371,7 +422,6 @@ def eval_models_layouts(TopOGraph, X,
                 fb_diff_MAP_r, fb_diff_MAP_t = local_scores(X, TopOGraph.fb_diff_MAP)
                 data_fb_diff_MAP_scores = data_fb_diff_MAP_pca, data_fb_diff_MAP_pca, fb_diff_MAP_r, fb_diff_MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_fb_diff_MDE_pca, data_fb_diff_MDE_lap = global_scores(X, TopOGraph.fb_diff_MDE)
                 fb_diff_MDE_r, fb_diff_MDE_t = local_scores(X, TopOGraph.fb_diff_MDE)
                 data_fb_diff_MDE_scores = data_fb_diff_MDE_pca, data_fb_diff_MDE_lap, fb_diff_MDE_r, fb_diff_MDE_t
@@ -396,7 +446,6 @@ def eval_models_layouts(TopOGraph, X,
                 fb_cknn_MAP_r, fb__MAP_t = local_scores(X, TopOGraph.fb_cknn_MAP)
                 data_fb_cknn_MAP_scores = data_fb_cknn_MAP_pca, data_fb_cknn_MAP_lap, fb_cknn_MAP_r, fb__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap = global_scores(X, TopOGraph.fb_cknn_MDE)
                 fb_cknn_MDE_r, fb_cknn_MDE_t = local_scores(X, TopOGraph.fb_cknn_MDE)
                 data_fb_cknn_MDE_scores = data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap, fb_cknn_MDE_r, fb_cknn_MDE_t
@@ -421,7 +470,6 @@ def eval_models_layouts(TopOGraph, X,
                 fb_fuzzy_MAP_r, fb__MAP_t = local_scores(X, TopOGraph.fb_fuzzy_MAP)
                 data_fb_fuzzy_MAP_scores = data_fb_fuzzy_MAP_pca, data_fb_fuzzy_MAP_lap, fb_fuzzy_MAP_r, fb__MAP_t
             if eval_MDE:
-                mde = TopOGraph.MDE()
                 data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap = global_scores(X, TopOGraph.fb_fuzzy_MDE)
                 fb_fuzzy_MDE_r, fb_fuzzy_MDE_t = local_scores(X, TopOGraph.fb_fuzzy_MDE)
                 data_fb_fuzzy_MDE_scores = data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap, fb_fuzzy_MDE_r, fb_fuzzy_MDE_t
@@ -434,19 +482,29 @@ def eval_models_layouts(TopOGraph, X,
                 fb_fuzzy_PaCMAP_r, fb_fuzzy_PaCMAP_t = local_scores(X, TopOGraph.fb_fuzzy_PaCMAP)
                 data_fb_fuzzy_PaCMAP_scores = data_fb_fuzzy_PaCMAP_pca, data_fb_fuzzy_PaCMAP_lap, fb_fuzzy_PaCMAP_r, fb_fuzzy_PaCMAP_t
 
-
-
     from sklearn.decomposition import PCA
-    pca_emb = PCA(n_components=TopOGraph.n_eigs)
+    import numpy as np
+    if issparse(X) == True:
+        if isinstance(X, csr_matrix):
+            data = X.todense()
+    if issparse(X) == False:
+        if not isinstance(X, np.ndarray):
+            import pandas as pd
+            if isinstance(X, pd.DataFrame):
+                data = np.array(X.values.T)
+            else:
+                return print('Uknown data format.')
+
+    pca_emb = PCA(n_components=TopOGraph.n_eigs).fit_transform(data)
     pca_pca, pca_lap = global_scores(X, pca_emb)
     pca_r, pca_t = local_scores(X, pca_emb)
 
-    embedding_scores = {'PCA_scores' : (pca_pca, pca_lap, pca_r, pca_t) }
+    embedding_scores = {'PCA' : (pca_pca, pca_lap, pca_r, pca_t)}
     graph_scores = {}
     layout_scores = {}
 
     if eval_db:
-        embedding_scores['DB '] = db_scores
+        embedding_scores['DB'] = db_scores
         if eval_diff:
             graph_scores['db_diff'] = db_diff_scores
             if eval_tSNE:
