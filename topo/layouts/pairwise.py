@@ -242,8 +242,7 @@ def PaCMAP(data=None,
                lr=1.0,
                num_iters=450,
                verbose=False,
-               intermediate=False,
-               random_state=None):
+               intermediate=False):
     """
     Dimensionality Reduction Using Pairwise-controlled Manifold Approximation and Projectio
 
@@ -291,20 +290,17 @@ def PaCMAP(data=None,
     except ImportError('TriMAP is needed for this embedding. Install it with `pip install trimap`'):
         return print('TriMAP is needed for this embedding. Install it with `pip install trimap`')
 
-    pacmap_emb = pacmap.PaCMAP(X=data,
-                                  init=init,
-                                  n_dims=n_dims,
-                                  n_neighbors=n_neighbors,
-                                  MN_ratio=MN_ratio,
-                                  FP_ratio=FP_ratio,
-                                  pair_neighbors=pair_neighbors,
-                                  pair_MN=pair_MN,
-                                  pair_FP=pair_FP,
-                                  distance=distance,
-                                  lr=lr,
-                                  num_iters=num_iters,
-                                  verbose=verbose,
-                                  intermediate=intermediate,
-                                  random_state=random_state)
+    pacmap_emb = pacmap.PaCMAP(n_dims=n_dims,
+                               n_neighbors=n_neighbors,
+                               MN_ratio=MN_ratio,
+                               FP_ratio=FP_ratio,
+                               pair_neighbors=pair_neighbors,
+                               pair_MN=pair_MN,
+                               pair_FP=pair_FP,
+                               distance=distance,
+                               lr=lr,
+                               num_iters=num_iters,
+                               verbose=verbose,
+                               intermediate=intermediate).fit_transform(X=data, init=init)
 
     return pacmap_emb

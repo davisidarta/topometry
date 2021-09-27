@@ -390,8 +390,9 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
         self.n_neighbors = n_neighbors
         return print('Updated neighbor search.')
 
-
-
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
 
 
 
@@ -472,7 +473,7 @@ class HNSWlibTransformer(BaseEstimator):
             import pandas as pd
             if isinstance(data, csr_matrix):
                 arr = np.zeros([self.N, self.m])
-                data = data.toarray(out=arr)
+                data = data.toarray()
             if isinstance(data, pd.DataFrame):
                 data = data.to_numpy()
             else:
@@ -629,3 +630,7 @@ class HNSWlibTransformer(BaseEstimator):
         """
         self.n_neighbors = n_neighbors
         return print('Updated neighbor search.')
+
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
