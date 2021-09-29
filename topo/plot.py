@@ -3,7 +3,7 @@ import numba
 import numpy as np
 from matplotlib.patches import Ellipse
 from sklearn.neighbors import KDTree
-
+from matplotlib import cm
 try:
     import matplotlib.pyplot as plt
 except ImportError:
@@ -201,6 +201,16 @@ def eval_density_at_point(x, embedding):
         result += eval_gaussian(x, pos=pos, cov=cov)
     return result
 
+
+def get_cmap(n, name='hsv'):
+    return plt.cm.get_cmap(name, n)
+
+
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return cm.get_cmap(name, n)
+
 def create_density_plot(X, Y, embedding):
     Z = np.zeros_like(X)
     tree = KDTree(embedding[:, :2])
@@ -210,10 +220,13 @@ def create_density_plot(X, Y, embedding):
             Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
     return Z / Z.sum()
 
-def plot_bases_scores(bases_scores):
+def plot_bases_scores(bases_scores, return_plot=True):
     keys = bases_scores.keys()
     values = bases_scores.values()
-
+    cmap = get_cmap(len(keys))
+    k_color = list()
+    for k in np.arange(len(keys)):
+        k_color.append(cmap(k))
     pca_vals = list()
     lap_vals = list()
     r_vals = list()
@@ -225,19 +238,20 @@ def plot_bases_scores(bases_scores):
         t_vals.append(val[3])
 
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
-    ax1.bar(keys, pca_vals)
+    ax1.bar(keys, pca_vals, color=k_color)
     ax1.set_title('PCA loss')
-    ax2.bar(keys, lap_vals)
+    ax2.bar(keys, lap_vals, color=k_color)
     ax2.set_title('LE loss')
-    ax3.bar(keys, r_vals)
+    ax3.bar(keys, r_vals, color=k_color)
     ax3.set_title('Geodesic Spearman R')
-    ax4.bar(keys, t_vals)
-    ax4.set_title('Geodesic Kendall Tau')
+    ax4.bar(keys, t_vals, color=k_color)
+    ax4.set_title('Geodesic Kendall T')
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
 
-    return plt.show()
-
-
-def plot_graphs_scores(graphs_scores):
+def plot_graphs_scores(graphs_scores, return_plot=True):
     keys = graphs_scores.keys()
     values = graphs_scores.values()
 
@@ -252,10 +266,22 @@ def plot_graphs_scores(graphs_scores):
     ax1.bar(keys, r_vals)
     ax2.bar(keys, t_vals)
 
-    return plt.show()
+    if len(keys) == 4:
+        colors = ['black', 'red', 'green', 'blue']
+    elif len(keys) == 3:
+        colors = ['black', 'red', 'green']
+    elif len(keys) == 2:
+        colors = ['black', 'red']
+    elif len(keys) == 1:
+        colors = ['black']
+
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
 
 
-def plot_layouts_scores(layouts_scores):
+def plot_layouts_scores(layouts_scores, return_plot=True):
     keys = layouts_scores.keys()
     values = layouts_scores.values()
 
@@ -276,7 +302,10 @@ def plot_layouts_scores(layouts_scores):
     ax3.bar(keys, r_vals)
     ax4.bar(keys, t_vals)
 
-    return plt.show()
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
 
 
 

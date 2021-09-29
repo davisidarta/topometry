@@ -394,7 +394,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         print('Building topological basis...' + 'using ' + str(self.basis) + ' model.')
         if self.basis == 'diffusion':
             start = time.time()
-            self.DiffBasis = Diffusor(n_components=self.n_eigs,
+            self.DiffBasis = Diffusor(n_eigs=self.n_eigs,
                                       n_neighbors=self.base_knn,
                                       alpha=self.alpha,
                                       n_jobs=self.n_jobs,
@@ -462,7 +462,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             self.FuzzyBasis = fuzzy_results[0]
             self.FuzzyLapMap = self.spectral_layout(X=data,
                                                     target=self.FuzzyBasis,
-                                                    dim=self.n_eigs,
+                                                    n_components=self.n_eigs,
                                                     metric=self.base_metric)
             expansion = 10.0 / np.abs(self.FuzzyLapMap).max()
             self.FuzzyLapMap = (self.FuzzyLapMap * expansion).astype(
@@ -1169,7 +1169,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
     def PaCMAP(self, data=None,
                init=None,
-               n_dims=2,
+               n_components=2,
                n_neighbors=10,
                MN_ratio=0.5,
                FP_ratio=2.0,
@@ -1207,7 +1207,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         start = time.time()
         results = pairwise.PaCMAP(data=data,
                                   init=init,
-                                  n_dims=n_dims,
+                                  n_dims=n_components,
                                   n_neighbors=n_neighbors,
                                   MN_ratio=MN_ratio,
                                   FP_ratio=FP_ratio,
@@ -1227,7 +1227,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
     def TriMAP(self, data=None,
                init=None,
-               n_dims=2,
+               n_components=2,
                n_inliers=10,
                n_outliers=5,
                n_random=5,
@@ -1268,7 +1268,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         start = time.time()
         results = trimap.TriMAP(X=data,
                                 init=init,
-                                n_dims=n_dims,
+                                n_dims=n_components,
                                 n_inliers=n_inliers,
                                 n_outliers=n_outliers,
                                 n_random=n_random,
@@ -1606,7 +1606,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         return self
 
 
-    def run_layouts(self, X,
+    def run_layouts(self, X, n_components=2,
                     bases=['diffusion', 'fuzzy', 'continuous'],
                     graphs=['diff', 'cknn', 'fuzzy'],
                     layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP']):
@@ -1661,135 +1661,135 @@ class TopOGraph(TransformerMixin, BaseEstimator):
             if run_diff:
                 self.graph = 'diff'
                 self.Diff_Diff_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Diff_Diff_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Diff_Diff_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.db_diff_MAP = self.MAP()
+                    self.db_diff_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.db_diff_MDE = self.MDE()
+                    self.db_diff_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.db_diff_TriMAP = self.TriMAP()
+                    self.db_diff_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.db_diff_PaCMAP = self.PaCMAP()
+                    self.db_diff_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.db_diff_tSNE = self.tSNE()
+                    self.db_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 self.Diff_Cknn_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Diff_Cknn_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Diff_Cknn_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.db_cknn_MAP = self.MAP()
+                    self.db_cknn_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.db_cknn_MDE = self.MDE()
+                    self.db_cknn_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.db_cknn_TriMAP = self.TriMAP()
+                    self.db_cknn_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.db_cknn_PaCMAP = self.PaCMAP()
+                    self.db_cknn_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.db_cknn_tSNE = self.tSNE()
+                    self.db_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.Diff_Fuzzy_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Diff_Fuzzy_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Diff_Fuzzy_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.db_fuzzy_MAP = self.MAP()
+                    self.db_fuzzy_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.db_fuzzy_MDE = self.MDE()
+                    self.db_fuzzy_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.db_fuzzy_TriMAP = self.TriMAP()
+                    self.db_fuzzy_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.db_fuzzy_PaCMAP = self.PaCMAP()
+                    self.db_fuzzy_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.db_fuzzy_tSNE = self.tSNE()
+                    self.db_fuzzy_tSNE = self.tSNE(n_components=n_components)
         if run_cb:
             self.basis = 'continuous'
             self.fit(X)
             if run_diff:
                 self.graph = 'diff'
                 self.Cknn_Diff_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Cknn_Diff_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Diff_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.cb_diff_MAP = self.MAP()
+                    self.cb_diff_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.cb_diff_MDE = self.MDE()
+                    self.cb_diff_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.cb_diff_TriMAP = self.TriMAP()
+                    self.cb_diff_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.cb_diff_PaCMAP = self.PaCMAP()
+                    self.cb_diff_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.cb_diff_tSNE = self.tSNE()
+                    self.cb_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 self.Cknn_Cknn_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Cknn_Cknn_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Cknn_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.cb_cknn_MAP = self.MAP()
+                    self.cb_cknn_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.cb_cknn_MDE = self.MDE()
+                    self.cb_cknn_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.cb_cknn_TriMAP = self.TriMAP()
+                    self.cb_cknn_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.cb_cknn_PaCMAP = self.PaCMAP()
+                    self.cb_cknn_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.cb_cknn_tSNE = self.tSNE()
+                    self.cb_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.Cknn_Fuzzy_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Cknn_Fuzzy_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Cknn_Fuzzy_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.cb_fuzzy_MAP = self.MAP()
+                    self.cb_fuzzy_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.cb_fuzzy_MDE = self.MDE()
+                    self.cb_fuzzy_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.cb_fuzzy_TriMAP = self.TriMAP()
+                    self.cb_fuzzy_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.cb_fuzzy_PaCMAP = self.PaCMAP()
+                    self.cb_fuzzy_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.cb_fuzzy_tSNE = self.tSNE()
+                    self.cb_fuzzy_tSNE = self.tSNE(n_components=n_components)
         if run_fb:
             self.basis = 'fuzzy'
             self.fit(X)
             if run_diff:
                 self.graph = 'diff'
                 self.Fuzzy_Diff_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Diff_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Diff_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.fb_diff_MAP = self.MAP()
+                    self.fb_diff_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.fb_diff_MDE = self.MDE()
+                    self.fb_diff_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.fb_diff_TriMAP = self.TriMAP()
+                    self.fb_diff_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.fb_diff_PaCMAP = self.PaCMAP()
+                    self.fb_diff_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.fb_diff_tSNE = self.tSNE()
+                    self.fb_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 self.Fuzzy_Cknn_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Cknn_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Cknn_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.fb_cknn_MAP = self.MAP()
+                    self.fb_cknn_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.fb_cknn_MDE = self.MDE()
+                    self.fb_cknn_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.fb_cknn_TriMAP = self.TriMAP()
+                    self.fb_cknn_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.fb_cknn_PaCMAP = self.PaCMAP()
+                    self.fb_cknn_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.fb_cknn_tSNE = self.tSNE()
+                    self.fb_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 self.Fuzzy_Fuzzy_Graph = self.transform()
-                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Fuzzy_Graph, metric=self.base_metric, dim=2)
+                self.spectral_layout(basis=self.basis, target=self.Fuzzy_Fuzzy_Graph, metric=self.base_metric, n_components=n_components)
                 if run_MAP:
-                    self.fb_fuzzy_MAP = self.MAP()
+                    self.fb_fuzzy_MAP = self.MAP(n_components=n_components)
                 if run_MDE:
-                    self.fb_fuzzy_MDE = self.MDE()
+                    self.fb_fuzzy_MDE = self.MDE(n_components=n_components)
                 if run_TriMAP:
-                    self.fb_fuzzy_TriMAP = self.TriMAP()
+                    self.fb_fuzzy_TriMAP = self.TriMAP(n_components=n_components)
                 if run_PaCMAP:
-                    self.fb_fuzzy_PaCMAP = self.PaCMAP()
+                    self.fb_fuzzy_PaCMAP = self.PaCMAP(n_components=n_components)
                 if run_tSNE:
-                    self.fb_fuzzy_tSNE = self.tSNE()
+                    self.fb_fuzzy_tSNE = self.tSNE(n_components=n_components)
 
         return self
 
