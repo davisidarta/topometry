@@ -153,7 +153,7 @@ class Diffusor(TransformerMixin):
 
     def __init__(self,
                  n_neighbors=10,
-                 n_components=50,
+                 n_eigs=50,
                  use_eigs='max',
                  metric='cosine',
                  kernel_use='decay_adaptive',
@@ -172,7 +172,7 @@ class Diffusor(TransformerMixin):
                  transitions=True
                  ):
         self.n_neighbors = n_neighbors
-        self.n_components = n_components
+        self.n_eigs = n_eigs
         self.use_eigs = use_eigs
         self.alpha = alpha
         self.n_jobs = n_jobs
@@ -428,9 +428,9 @@ class Diffusor(TransformerMixin):
         # Use user's  or default initial guess
         # initial eigen value decomposition
         if self.transitions:
-            D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         else:
-            D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         D = np.real(D)
         V = np.real(V)
         inds = np.argsort(D)[::-1]
@@ -445,9 +445,9 @@ class Diffusor(TransformerMixin):
 
         if self.eigen_expansion and len(residual) < 1:
             #expand eigendecomposition
-            target = self.n_components + 30
+            target = self.n_eigs + 30
             while residual < 3:
-                while target < 3 * self.n_components:
+                while target < 3 * self.n_eigs:
                     print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
                           + str(target) + 'components.')
                     if self.transitions:
@@ -468,13 +468,13 @@ class Diffusor(TransformerMixin):
                     residual = np.sum(vals < 0, axis=0)
 
                 if residual < 1:
-                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
                           ' Falling back to `eigen_expansion=False`, will not attempt')
                     self.eigen_expansion = False
 
         if self.eigen_expansion:
             if len(residual) > 30:
-                target = self.n_components - 15
+                target = self.n_eigs - 15
                 while len(residual) > 29:
                     if self.transitions:
                        D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
@@ -496,14 +496,14 @@ class Diffusor(TransformerMixin):
                         target = pos - int(residual // 2)
 
                 if len(residual) < 1:
-                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
                               ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
                     self.eigen_expansion = False
         if not self.eigen_expansion:
             if self.transitions:
-                D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
+                D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
             else:
-                D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=self.N)
+                D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
             D = np.real(D)
             V = np.real(V)
             inds = np.argsort(D)[::-1]
@@ -544,8 +544,6 @@ class Diffusor(TransformerMixin):
         data :
             Input data matrix (numpy array, pandas df, csr_matrix).
 
-        n_components: int (optional, default None)
-            Numper of components to map to prior to learning.
 
         Returns
         -------
@@ -558,9 +556,9 @@ class Diffusor(TransformerMixin):
         # Use user's  or default initial guess
         # initial eigen value decomposition
         if self.transitions:
-            D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         else:
-            D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         D = np.real(D)
         V = np.real(V)
         inds = np.argsort(D)[::-1]
@@ -575,9 +573,9 @@ class Diffusor(TransformerMixin):
 
         if self.eigen_expansion and len(residual) < 1:
             #expand eigendecomposition
-            target = self.n_components + 30
+            target = self.n_eigs + 30
             while residual < 3:
-                while target < 3 * self.n_components:
+                while target < 3 * self.n_eigs:
                     print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
                           + str(target) + 'components.')
                     if self.transitions:
@@ -598,13 +596,13 @@ class Diffusor(TransformerMixin):
                     residual = np.sum(vals < 0, axis=0)
 
                 if residual < 1:
-                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
                           ' Falling back to `eigen_expansion=False`, will not attempt')
                     self.eigen_expansion = False
 
         if self.eigen_expansion:
             if len(residual) > 30:
-                target = self.n_components - 15
+                target = self.n_eigs - 15
                 while len(residual) > 29:
                     if self.transitions:
                        D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
@@ -626,14 +624,14 @@ class Diffusor(TransformerMixin):
                         target = pos - int(residual // 2)
 
                 if residual < 1:
-                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_components` !'
+                    print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
                               ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
                     self.eigen_expansion = False
         if not self.eigen_expansion:
             if self.transitions:
-                D, V = eigs(self.T, self.n_components, tol=1e-4, maxiter=self.N)
+                D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
             else:
-                D, V = eigs(self.K, self.n_components, tol=1e-4, maxiter=self.N)
+                D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
             D = np.real(D)
             V = np.real(V)
             inds = np.argsort(D)[::-1]
@@ -719,7 +717,7 @@ class Diffusor(TransformerMixin):
 
         """
         if n_eigs is None:
-            n_eigs = self.n_components
+            n_eigs = self.n_eigs
 
         mms, self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                                 n_eigs=n_eigs,
