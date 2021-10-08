@@ -328,7 +328,7 @@ def eval_models_layouts(TopOGraph, X,
         cb_scores = cb_pca, cb_lap, cb_r, cb_t
 
         if eval_diff:
-            cb_diff_r, cb_diff_t = local_scores(X, TopOGraph.Diff_Diff_Graph, emb_is_graph=True)
+            cb_diff_r, cb_diff_t = local_scores(X, TopOGraph.Cknn_Diff_Graph, emb_is_graph=True)
 
             cb_diff_scores = cb_diff_r, cb_diff_t
 
@@ -354,7 +354,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_diff_PaCMAP_scores = data_cb_diff_PaCMAP_pca, data_cb_diff_PaCMAP_lap, cb_diff_PaCMAP_r, cb_diff_PaCMAP_t
 
         if eval_cknn:
-            cb_cknn_r, cb_cknn_t = local_scores(X, TopOGraph.Diff_Cknn_Graph, emb_is_graph=True)
+            cb_cknn_r, cb_cknn_t = local_scores(X, TopOGraph.Cknn_Cknn_Graph, emb_is_graph=True)
             cb_cknn_scores = cb_cknn_r, cb_cknn_t
             if eval_tSNE:
                 data_cb_cknn_tSNE_pca, data_cb_cknn_tSNE_lap = global_scores(X, TopOGraph.cb_cknn_tSNE)
@@ -378,7 +378,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_cknn_PaCMAP_scores = data_cb_cknn_PaCMAP_pca, data_cb_cknn_PaCMAP_lap, cb_cknn_PaCMAP_r, cb_cknn_PaCMAP_t
 
         if eval_fuzzy:
-            cb_fuzzy_r, cb_fuzzy_t = local_scores(X, TopOGraph.Diff_Fuzzy_Graph, emb_is_graph=True)
+            cb_fuzzy_r, cb_fuzzy_t = local_scores(X, TopOGraph.Cknn_Fuzzy_Graph, emb_is_graph=True)
             cb_fuzzy_scores = cb_fuzzy_r, cb_fuzzy_t
             if eval_tSNE:
                 data_cb_fuzzy_tSNE_pca, data_cb_fuzzy_tSNE_lap = global_scores(X, TopOGraph.cb_fuzzy_tSNE)
@@ -409,7 +409,7 @@ def eval_models_layouts(TopOGraph, X,
         fb_scores = fb_pca, fb_lap, fb_r, fb_t
 
         if eval_diff:
-            fb_diff_r, fb_diff_t = local_scores(X, TopOGraph.Diff_Diff_Graph, emb_is_graph=True)
+            fb_diff_r, fb_diff_t = local_scores(X, TopOGraph.Fuzzy_Diff_Graph, emb_is_graph=True)
 
             fb_diff_scores = fb_diff_r, fb_diff_t
 
@@ -435,7 +435,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_diff_PaCMAP_scores = data_fb_diff_PaCMAP_pca, data_fb_diff_PaCMAP_lap, fb_diff_PaCMAP_r, fb_diff_PaCMAP_t
 
         if eval_cknn:
-            fb_cknn_r, fb_cknn_t = local_scores(X, TopOGraph.Diff_Cknn_Graph, emb_is_graph=True)
+            fb_cknn_r, fb_cknn_t = local_scores(X, TopOGraph.Fuzzy_Cknn_Graph, emb_is_graph=True)
             fb_cknn_scores = fb_cknn_r, fb_cknn_t
             if eval_tSNE:
                 data_fb_cknn_tSNE_pca, data_fb_cknn_tSNE_lap = global_scores(X, TopOGraph.fb_cknn_tSNE)
@@ -459,7 +459,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_cknn_PaCMAP_scores = data_fb_cknn_PaCMAP_pca, data_fb_cknn_PaCMAP_lap, fb_cknn_PaCMAP_r, fb_cknn_PaCMAP_t
 
         if eval_fuzzy:
-            fb_fuzzy_r, fb_fuzzy_t = local_scores(X, TopOGraph.Diff_Fuzzy_Graph, emb_is_graph=True)
+            fb_fuzzy_r, fb_fuzzy_t = local_scores(X, TopOGraph.Fuzzy_Fuzzy_Graph, emb_is_graph=True)
             fb_fuzzy_scores = fb_fuzzy_r, fb_fuzzy_t
             if eval_tSNE:
                 data_fb_fuzzy_tSNE_pca, data_fb_fuzzy_tSNE_lap = global_scores(X, TopOGraph.fb_fuzzy_tSNE)
