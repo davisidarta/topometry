@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from scipy.sparse import (SparseEfficiencyWarning, csr_matrix, find, issparse)
-from scipy.sparse.linalg import eigs
+from scipy.sparse.linalg import eigsh
 from sklearn.base import TransformerMixin
 from sklearn.neighbors import NearestNeighbors
 
@@ -428,9 +428,9 @@ class Diffusor(TransformerMixin):
         # Use user's  or default initial guess
         # initial eigen value decomposition
         if self.transitions:
-            D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigsh(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         else:
-            D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigsh(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         D = np.real(D)
         V = np.real(V)
         inds = np.argsort(D)[::-1]
@@ -451,9 +451,9 @@ class Diffusor(TransformerMixin):
                     print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
                           + str(target) + 'components.')
                     if self.transitions:
-                        D, V = eigs(self.T, target, tol=1e-4, maxiter=(self.N // 10))
+                        D, V = eigsh(self.T, target, tol=1e-4, maxiter=(self.N // 10))
                     else:
-                        D, V = eigs(self.K, target, tol=1e-4, maxiter=(self.N // 10))
+                        D, V = eigsh(self.K, target, tol=1e-4, maxiter=(self.N // 10))
                     D = np.real(D)
                     V = np.real(V)
                     inds = np.argsort(D)[::-1]
@@ -477,9 +477,9 @@ class Diffusor(TransformerMixin):
                 target = self.n_eigs - 15
                 while len(residual) > 29:
                     if self.transitions:
-                       D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
+                       D, V = eigsh(self.T, target, tol=1e-4, maxiter=self.N)
                     else:
-                        D, V = eigs(self.K, target, tol=1e-4, maxiter=self.N)
+                        D, V = eigsh(self.K, target, tol=1e-4, maxiter=self.N)
                     D = np.real(D)
                     V = np.real(V)
                     inds = np.argsort(D)[::-1]
@@ -501,9 +501,9 @@ class Diffusor(TransformerMixin):
                     self.eigen_expansion = False
         if not self.eigen_expansion:
             if self.transitions:
-                D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
+                D, V = eigsh(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
             else:
-                D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
+                D, V = eigsh(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
             D = np.real(D)
             V = np.real(V)
             inds = np.argsort(D)[::-1]
@@ -556,9 +556,9 @@ class Diffusor(TransformerMixin):
         # Use user's  or default initial guess
         # initial eigen value decomposition
         if self.transitions:
-            D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigsh(self.T, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         else:
-            D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
+            D, V = eigsh(self.K, self.n_eigs, tol=1e-4, maxiter=(self.N // 10))
         D = np.real(D)
         V = np.real(V)
         inds = np.argsort(D)[::-1]
@@ -579,9 +579,9 @@ class Diffusor(TransformerMixin):
                     print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
                           + str(target) + 'components.')
                     if self.transitions:
-                        D, V = eigs(self.T, target, tol=1e-4, maxiter=(self.N // 10))
+                        D, V = eigsh(self.T, target, tol=1e-4, maxiter=(self.N // 10))
                     else:
-                        D, V = eigs(self.K, target, tol=1e-4, maxiter=(self.N // 10))
+                        D, V = eigsh(self.K, target, tol=1e-4, maxiter=(self.N // 10))
                     D = np.real(D)
                     V = np.real(V)
                     inds = np.argsort(D)[::-1]
@@ -605,9 +605,9 @@ class Diffusor(TransformerMixin):
                 target = self.n_eigs - 15
                 while len(residual) > 29:
                     if self.transitions:
-                       D, V = eigs(self.T, target, tol=1e-4, maxiter=self.N)
+                       D, V = eigsh(self.T, target, tol=1e-4, maxiter=self.N)
                     else:
-                        D, V = eigs(self.K, target, tol=1e-4, maxiter=self.N)
+                        D, V = eigsh(self.K, target, tol=1e-4, maxiter=self.N)
                     D = np.real(D)
                     V = np.real(V)
                     inds = np.argsort(D)[::-1]
@@ -629,9 +629,9 @@ class Diffusor(TransformerMixin):
                     self.eigen_expansion = False
         if not self.eigen_expansion:
             if self.transitions:
-                D, V = eigs(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
+                D, V = eigsh(self.T, self.n_eigs, tol=1e-4, maxiter=self.N)
             else:
-                D, V = eigs(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
+                D, V = eigsh(self.K, self.n_eigs, tol=1e-4, maxiter=self.N)
             D = np.real(D)
             V = np.real(V)
             inds = np.argsort(D)[::-1]

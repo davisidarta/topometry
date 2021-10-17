@@ -1,11 +1,14 @@
+import numpy as np
 import matplotlib
 from scipy.sparse import issparse, csr_matrix
+from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+from topo.layouts.map import fuzzy_embedding
 
 matplotlib.use('Agg')  # plotting backend compatible with screen
 import sys
 from topo.models import TopOGraph
 from topo.eval.global_scores import global_score_pca, global_score_laplacian
-from topo.eval.local_scores import geodesic_distance, knn_spearman_r, knn_kendall_tau
+from topo.eval.local_scores import knn_spearman_r, knn_kendall_tau
 
 # Pipelines!
 
@@ -249,7 +252,7 @@ def eval_models_layouts(TopOGraph, X,
         db_scores = db_pca, db_lap, db_r, db_t
 
         if eval_diff:
-            db_diff_r, db_diff_t = local_scores(X, TopOGraph.Diff_Diff_Graph, emb_is_graph=True)
+            db_diff_r, db_diff_t = local_scores(X, TopOGraph.db_diff_graph, emb_is_graph=True)
             db_diff_scores = db_diff_r, db_diff_t
 
             if eval_tSNE:
@@ -274,7 +277,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_diff_PaCMAP_scores = data_db_diff_PaCMAP_pca, data_db_diff_PaCMAPP_lap, db_diff_PaCMAP_r, db_diff_PaCMAP_t
 
         if eval_cknn:
-            db_cknn_r, db_cknn_t = local_scores(X, TopOGraph.Diff_Cknn_Graph, emb_is_graph=True)
+            db_cknn_r, db_cknn_t = local_scores(X, TopOGraph.db_cknn_graph, emb_is_graph=True)
             db_cknn_scores = db_cknn_r, db_cknn_t
             if eval_tSNE:
                 data_db_cknn_tSNE_pca, data_db_cknn_tSNE_lap = global_scores(X, TopOGraph.db_cknn_tSNE)
@@ -298,7 +301,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_cknn_PaCMAP_scores = data_db_cknn_PaCMAP_pca, data_db_cknn_PaCMAP_lap, db_cknn_PaCMAP_r, db_cknn_PaCMAP_t
 
         if eval_fuzzy:
-            db_fuzzy_r, db_fuzzy_t = local_scores(X, TopOGraph.Diff_Fuzzy_Graph, emb_is_graph=True)
+            db_fuzzy_r, db_fuzzy_t = local_scores(X, TopOGraph.db_fuzzy_graph, emb_is_graph=True)
             db_fuzzy_scores = db_fuzzy_r, db_fuzzy_t
             if eval_tSNE:
                 data_db_fuzzy_tSNE_pca, data_db_fuzzy_tSNE_lap = global_scores(X, TopOGraph.db_fuzzy_tSNE)
@@ -328,7 +331,7 @@ def eval_models_layouts(TopOGraph, X,
         cb_scores = cb_pca, cb_lap, cb_r, cb_t
 
         if eval_diff:
-            cb_diff_r, cb_diff_t = local_scores(X, TopOGraph.Cknn_Diff_Graph, emb_is_graph=True)
+            cb_diff_r, cb_diff_t = local_scores(X, TopOGraph.cb_diff_graph, emb_is_graph=True)
 
             cb_diff_scores = cb_diff_r, cb_diff_t
 
@@ -354,7 +357,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_diff_PaCMAP_scores = data_cb_diff_PaCMAP_pca, data_cb_diff_PaCMAP_lap, cb_diff_PaCMAP_r, cb_diff_PaCMAP_t
 
         if eval_cknn:
-            cb_cknn_r, cb_cknn_t = local_scores(X, TopOGraph.Cknn_Cknn_Graph, emb_is_graph=True)
+            cb_cknn_r, cb_cknn_t = local_scores(X, TopOGraph.cb_cknn_graph, emb_is_graph=True)
             cb_cknn_scores = cb_cknn_r, cb_cknn_t
             if eval_tSNE:
                 data_cb_cknn_tSNE_pca, data_cb_cknn_tSNE_lap = global_scores(X, TopOGraph.cb_cknn_tSNE)
@@ -378,7 +381,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_cknn_PaCMAP_scores = data_cb_cknn_PaCMAP_pca, data_cb_cknn_PaCMAP_lap, cb_cknn_PaCMAP_r, cb_cknn_PaCMAP_t
 
         if eval_fuzzy:
-            cb_fuzzy_r, cb_fuzzy_t = local_scores(X, TopOGraph.Cknn_Fuzzy_Graph, emb_is_graph=True)
+            cb_fuzzy_r, cb_fuzzy_t = local_scores(X, TopOGraph.cb_fuzzy_graph, emb_is_graph=True)
             cb_fuzzy_scores = cb_fuzzy_r, cb_fuzzy_t
             if eval_tSNE:
                 data_cb_fuzzy_tSNE_pca, data_cb_fuzzy_tSNE_lap = global_scores(X, TopOGraph.cb_fuzzy_tSNE)
@@ -409,7 +412,7 @@ def eval_models_layouts(TopOGraph, X,
         fb_scores = fb_pca, fb_lap, fb_r, fb_t
 
         if eval_diff:
-            fb_diff_r, fb_diff_t = local_scores(X, TopOGraph.Fuzzy_Diff_Graph, emb_is_graph=True)
+            fb_diff_r, fb_diff_t = local_scores(X, TopOGraph.fb_diff_graph, emb_is_graph=True)
 
             fb_diff_scores = fb_diff_r, fb_diff_t
 
@@ -435,7 +438,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_diff_PaCMAP_scores = data_fb_diff_PaCMAP_pca, data_fb_diff_PaCMAP_lap, fb_diff_PaCMAP_r, fb_diff_PaCMAP_t
 
         if eval_cknn:
-            fb_cknn_r, fb_cknn_t = local_scores(X, TopOGraph.Fuzzy_Cknn_Graph, emb_is_graph=True)
+            fb_cknn_r, fb_cknn_t = local_scores(X, TopOGraph.fb_cknn_graph, emb_is_graph=True)
             fb_cknn_scores = fb_cknn_r, fb_cknn_t
             if eval_tSNE:
                 data_fb_cknn_tSNE_pca, data_fb_cknn_tSNE_lap = global_scores(X, TopOGraph.fb_cknn_tSNE)
@@ -459,7 +462,7 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_cknn_PaCMAP_scores = data_fb_cknn_PaCMAP_pca, data_fb_cknn_PaCMAP_lap, fb_cknn_PaCMAP_r, fb_cknn_PaCMAP_t
 
         if eval_fuzzy:
-            fb_fuzzy_r, fb_fuzzy_t = local_scores(X, TopOGraph.Fuzzy_Fuzzy_Graph, emb_is_graph=True)
+            fb_fuzzy_r, fb_fuzzy_t = local_scores(X, TopOGraph.fb_fuzzy_graph, emb_is_graph=True)
             fb_fuzzy_scores = fb_fuzzy_r, fb_fuzzy_t
             if eval_tSNE:
                 data_fb_fuzzy_tSNE_pca, data_fb_fuzzy_tSNE_lap = global_scores(X, TopOGraph.fb_fuzzy_tSNE)
@@ -499,126 +502,170 @@ def eval_models_layouts(TopOGraph, X,
     pca_pca, pca_lap = global_scores(X, pca_emb)
     pca_r, pca_t = local_scores(X, pca_emb)
 
+
+
+
     embedding_scores = {'PCA' : (pca_pca, pca_lap, pca_r, pca_t)}
     graph_scores = {}
     layout_scores = {}
 
+    if eval_MAP:
+        # Compare to PCA + (U)MAP and just (U)MAP
+        pca_fuzzy_results = fuzzy_simplicial_set_ann(pca_emb, n_neighbors=TopOGraph.base_knn,
+                                                     backend=TopOGraph.backend, metric=TopOGraph.base_metric,
+                                                     n_jobs=TopOGraph.n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
+                                                     verbose=TopOGraph.bases_graph_verbose)
+
+        umap_on_pca_emb = fuzzy_embedding(data=pca_emb, graph=pca_fuzzy_results[0], njobs=TopOGraph.n_jobs,
+                                          verbose=TopOGraph.layout_verbose)
+
+        umap_on_pca_pca, umap_on_pca_lap = global_scores(X, umap_on_pca_emb)
+        umap_on_pca_r, umap_on_pca_t = local_scores(X, umap_on_pca_emb)
+        umap_on_pca_scores = umap_on_pca_pca, umap_on_pca_lap, umap_on_pca_r, umap_on_pca_t
+
+        layout_scores['UMAP_on_PCA'] = np.absolute(umap_on_pca_scores)
+
+        data_fuzzy_results = fuzzy_simplicial_set_ann(X, n_neighbors=TopOGraph.base_knn,
+                                                      backend=TopOGraph.backend, metric=TopOGraph.base_metric,
+                                                      n_jobs=TopOGraph.n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
+                                                      verbose=TopOGraph.bases_graph_verbose)
+        umap_emb = fuzzy_embedding(data=X, graph=data_fuzzy_results[0], njobs=TopOGraph.n_jobs,
+                                   verbose=TopOGraph.layout_verbose)
+
+        umap_pca, umap_lap = global_scores(X, umap_emb)
+        umap_r, umap_t = local_scores(X, umap_emb)
+        umap_scores = umap_pca, umap_lap, umap_r, umap_t
+
+        layout_scores['UMAP'] = np.absolute(umap_scores)
+
+
+    if eval_tSNE:
+        from MulticoreTSNE import MulticoreTSNE as TSNE
+        tsne_emb = TSNE(verbose=TopOGraph.layout_verbose, n_jobs=TopOGraph.n_jobs,
+                        init=pca_emb, metric=TopOGraph.graph_metric).fit_transform(pca_emb)
+
+        tsne_on_pca_pca, tsne_on_pca_lap = global_scores(X, tsne_emb)
+        tsne_on_pca_r, tsne_on_pca_t = local_scores(X, tsne_emb)
+        tsne_on_pca_scores = tsne_on_pca_pca, tsne_on_pca_lap, tsne_on_pca_r, tsne_on_pca_t
+
+        layout_scores['tSNE_on_PCA'] = np.absolute(tsne_on_pca_scores)
+
     if eval_db:
-        embedding_scores['DB'] = db_scores
+        embedding_scores['DB'] = np.absolute(db_scores)
         if eval_diff:
-            graph_scores['db_diff'] = db_diff_scores
+            graph_scores['db_diff'] = np.absolute(db_diff_scores)
             if eval_tSNE:
-                layout_scores['db_diff_tSNE'] = data_db_diff_tSNE_scores
+                layout_scores['db_diff_tSNE'] = np.absolute(data_db_diff_tSNE_scores)
             if eval_MAP:
-                layout_scores['db_diff_MAP'] = data_db_diff_MAP_scores
+                layout_scores['db_diff_MAP'] = np.absolute(data_db_diff_MAP_scores)
             if eval_MDE:
-                layout_scores['db_diff_MDE'] = data_db_diff_MDE_scores
+                layout_scores['db_diff_MDE'] = np.absolute(data_db_diff_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['db_diff_PaCMAP'] = data_db_diff_PaCMAP_scores
+                layout_scores['db_diff_PaCMAP'] = np.absolute(data_db_diff_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['db_diff_TriMAP'] = data_db_diff_TriMAP_scores
+                layout_scores['db_diff_TriMAP'] = np.absolute(data_db_diff_TriMAP_scores)
         if eval_cknn:
-            graph_scores['db_cknn'] = db_cknn_scores
+            graph_scores['db_cknn'] = np.absolute(db_cknn_scores)
             if eval_tSNE:
-                layout_scores['db_cknn_tSNE'] = data_db_cknn_tSNE_scores
+                layout_scores['db_cknn_tSNE'] = np.absolute(data_db_cknn_tSNE_scores)
             if eval_MAP:
-                layout_scores['db_cknn_MAP'] = data_db_cknn_MAP_scores
+                layout_scores['db_cknn_MAP'] = np.absolute(data_db_cknn_MAP_scores)
             if eval_MDE:
-                layout_scores['db_cknn_MDE'] = data_db_cknn_MDE_scores
+                layout_scores['db_cknn_MDE'] = np.absolute(data_db_cknn_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['db_cknn_PaCMAP'] = data_db_cknn_PaCMAP_scores
+                layout_scores['db_cknn_PaCMAP'] = np.absolute(data_db_cknn_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['db_cknn_TriMAP'] = data_db_cknn_TriMAP_scores
+                layout_scores['db_cknn_TriMAP'] = np.absolute(data_db_cknn_TriMAP_scores)
         if eval_fuzzy:
-            graph_scores['db_fuzzy'] = db_fuzzy_scores
+            graph_scores['db_fuzzy'] = np.absolute(db_fuzzy_scores)
             if eval_tSNE:
-                layout_scores['db_fuzzy_tSNE'] = data_db_fuzzy_tSNE_scores
+                layout_scores['db_fuzzy_tSNE'] = np.absolute(data_db_fuzzy_tSNE_scores)
             if eval_MAP:
-                layout_scores['db_fuzzy_MAP'] = data_db_fuzzy_MAP_scores
+                layout_scores['db_fuzzy_MAP'] = np.absolute(data_db_fuzzy_MAP_scores)
             if eval_MDE:
-                layout_scores['db_fuzzy_MDE'] = data_db_fuzzy_MDE_scores
+                layout_scores['db_fuzzy_MDE'] = np.absolute(data_db_fuzzy_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['db_fuzzy_PaCMAP'] = data_db_fuzzy_PaCMAP_scores
+                layout_scores['db_fuzzy_PaCMAP'] = np.absolute(data_db_fuzzy_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['db_fuzzy_TriMAP'] = data_db_fuzzy_TriMAP_scores
+                layout_scores['db_fuzzy_TriMAP'] = np.absolute(data_db_fuzzy_TriMAP_scores)
 
     if eval_cb:
-        embedding_scores['CB'] = cb_scores
+        embedding_scores['CB'] = np.absolute(cb_scores)
         if eval_diff:
-            graph_scores['cb_diff'] = cb_diff_scores
+            graph_scores['cb_diff'] = np.absolute(cb_diff_scores)
             if eval_tSNE:
-                layout_scores['cb_diff_tSNE'] = data_cb_diff_tSNE_scores
+                layout_scores['cb_diff_tSNE'] = np.absolute(data_cb_diff_tSNE_scores)
             if eval_MAP:
-                layout_scores['cb_diff_MAP'] = data_cb_diff_MAP_scores
+                layout_scores['cb_diff_MAP'] = np.absolute(data_cb_diff_MAP_scores)
             if eval_MDE:
-                layout_scores['cb_diff_MDE'] = data_cb_diff_MDE_scores
+                layout_scores['cb_diff_MDE'] = np.absolute(data_cb_diff_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['cb_diff_PaCMAP'] = data_cb_diff_PaCMAP_scores
+                layout_scores['cb_diff_PaCMAP'] = np.absolute(data_cb_diff_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['cb_diff_TriMAP'] = data_cb_diff_TriMAP_scores
+                layout_scores['cb_diff_TriMAP'] = np.absolute(data_cb_diff_TriMAP_scores)
         if eval_cknn:
-            graph_scores['cb_cknn'] = cb_cknn_scores
+            graph_scores['cb_cknn'] = np.absolute(cb_cknn_scores)
             if eval_tSNE:
-                layout_scores['cb_cknn_tSNE'] = data_cb_cknn_tSNE_scores
+                layout_scores['cb_cknn_tSNE'] = np.absolute(data_cb_cknn_tSNE_scores)
             if eval_MAP:
-                layout_scores['cb_cknn_MAP'] = data_cb_cknn_MAP_scores
+                layout_scores['cb_cknn_MAP'] = np.absolute(data_cb_cknn_MAP_scores)
             if eval_MDE:
-                layout_scores['cb_cknn_MDE'] = data_cb_cknn_MDE_scores
+                layout_scores['cb_cknn_MDE'] = np.absolute(data_cb_cknn_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['cb_cknn_PaCMAP'] = data_cb_cknn_PaCMAP_scores
+                layout_scores['cb_cknn_PaCMAP'] = np.absolute(data_cb_cknn_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['cb_cknn_TriMAP'] = data_cb_cknn_TriMAP_scores
+                layout_scores['cb_cknn_TriMAP'] = np.absolute(data_cb_cknn_TriMAP_scores)
         if eval_fuzzy:
-            graph_scores['cb_fuzzy'] = cb_fuzzy_scores
+            graph_scores['cb_fuzzy'] = np.absolute(cb_fuzzy_scores)
             if eval_tSNE:
-                layout_scores['cb_fuzzy_tSNE'] = data_cb_fuzzy_tSNE_scores
+                layout_scores['cb_fuzzy_tSNE'] = np.absolute(data_cb_fuzzy_tSNE_scores)
             if eval_MAP:
-                layout_scores['cb_fuzzy_MAP'] = data_cb_fuzzy_MAP_scores
+                layout_scores['cb_fuzzy_MAP'] = np.absolute(data_cb_fuzzy_MAP_scores)
             if eval_MDE:
-                layout_scores['cb_fuzzy_MDE'] = data_cb_fuzzy_MDE_scores
+                layout_scores['cb_fuzzy_MDE'] = np.absolute(data_cb_fuzzy_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['cb_fuzzy_PaCMAP'] = data_cb_fuzzy_PaCMAP_scores
+                layout_scores['cb_fuzzy_PaCMAP'] = np.absolute(data_cb_fuzzy_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['cb_fuzzy_TriMAP'] = data_cb_fuzzy_TriMAP_scores
+                layout_scores['cb_fuzzy_TriMAP'] = np.absolute(data_cb_fuzzy_TriMAP_scores)
 
     if eval_fb:
-        embedding_scores['FB'] = fb_scores
+        embedding_scores['FB'] = np.absolute(fb_scores)
         if eval_diff:
-            graph_scores['fb_diff'] = fb_diff_scores
+            graph_scores['fb_diff'] = np.absolute(fb_diff_scores)
             if eval_tSNE:
-                layout_scores['fb_diff_tSNE'] = data_fb_diff_tSNE_scores
+                layout_scores['fb_diff_tSNE'] = np.absolute(data_fb_diff_tSNE_scores)
             if eval_MAP:
-                layout_scores['fb_diff_MAP'] = data_fb_diff_MAP_scores
+                layout_scores['fb_diff_MAP'] = np.absolute(data_fb_diff_MAP_scores)
             if eval_MDE:
-                layout_scores['fb_diff_MDE'] = data_fb_diff_MDE_scores
+                layout_scores['fb_diff_MDE'] = np.absolute(data_fb_diff_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['fb_diff_PaCMAP'] = data_fb_diff_PaCMAP_scores
+                layout_scores['fb_diff_PaCMAP'] = np.absolute(data_fb_diff_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['fb_diff_TriMAP'] = data_fb_diff_TriMAP_scores
+                layout_scores['fb_diff_TriMAP'] = np.absolute(data_fb_diff_TriMAP_scores)
         if eval_cknn:
-            graph_scores['fb_cknn'] = fb_cknn_scores
+            graph_scores['fb_cknn'] = np.absolute(fb_cknn_scores)
             if eval_tSNE:
-                layout_scores['fb_cknn_tSNE'] = data_fb_cknn_tSNE_scores
+                layout_scores['fb_cknn_tSNE'] = np.absolute(data_fb_cknn_tSNE_scores)
             if eval_MAP:
-                layout_scores['fb_cknn_MAP'] = data_fb_cknn_MAP_scores
+                layout_scores['fb_cknn_MAP'] = np.absolute(data_fb_cknn_MAP_scores)
             if eval_MDE:
-                layout_scores['fb_cknn_MDE'] = data_fb_cknn_MDE_scores
+                layout_scores['fb_cknn_MDE'] = np.absolute(data_fb_cknn_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['fb_cknn_PaCMAP'] = data_fb_cknn_PaCMAP_scores
+                layout_scores['fb_cknn_PaCMAP'] = np.absolute(data_fb_cknn_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['fb_cknn_TriMAP'] = data_fb_cknn_TriMAP_scores
+                layout_scores['fb_cknn_TriMAP'] = np.absolute(data_fb_cknn_TriMAP_scores)
         if eval_fuzzy:
-            graph_scores['fb_fuzzy'] = fb_fuzzy_scores
+            graph_scores['fb_fuzzy'] = np.absolute(fb_fuzzy_scores)
             if eval_tSNE:
-                layout_scores['fb_fuzzy_tSNE'] = data_fb_fuzzy_tSNE_scores
+                layout_scores['fb_fuzzy_tSNE'] = np.absolute(data_fb_fuzzy_tSNE_scores)
             if eval_MAP:
-                layout_scores['fb_fuzzy_MAP'] = data_fb_fuzzy_MAP_scores
+                layout_scores['fb_fuzzy_MAP'] = np.absolute(data_fb_fuzzy_MAP_scores)
             if eval_MDE:
-                layout_scores['fb_fuzzy_MDE'] = data_fb_fuzzy_MDE_scores
+                layout_scores['fb_fuzzy_MDE'] = np.absolute(data_fb_fuzzy_MDE_scores)
             if eval_PaCMAP:
-                layout_scores['fb_fuzzy_PaCMAP'] = data_fb_fuzzy_PaCMAP_scores
+                layout_scores['fb_fuzzy_PaCMAP'] = np.absolute(data_fb_fuzzy_PaCMAP_scores)
             if eval_TriMAP:
-                layout_scores['fb_fuzzy_TriMAP'] = data_fb_fuzzy_TriMAP_scores
+                layout_scores['fb_fuzzy_TriMAP'] = np.absolute(data_fb_fuzzy_TriMAP_scores)
 
     return embedding_scores, graph_scores, layout_scores
 
