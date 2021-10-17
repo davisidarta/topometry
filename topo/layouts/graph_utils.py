@@ -44,7 +44,7 @@ from sklearn.neighbors import NearestNeighbors
 
 from topo.base import ann
 from topo.base import dists as dist
-from topo.spectral import spectral, umap_layouts
+from topo.spectral import _spectral, umap_layouts
 from topo.tpgraph import diffusion
 from topo.utils import umap_utils
 
@@ -850,7 +850,7 @@ def simplicial_set_embedding(
         initialisation = embedding
     elif isinstance(init, str) and init == "spectral":
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral.spectral_layout(
+        initialisation = _spectral.spectral_layout(
             data,
             graph,
             n_components,
