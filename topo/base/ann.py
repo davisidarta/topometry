@@ -472,6 +472,7 @@ class HNSWlibTransformer(BaseEstimator):
         self.verbose = verbose
         self.N = None
         self.m = None
+        self.p = None
 
     def fit(self, data):
         import hnswlib
