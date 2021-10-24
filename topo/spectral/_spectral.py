@@ -138,7 +138,7 @@ def component_layout(
     metric_kwds: dict (optional, default {})
         Keyword arguments to be passed to the metric function.
         If metric is 'precomputed', 'linkage' keyword can be used to specify
-        'average', 'complete', or 'single' linkage. Default is 'average'
+        'average', 'complete', or 'single' linkage. Default is 'single'
     Returns
     -------
     component_embedding: array of shape (n_components, dim)
@@ -152,7 +152,7 @@ def component_layout(
         # cannot compute centroids from precomputed distances
         # instead, compute centroid distances using linkage
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
-        linkage = metric_kwds.get("linkage", "complete")
+        linkage = metric_kwds.get("linkage", "single")
         if linkage == "average":
             linkage = np.mean
         elif linkage == "complete":
@@ -369,7 +369,6 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
-    n_samples = graph.shape[0]
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
 
     if n_components > 1:

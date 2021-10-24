@@ -516,6 +516,8 @@ class Diffusor(TransformerMixin):
         if not self.cache:
             del self.K
             del self.T
+            import gc
+            gc.collect()
 
         # Create the results dictionary
         self.res = {'EigenVectors': V, 'EigenValues': D}

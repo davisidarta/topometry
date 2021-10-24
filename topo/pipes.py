@@ -1,11 +1,10 @@
-import numpy as np
 import matplotlib
 from scipy.sparse import issparse, csr_matrix
+
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.layouts.map import fuzzy_embedding
 
 matplotlib.use('Agg')  # plotting backend compatible with screen
-import sys
 from topo.models import TopOGraph
 from topo.eval.global_scores import global_score_pca, global_score_laplacian
 from topo.eval.local_scores import knn_spearman_r, knn_kendall_tau
@@ -240,7 +239,6 @@ def eval_models_layouts(TopOGraph, X,
     fb_cknn_scores = None
     fb_fuzzy_scores = None
 
-
     TopOGraph.run_layouts(X=X,
                 bases=bases,
                 graphs=graphs,
@@ -250,11 +248,17 @@ def eval_models_layouts(TopOGraph, X,
         db_pca, db_lap = global_scores(X, TopOGraph.MSDiffMap)
         db_r, db_t = local_scores(X, TopOGraph.MSDiffMap)
         db_scores = db_pca, db_lap, db_r, db_t
-
+        if eval_TriMAP:
+            data_db_TriMAP_pca, data_db_TriMAP_lap = global_scores(X, TopOGraph.db_TriMAP)
+            db_TriMAP_r, db_TriMAP_t = local_scores(X, TopOGraph.db_TriMAP)
+            data_db_TriMAP_scores = data_db_TriMAP_pca, data_db_TriMAP_lap, db_TriMAP_r, db_TriMAP_t
+        if eval_PaCMAP:
+            data_db_PaCMAP_pca, data_db_PaCMAP_lap = global_scores(X, TopOGraph.db_PaCMAP)
+            db_PaCMAP_r, db_PaCMAP_t = local_scores(X, TopOGraph.db_PaCMAP)
+            data_db_PaCMAP_scores = data_db_PaCMAP_pca, data_db_PaCMAP_lap, db_PaCMAP_r, db_PaCMAP_t
         if eval_diff:
             db_diff_r, db_diff_t = local_scores(X, TopOGraph.db_diff_graph, emb_is_graph=True)
             db_diff_scores = db_diff_r, db_diff_t
-
             if eval_tSNE:
                 data_db_diff_tSNE_pca, data_db_diff_tSNE_pca = global_scores(X, TopOGraph.db_diff_tSNE)
                 db_diff_tSNE_r, db_diff_tSNE_t = local_scores(X, TopOGraph.db_diff_tSNE)
@@ -267,14 +271,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_diff_MDE_pca, data_db_diff_MDE_lap = global_scores(X, TopOGraph.db_diff_MDE)
                 db_diff_MDE_r, db_diff_MDE_t = local_scores(X, TopOGraph.db_diff_MDE)
                 data_db_diff_MDE_scores = data_db_diff_MDE_pca, data_db_diff_MDE_lap, db_diff_MDE_r, db_diff_MDE_t
-            if eval_TriMAP:
-                data_db_diff_TriMAP_pca, data_db_diff_TriMAP_lap = global_scores(X, TopOGraph.db_diff_TriMAP)
-                db_diff_TriMAP_r, db_diff_TriMAP_t = local_scores(X, TopOGraph.db_diff_TriMAP)
-                data_db_diff_TriMAP_scores = data_db_diff_TriMAP_pca, data_db_diff_TriMAP_lap, db_diff_TriMAP_r, db_diff_TriMAP_t
-            if eval_PaCMAP:
-                data_db_diff_PaCMAP_pca, data_db_diff_PaCMAPP_lap = global_scores(X, TopOGraph.db_diff_PaCMAP)
-                db_diff_PaCMAP_r, db_diff_PaCMAP_t = local_scores(X, TopOGraph.db_diff_PaCMAP)
-                data_db_diff_PaCMAP_scores = data_db_diff_PaCMAP_pca, data_db_diff_PaCMAPP_lap, db_diff_PaCMAP_r, db_diff_PaCMAP_t
 
         if eval_cknn:
             db_cknn_r, db_cknn_t = local_scores(X, TopOGraph.db_cknn_graph, emb_is_graph=True)
@@ -291,14 +287,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_cknn_MDE_pca, data_db_cknn_MDE_lap = global_scores(X, TopOGraph.db_cknn_MDE)
                 db_cknn_MDE_r, db_cknn_MDE_t = local_scores(X, TopOGraph.db_cknn_MDE)
                 data_db_cknn_MDE_scores = data_db_cknn_MDE_pca, data_db_cknn_MDE_lap, db_cknn_MDE_r, db_cknn_MDE_t
-            if eval_TriMAP:
-                data_db_cknn_TriMAP_pca, data_db_cknn_TriMAP_lap = global_scores(X, TopOGraph.db_cknn_TriMAP)
-                db_cknn_TriMAP_r, db_cknn_TriMAP_t = local_scores(X, TopOGraph.db_cknn_TriMAP)
-                data_db_cknn_TriMAP_scores = data_db_cknn_TriMAP_pca, data_db_cknn_TriMAP_lap, db_cknn_TriMAP_r, db_cknn_TriMAP_t
-            if eval_PaCMAP:
-                data_db_cknn_PaCMAP_pca, data_db_cknn_PaCMAP_lap = global_scores(X, TopOGraph.db_cknn_PaCMAP)
-                db_cknn_PaCMAP_r, db_cknn_PaCMAP_t = local_scores(X, TopOGraph.db_cknn_PaCMAP)
-                data_db_cknn_PaCMAP_scores = data_db_cknn_PaCMAP_pca, data_db_cknn_PaCMAP_lap, db_cknn_PaCMAP_r, db_cknn_PaCMAP_t
 
         if eval_fuzzy:
             db_fuzzy_r, db_fuzzy_t = local_scores(X, TopOGraph.db_fuzzy_graph, emb_is_graph=True)
@@ -315,26 +303,22 @@ def eval_models_layouts(TopOGraph, X,
                 data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap = global_scores(X, TopOGraph.db_fuzzy_MDE)
                 db_fuzzy_MDE_r, db_fuzzy_MDE_t = local_scores(X, TopOGraph.db_fuzzy_MDE)
                 data_db_fuzzy_MDE_scores = data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap, db_fuzzy_MDE_r, db_fuzzy_MDE_t
-            if eval_TriMAP:
-                data_db_fuzzy_TriMAP_pca, data_db_fuzzy_TriMAP_lap = global_scores(X, TopOGraph.db_fuzzy_TriMAP)
-                db_fuzzy_TriMAP_r, db_fuzzy_TriMAP_t = local_scores(X, TopOGraph.db_fuzzy_TriMAP)
-                data_db_fuzzy_TriMAP_scores = data_db_fuzzy_TriMAP_pca, data_db_fuzzy_TriMAP_lap, db_fuzzy_TriMAP_r, db_fuzzy_TriMAP_t
-            if eval_PaCMAP:
-                data_db_fuzzy_PaCMAP_pca, data_db_fuzzy_PaCMAP_lap = global_scores(X, TopOGraph.db_fuzzy_PaCMAP)
-                db_fuzzy_PaCMAP_r, db_fuzzy_PaCMAP_t = local_scores(X, TopOGraph.db_fuzzy_PaCMAP)
-                data_db_fuzzy_PaCMAP_scores = data_db_fuzzy_PaCMAP_pca, data_db_fuzzy_PaCMAP_lap, db_fuzzy_PaCMAP_r, db_fuzzy_PaCMAP_t
 
     if eval_cb:
         cb_pca, cb_lap = global_scores(X, TopOGraph.CLapMap)
         cb_r, cb_t = local_scores(X, TopOGraph.CLapMap)
-
         cb_scores = cb_pca, cb_lap, cb_r, cb_t
-
+        if eval_TriMAP:
+            data_cb_TriMAP_pca, data_cb_TriMAP_lap = global_scores(X, TopOGraph.cb_TriMAP)
+            cb_TriMAP_r, cb_TriMAP_t = local_scores(X, TopOGraph.cb_TriMAP)
+            data_cb_TriMAP_scores = data_cb_TriMAP_pca, data_cb_TriMAP_lap, cb_TriMAP_r, cb_TriMAP_t
+        if eval_PaCMAP:
+            data_cb_PaCMAP_pca, data_cb_PaCMAP_lap = global_scores(X, TopOGraph.cb_PaCMAP)
+            cb_PaCMAP_r, cb_PaCMAP_t = local_scores(X, TopOGraph.cb_PaCMAP)
+            data_cb_PaCMAP_scores = data_cb_PaCMAP_pca, data_cb_PaCMAP_lap, cb_PaCMAP_r, cb_PaCMAP_t
         if eval_diff:
             cb_diff_r, cb_diff_t = local_scores(X, TopOGraph.cb_diff_graph, emb_is_graph=True)
-
             cb_diff_scores = cb_diff_r, cb_diff_t
-
             if eval_tSNE:
                 data_cb_diff_tSNE_pca, data_cb_diff_tSNE_pca = global_scores(X, TopOGraph.cb_diff_tSNE)
                 cb_diff_tSNE_r, cb_diff_tSNE_t = local_scores(X, TopOGraph.cb_diff_tSNE)
@@ -347,14 +331,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_diff_MDE_pca, data_cb_diff_MDE_lap = global_scores(X, TopOGraph.cb_diff_MDE)
                 cb_diff_MDE_r, cb_diff_MDE_t = local_scores(X, TopOGraph.cb_diff_MDE)
                 data_cb_diff_MDE_scores = data_cb_diff_MDE_pca, data_cb_diff_MDE_lap, cb_diff_MDE_r, cb_diff_MDE_t
-            if eval_TriMAP:
-                data_cb_diff_TriMAP_pca, data_cb_diff_TriMAP_lap = global_scores(X, TopOGraph.cb_diff_TriMAP)
-                cb_diff_TriMAP_r, cb_diff_TriMAP_t = local_scores(X, TopOGraph.cb_diff_TriMAP)
-                data_cb_diff_TriMAP_scores = data_cb_diff_TriMAP_pca, data_cb_diff_TriMAP_lap, cb_diff_TriMAP_r, cb_diff_TriMAP_t
-            if eval_PaCMAP:
-                data_cb_diff_PaCMAP_pca, data_cb_diff_PaCMAP_lap = global_scores(X, TopOGraph.cb_diff_PaCMAP)
-                cb_diff_PaCMAP_r, cb_diff_PaCMAP_t = local_scores(X, TopOGraph.cb_diff_PaCMAP)
-                data_cb_diff_PaCMAP_scores = data_cb_diff_PaCMAP_pca, data_cb_diff_PaCMAP_lap, cb_diff_PaCMAP_r, cb_diff_PaCMAP_t
 
         if eval_cknn:
             cb_cknn_r, cb_cknn_t = local_scores(X, TopOGraph.cb_cknn_graph, emb_is_graph=True)
@@ -371,14 +347,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap = global_scores(X, TopOGraph.cb_cknn_MDE)
                 cb_cknn_MDE_r, cb_cknn_MDE_t = local_scores(X, TopOGraph.cb_cknn_MDE)
                 data_cb_cknn_MDE_scores = data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap, cb_cknn_MDE_r, cb_cknn_MDE_t
-            if eval_TriMAP:
-                data_cb_cknn_TriMAP_pca, data_cb_cknn_TriMAP_lap = global_scores(X, TopOGraph.cb_cknn_TriMAP)
-                cb_cknn_TriMAP_r, cb_cknn_TriMAP_t = local_scores(X, TopOGraph.cb_cknn_TriMAP)
-                data_cb_cknn_TriMAP_scores = data_cb_cknn_TriMAP_pca, data_cb_cknn_TriMAP_lap, cb_cknn_TriMAP_r, cb_cknn_TriMAP_t
-            if eval_PaCMAP:
-                data_cb_cknn_PaCMAP_pca, data_cb_cknn_PaCMAP_lap = global_scores(X, TopOGraph.cb_cknn_PaCMAP)
-                cb_cknn_PaCMAP_r, cb_cknn_PaCMAP_t = local_scores(X, TopOGraph.cb_cknn_PaCMAP)
-                data_cb_cknn_PaCMAP_scores = data_cb_cknn_PaCMAP_pca, data_cb_cknn_PaCMAP_lap, cb_cknn_PaCMAP_r, cb_cknn_PaCMAP_t
 
         if eval_fuzzy:
             cb_fuzzy_r, cb_fuzzy_t = local_scores(X, TopOGraph.cb_fuzzy_graph, emb_is_graph=True)
@@ -395,25 +363,25 @@ def eval_models_layouts(TopOGraph, X,
                 data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap = global_scores(X, TopOGraph.cb_fuzzy_MDE)
                 cb_fuzzy_MDE_r, cb_fuzzy_MDE_t = local_scores(X, TopOGraph.cb_fuzzy_MDE)
                 data_cb_fuzzy_MDE_scores = data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap, cb_fuzzy_MDE_r, cb_fuzzy_MDE_t
-            if eval_TriMAP:
-                data_cb_fuzzy_TriMAP_pca, data_cb_fuzzy_TriMAP_lap = global_scores(X, TopOGraph.cb_fuzzy_TriMAP)
-                cb_fuzzy_TriMAP_r, cb_fuzzy_TriMAP_t = local_scores(X, TopOGraph.cb_fuzzy_TriMAP)
-                data_cb_fuzzy_TriMAP_scores = data_cb_fuzzy_TriMAP_pca, data_cb_fuzzy_TriMAP_lap, cb_fuzzy_TriMAP_r, cb_fuzzy_TriMAP_t
-            if eval_PaCMAP:
-                data_cb_fuzzy_PaCMAP_pca, data_cb_fuzzy_PaCMAP_lap = global_scores(X, TopOGraph.cb_fuzzy_PaCMAP)
-                cb_fuzzy_PaCMAP_r, cb_fuzzy_PaCMAP_t = local_scores(X, TopOGraph.cb_fuzzy_PaCMAP)
-                data_cb_fuzzy_PaCMAP_scores = data_cb_fuzzy_PaCMAP_pca, data_cb_fuzzy_PaCMAP_lap, cb_fuzzy_PaCMAP_r, cb_fuzzy_PaCMAP_t
+
 
 
     if eval_fb:
         fb_pca, fb_lap = global_scores(X, TopOGraph.FuzzyLapMap)
         fb_r, fb_t = local_scores(X, TopOGraph.FuzzyLapMap)
-
         fb_scores = fb_pca, fb_lap, fb_r, fb_t
+
+        if eval_TriMAP:
+            data_fb_TriMAP_pca, data_fb_TriMAP_lap = global_scores(X, TopOGraph.fb_TriMAP)
+            fb_TriMAP_r, fb_TriMAP_t = local_scores(X, TopOGraph.fb_TriMAP)
+            data_fb_TriMAP_scores = data_fb_TriMAP_pca, data_fb_TriMAP_lap, fb_TriMAP_r, fb_TriMAP_t
+        if eval_PaCMAP:
+            data_fb_PaCMAP_pca, data_fb_PaCMAP_lap = global_scores(X, TopOGraph.fb_PaCMAP)
+            fb_PaCMAP_r, fb_PaCMAP_t = local_scores(X, TopOGraph.fb_PaCMAP)
+            data_fb_PaCMAP_scores = data_fb_PaCMAP_pca, data_fb_PaCMAP_lap, fb_PaCMAP_r, fb_PaCMAP_t
 
         if eval_diff:
             fb_diff_r, fb_diff_t = local_scores(X, TopOGraph.fb_diff_graph, emb_is_graph=True)
-
             fb_diff_scores = fb_diff_r, fb_diff_t
 
             if eval_tSNE:
@@ -428,14 +396,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_diff_MDE_pca, data_fb_diff_MDE_lap = global_scores(X, TopOGraph.fb_diff_MDE)
                 fb_diff_MDE_r, fb_diff_MDE_t = local_scores(X, TopOGraph.fb_diff_MDE)
                 data_fb_diff_MDE_scores = data_fb_diff_MDE_pca, data_fb_diff_MDE_lap, fb_diff_MDE_r, fb_diff_MDE_t
-            if eval_TriMAP:
-                data_fb_diff_TriMAP_pca, data_fb_diff_TriMAP_lap = global_scores(X, TopOGraph.fb_diff_TriMAP)
-                fb_diff_TriMAP_r, fb_diff_TriMAP_t = local_scores(X, TopOGraph.fb_diff_TriMAP)
-                data_fb_diff_TriMAP_scores = data_fb_diff_TriMAP_pca, data_fb_diff_TriMAP_lap, fb_diff_TriMAP_r, fb_diff_TriMAP_t
-            if eval_PaCMAP:
-                data_fb_diff_PaCMAP_pca, data_fb_diff_PaCMAP_lap = global_scores(X, TopOGraph.fb_diff_PaCMAP)
-                fb_diff_PaCMAP_r, fb_diff_PaCMAP_t = local_scores(X, TopOGraph.fb_diff_PaCMAP)
-                data_fb_diff_PaCMAP_scores = data_fb_diff_PaCMAP_pca, data_fb_diff_PaCMAP_lap, fb_diff_PaCMAP_r, fb_diff_PaCMAP_t
 
         if eval_cknn:
             fb_cknn_r, fb_cknn_t = local_scores(X, TopOGraph.fb_cknn_graph, emb_is_graph=True)
@@ -452,14 +412,6 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap = global_scores(X, TopOGraph.fb_cknn_MDE)
                 fb_cknn_MDE_r, fb_cknn_MDE_t = local_scores(X, TopOGraph.fb_cknn_MDE)
                 data_fb_cknn_MDE_scores = data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap, fb_cknn_MDE_r, fb_cknn_MDE_t
-            if eval_TriMAP:
-                data_fb_cknn_TriMAP_pca, data_fb_cknn_TriMAP_lap = global_scores(X, TopOGraph.fb_cknn_TriMAP)
-                fb_cknn_TriMAP_r, fb_cknn_TriMAP_t = local_scores(X, TopOGraph.fb_cknn_TriMAP)
-                data_fb_cknn_TriMAP_scores = data_fb_cknn_TriMAP_pca, data_fb_cknn_TriMAP_lap, fb_cknn_TriMAP_r, fb_cknn_TriMAP_t
-            if eval_PaCMAP:
-                data_fb_cknn_PaCMAP_pca, data_fb_cknn_PaCMAP_lap = global_scores(X, TopOGraph.fb_cknn_PaCMAP)
-                fb_cknn_PaCMAP_r, fb_cknn_PaCMAP_t = local_scores(X, TopOGraph.fb_cknn_PaCMAP)
-                data_fb_cknn_PaCMAP_scores = data_fb_cknn_PaCMAP_pca, data_fb_cknn_PaCMAP_lap, fb_cknn_PaCMAP_r, fb_cknn_PaCMAP_t
 
         if eval_fuzzy:
             fb_fuzzy_r, fb_fuzzy_t = local_scores(X, TopOGraph.fb_fuzzy_graph, emb_is_graph=True)
@@ -476,36 +428,28 @@ def eval_models_layouts(TopOGraph, X,
                 data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap = global_scores(X, TopOGraph.fb_fuzzy_MDE)
                 fb_fuzzy_MDE_r, fb_fuzzy_MDE_t = local_scores(X, TopOGraph.fb_fuzzy_MDE)
                 data_fb_fuzzy_MDE_scores = data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap, fb_fuzzy_MDE_r, fb_fuzzy_MDE_t
-            if eval_TriMAP:
-                data_fb_fuzzy_TriMAP_pca, data_fb_fuzzy_TriMAP_lap = global_scores(X, TopOGraph.fb_fuzzy_TriMAP)
-                fb_fuzzy_TriMAP_r, fb_fuzzy_TriMAP_t = local_scores(X, TopOGraph.fb_fuzzy_TriMAP)
-                data_fb_fuzzy_TriMAP_scores = data_fb_fuzzy_TriMAP_pca, data_fb_fuzzy_TriMAP_lap, fb_fuzzy_TriMAP_r, fb_fuzzy_TriMAP_t
-            if eval_PaCMAP:
-                data_fb_fuzzy_PaCMAP_pca, data_fb_fuzzy_PaCMAP_lap = global_scores(X, TopOGraph.fb_fuzzy_PaCMAP)
-                fb_fuzzy_PaCMAP_r, fb_fuzzy_PaCMAP_t = local_scores(X, TopOGraph.fb_fuzzy_PaCMAP)
-                data_fb_fuzzy_PaCMAP_scores = data_fb_fuzzy_PaCMAP_pca, data_fb_fuzzy_PaCMAP_lap, fb_fuzzy_PaCMAP_r, fb_fuzzy_PaCMAP_t
 
-    from sklearn.decomposition import PCA
+    from sklearn.decomposition import TruncatedSVD, PCA
     import numpy as np
     if issparse(X) == True:
         if isinstance(X, csr_matrix):
-            data = X.todense()
+            pca_emb = TruncatedSVD(n_components=TopOGraph.n_eigs).fit_transform(X)
+
     if issparse(X) == False:
         if not isinstance(X, np.ndarray):
             import pandas as pd
             if isinstance(X, pd.DataFrame):
-                data = np.array(X.values.T)
+                X = np.array(X.values.T)
             else:
                 return print('Uknown data format.')
+        pca_emb = PCA(n_components=TopOGraph.n_eigs).fit_transform(X)
 
-    pca_emb = PCA(n_components=TopOGraph.n_eigs).fit_transform(data)
     pca_pca, pca_lap = global_scores(X, pca_emb)
     pca_r, pca_t = local_scores(X, pca_emb)
+    pca_scores = pca_pca, pca_lap, pca_r, pca_t
 
 
-
-
-    embedding_scores = {'PCA' : (pca_pca, pca_lap, pca_r, pca_t)}
+    embedding_scores = {'PCA' : np.absolute(pca_scores)}
     graph_scores = {}
     layout_scores = {}
 
@@ -516,7 +460,7 @@ def eval_models_layouts(TopOGraph, X,
                                                      n_jobs=TopOGraph.n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
                                                      verbose=TopOGraph.bases_graph_verbose)
 
-        umap_on_pca_emb = fuzzy_embedding(data=pca_emb, graph=pca_fuzzy_results[0], njobs=TopOGraph.n_jobs,
+        umap_on_pca_emb, aux = fuzzy_embedding(data=pca_emb, graph=pca_fuzzy_results[0], njobs=TopOGraph.n_jobs,
                                           verbose=TopOGraph.layout_verbose)
 
         umap_on_pca_pca, umap_on_pca_lap = global_scores(X, umap_on_pca_emb)
@@ -529,7 +473,7 @@ def eval_models_layouts(TopOGraph, X,
                                                       backend=TopOGraph.backend, metric=TopOGraph.base_metric,
                                                       n_jobs=TopOGraph.n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
                                                       verbose=TopOGraph.bases_graph_verbose)
-        umap_emb = fuzzy_embedding(data=X, graph=data_fuzzy_results[0], njobs=TopOGraph.n_jobs,
+        umap_emb, aux = fuzzy_embedding(data=X, graph=data_fuzzy_results[0], njobs=TopOGraph.n_jobs, init=pca_emb[:, 0:2],
                                    verbose=TopOGraph.layout_verbose)
 
         umap_pca, umap_lap = global_scores(X, umap_emb)
@@ -542,16 +486,45 @@ def eval_models_layouts(TopOGraph, X,
     if eval_tSNE:
         from MulticoreTSNE import MulticoreTSNE as TSNE
         tsne_emb = TSNE(verbose=TopOGraph.layout_verbose, n_jobs=TopOGraph.n_jobs,
-                        init=pca_emb, metric=TopOGraph.graph_metric).fit_transform(pca_emb)
-
+                        init=pca_emb[:, 0:2], metric=TopOGraph.graph_metric).fit_transform(pca_emb)
         tsne_on_pca_pca, tsne_on_pca_lap = global_scores(X, tsne_emb)
         tsne_on_pca_r, tsne_on_pca_t = local_scores(X, tsne_emb)
         tsne_on_pca_scores = tsne_on_pca_pca, tsne_on_pca_lap, tsne_on_pca_r, tsne_on_pca_t
-
         layout_scores['tSNE_on_PCA'] = np.absolute(tsne_on_pca_scores)
+
+    if eval_PaCMAP:
+        from topo.layouts.pairwise import PaCMAP
+        pca_pacmap_emb = PaCMAP(data=pca_emb, init=pca_emb[:, 0:2], verbose=TopOGraph.layout_verbose)
+        pacmap_on_pca_pca, pacmap_on_pca_lap = global_scores(X, pca_pacmap_emb)
+        pacmap_on_pca_r, pacmap_on_pca_t = local_scores(X, pca_pacmap_emb)
+        pacmap_on_pca_scores = pacmap_on_pca_pca, pacmap_on_pca_lap, pacmap_on_pca_r, pacmap_on_pca_t
+        layout_scores['PaCMAP_on_PCA'] = np.absolute(pacmap_on_pca_scores)
+
+    if eval_TriMAP:
+        from topo.layouts.trimap import TriMAP
+        pca_trimap_emb = TriMAP(X=pca_emb, init=pca_emb[:, 0:2], verbose=TopOGraph.layout_verbose)
+        trimap_on_pca_pca, trimap_on_pca_lap = global_scores(X, pca_trimap_emb)
+        trimap_on_pca_r, trimap_on_pca_t = local_scores(X, pca_trimap_emb)
+        trimap_on_pca_scores = trimap_on_pca_pca, trimap_on_pca_lap, trimap_on_pca_r, trimap_on_pca_t
+        layout_scores['TriMAP_on_PCA'] = np.absolute(trimap_on_pca_scores)
+
+    if eval_MDE:
+        import torch
+        import pymde
+        pca_mde_emb = pymde.preserve_neighbors(torch.tensor(pca_emb),
+                                               n_neighbors=TopOGraph.base_knn, verbose=False).embed()
+        pca_mde_emb = pca_mde_emb.numpy()
+        mde_on_pca_pca, mde_on_pca_lap = global_scores(X, pca_mde_emb)
+        mde_on_pca_r, mde_on_pca_t = local_scores(X, pca_mde_emb)
+        mde_on_pca_scores = mde_on_pca_pca, mde_on_pca_lap, mde_on_pca_r, mde_on_pca_t
+        layout_scores['MDE_on_PCA'] = np.absolute(mde_on_pca_scores)
 
     if eval_db:
         embedding_scores['DB'] = np.absolute(db_scores)
+        if eval_PaCMAP:
+            layout_scores['db_PaCMAP'] = np.absolute(data_db_PaCMAP_scores)
+        if eval_TriMAP:
+            layout_scores['db_TriMAP'] = np.absolute(data_db_TriMAP_scores)
         if eval_diff:
             graph_scores['db_diff'] = np.absolute(db_diff_scores)
             if eval_tSNE:
@@ -560,10 +533,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['db_diff_MAP'] = np.absolute(data_db_diff_MAP_scores)
             if eval_MDE:
                 layout_scores['db_diff_MDE'] = np.absolute(data_db_diff_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['db_diff_PaCMAP'] = np.absolute(data_db_diff_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['db_diff_TriMAP'] = np.absolute(data_db_diff_TriMAP_scores)
+
         if eval_cknn:
             graph_scores['db_cknn'] = np.absolute(db_cknn_scores)
             if eval_tSNE:
@@ -572,10 +542,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['db_cknn_MAP'] = np.absolute(data_db_cknn_MAP_scores)
             if eval_MDE:
                 layout_scores['db_cknn_MDE'] = np.absolute(data_db_cknn_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['db_cknn_PaCMAP'] = np.absolute(data_db_cknn_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['db_cknn_TriMAP'] = np.absolute(data_db_cknn_TriMAP_scores)
+
         if eval_fuzzy:
             graph_scores['db_fuzzy'] = np.absolute(db_fuzzy_scores)
             if eval_tSNE:
@@ -584,13 +551,15 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['db_fuzzy_MAP'] = np.absolute(data_db_fuzzy_MAP_scores)
             if eval_MDE:
                 layout_scores['db_fuzzy_MDE'] = np.absolute(data_db_fuzzy_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['db_fuzzy_PaCMAP'] = np.absolute(data_db_fuzzy_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['db_fuzzy_TriMAP'] = np.absolute(data_db_fuzzy_TriMAP_scores)
+
 
     if eval_cb:
         embedding_scores['CB'] = np.absolute(cb_scores)
+        if eval_PaCMAP:
+            layout_scores['cb_PaCMAP'] = np.absolute(data_cb_PaCMAP_scores)
+        if eval_TriMAP:
+            layout_scores['cb_TriMAP'] = np.absolute(data_cb_TriMAP_scores)
+
         if eval_diff:
             graph_scores['cb_diff'] = np.absolute(cb_diff_scores)
             if eval_tSNE:
@@ -599,10 +568,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['cb_diff_MAP'] = np.absolute(data_cb_diff_MAP_scores)
             if eval_MDE:
                 layout_scores['cb_diff_MDE'] = np.absolute(data_cb_diff_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['cb_diff_PaCMAP'] = np.absolute(data_cb_diff_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['cb_diff_TriMAP'] = np.absolute(data_cb_diff_TriMAP_scores)
+
         if eval_cknn:
             graph_scores['cb_cknn'] = np.absolute(cb_cknn_scores)
             if eval_tSNE:
@@ -611,10 +577,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['cb_cknn_MAP'] = np.absolute(data_cb_cknn_MAP_scores)
             if eval_MDE:
                 layout_scores['cb_cknn_MDE'] = np.absolute(data_cb_cknn_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['cb_cknn_PaCMAP'] = np.absolute(data_cb_cknn_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['cb_cknn_TriMAP'] = np.absolute(data_cb_cknn_TriMAP_scores)
+
         if eval_fuzzy:
             graph_scores['cb_fuzzy'] = np.absolute(cb_fuzzy_scores)
             if eval_tSNE:
@@ -623,13 +586,13 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['cb_fuzzy_MAP'] = np.absolute(data_cb_fuzzy_MAP_scores)
             if eval_MDE:
                 layout_scores['cb_fuzzy_MDE'] = np.absolute(data_cb_fuzzy_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['cb_fuzzy_PaCMAP'] = np.absolute(data_cb_fuzzy_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['cb_fuzzy_TriMAP'] = np.absolute(data_cb_fuzzy_TriMAP_scores)
 
     if eval_fb:
         embedding_scores['FB'] = np.absolute(fb_scores)
+        if eval_PaCMAP:
+            layout_scores['fb_PaCMAP'] = np.absolute(data_fb_PaCMAP_scores)
+        if eval_TriMAP:
+            layout_scores['fb_TriMAP'] = np.absolute(data_fb_TriMAP_scores)
         if eval_diff:
             graph_scores['fb_diff'] = np.absolute(fb_diff_scores)
             if eval_tSNE:
@@ -638,10 +601,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['fb_diff_MAP'] = np.absolute(data_fb_diff_MAP_scores)
             if eval_MDE:
                 layout_scores['fb_diff_MDE'] = np.absolute(data_fb_diff_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['fb_diff_PaCMAP'] = np.absolute(data_fb_diff_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['fb_diff_TriMAP'] = np.absolute(data_fb_diff_TriMAP_scores)
+
         if eval_cknn:
             graph_scores['fb_cknn'] = np.absolute(fb_cknn_scores)
             if eval_tSNE:
@@ -650,10 +610,7 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['fb_cknn_MAP'] = np.absolute(data_fb_cknn_MAP_scores)
             if eval_MDE:
                 layout_scores['fb_cknn_MDE'] = np.absolute(data_fb_cknn_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['fb_cknn_PaCMAP'] = np.absolute(data_fb_cknn_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['fb_cknn_TriMAP'] = np.absolute(data_fb_cknn_TriMAP_scores)
+
         if eval_fuzzy:
             graph_scores['fb_fuzzy'] = np.absolute(fb_fuzzy_scores)
             if eval_tSNE:
@@ -662,10 +619,6 @@ def eval_models_layouts(TopOGraph, X,
                 layout_scores['fb_fuzzy_MAP'] = np.absolute(data_fb_fuzzy_MAP_scores)
             if eval_MDE:
                 layout_scores['fb_fuzzy_MDE'] = np.absolute(data_fb_fuzzy_MDE_scores)
-            if eval_PaCMAP:
-                layout_scores['fb_fuzzy_PaCMAP'] = np.absolute(data_fb_fuzzy_PaCMAP_scores)
-            if eval_TriMAP:
-                layout_scores['fb_fuzzy_TriMAP'] = np.absolute(data_fb_fuzzy_TriMAP_scores)
 
     return embedding_scores, graph_scores, layout_scores
 

@@ -161,7 +161,7 @@ def IsomorphicMDE(data,
 
     # DS: add multicomponent spectral initialization
     if isinstance(init, np.ndarray):
-        X_init = init
+        X_init = torch.tensor(init)
     elif init == "quadratic":
         if verbose:
             problem.LOGGER.info("Computing quadratic initialization.")
