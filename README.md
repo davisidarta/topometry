@@ -8,12 +8,12 @@
 
 **Table of Contents**
 
-- [What is TopOMetry and why it is useful](#topological-metrics-basis-graphs-and-layouts)
+- [A framework to topological metrics, bases, graphs and layouts](#a-framework-to-metrics-bases-graphs-and-layouts)
 - [Installation](#installation-and-dependencies)
 - [Documentation and tutorials](https://topometry.readthedocs.io/en/latest/)
 - [Quick-start](#quick-start)
 
-## Topological metrics, basis, graphs and layouts
+## A framework to topological metrics, bases, graphs and layouts
 
 TopOMetry is a high-level python library to explore data topology.
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well

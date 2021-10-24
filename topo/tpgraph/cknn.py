@@ -3,7 +3,8 @@
 # (https://arxiv.org/pdf/1606.02353.pdf)
 #
 # Based on the implementation by Naoto MINAMI (https://github.com/chlorochrule/cknn),
-# with some performance improvements, under the following MIT license:
+# with some API and performance improvements (majorly by allowing precomputed kNN instead of pairwise metrics),
+# under the following MIT license:
 #
 # MIT LICENSE
 #
@@ -61,23 +62,13 @@ def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
     c_knn = CkNearestNeighbors(n_neighbors=n_neighbors, delta=delta,
                               metric=metric, t=t, include_self=include_self,
                               is_sparse=is_sparse)
-    c_knn.cknneighbors_graph(X)
-    c_knn.K[(np.arange(c_knn.K.shape[0]), np.arange(c_knn.K.shape[0]))] = 0
+    graph = c_knn.cknneighbors_graph(X)
+    graph[(np.arange(graph.shape[0]), np.arange(graph.shape[0]))] = 0
 
     if return_instance:
         return c_knn
     else:
-        return c_knn.K
-
-def cknn_adj(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
-                       include_self=False, is_sparse=True):
-
-    c_knn = CkNearestNeighbors(n_neighbors=n_neighbors, delta=delta,
-                              metric=metric, t=t, include_self=include_self,
-                              is_sparse=is_sparse)
-    c_knn.cknneighbors_graph(X)
-    return c_knn.A()
-
+        return graph
 
 class CkNearestNeighbors(object):
     """This object provides the all logic of CkNN.
@@ -108,29 +99,24 @@ class CkNearestNeighbors(object):
         """
 
     def __repr__(self):
-        if (self.N is not None) and (self.M is not None):
-            msg = "CkNearestNeighbors() object with %i samples and %i observations" % (self.N, self.M) + " and:"
+        if (self.n is not None):
+            msg = "CkNearestNeighbors() object with %i fitted samples" % (self.n)
         else:
             msg = "CkNearestNeighbors() object object without any fitted data."
-        if self.K is not None:
-            msg = msg + " \n    Continuous kernel fitted - CkNearestNeighbors.K"
-        if self.A is not None:
-            msg = msg + " \n    Adjacency matrix fitted - CkNearestNeighbors.A"
         return msg
 
     def __init__(self, n_neighbors=10, delta=1.0, metric='euclidean', t='inf',
-                 include_self=False, is_sparse=True, return_adjacency=False):
+                 include_self=False, is_sparse=True):
         self.n_neighbors = n_neighbors
         self.delta = delta
         self.metric = metric
         self.t = t
         self.include_self = include_self
         self.is_sparse = is_sparse
+        self.n = None
         self.K = None
-        self.return_adjacency = return_adjacency
-        self.A = None
-        self.N = None
-        self.M = None
+        self.n = None
+        self.m = None
         if self.metric == 'euclidean':
             self.metric_fun = euclidean
         elif metric == 'standardised_euclidean':
@@ -179,8 +165,7 @@ class CkNearestNeighbors(object):
         return: csr_matrix (if self.is_sparse is True)
                 or ndarray(if self.is_sparse is False)
         """
-        self.N = X.shape[0]
-        self.M = X.shape[1]
+        self.n = np.shape(X)[0]
         n_neighbors = self.n_neighbors
         delta = self.delta
         metric = self.metric
@@ -214,36 +199,22 @@ class CkNearestNeighbors(object):
         if isinstance(delta, (int, float)):
             ValueError("Invalid argument type. "
                        "Type of `delta` must be float or int")
-        self.A = csr_matrix(ratio_matrix < delta)
+        A = csr_matrix(ratio_matrix < delta)
 
         if include_self:
-            self.A[diag_ptr, diag_ptr] = True
+            A[diag_ptr, diag_ptr] = True
         else:
-            self.A[diag_ptr, diag_ptr] = False
+            A[diag_ptr, diag_ptr] = False
 
         if t == 'inf':
-            neigh = self.A.astype(np.float)
+            K = A.astype(np.float)
         else:
-            mask = self.A.nonzero()
+            mask = A.nonzero()
             weights = np.exp(-np.power(dmatrix[mask], 2)/t)
             dmatrix[:] = 0.
             dmatrix[mask] = weights
-            neigh = csr_matrix(dmatrix)
-        if self.return_adjacency:
-            return self.A
-        if is_sparse:
-            self.K = neigh
-        else:
-            self.K = neigh.toarray()
-        return self.K
+            K = csr_matrix(dmatrix)
+        if not is_sparse:
+            K = K.toarray()
+        return K
 
-    def adjacency(self):
-        """
-        Adjacency matrix from the original CkNN algorithm
-
-        Returns
-        -------
-        A: csr_matrix or np.ndarray
-        """
-
-        return self.A

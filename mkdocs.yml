@@ -1,18 +1,32 @@
 site_name: TopOMetry Documentation
 nav:
     - Welcome!: index.md
-    - Installation: installation.md
-    - Quick-start: quickstart.md
-    - Single-cell analysis: TopOMetry_Intro_pbmc_3k.md
-    - The TopOGraph model: topograph.md
-    - Diffusion harmonics: diffusor.md
+    - Installation + Quick-start: installation.md
+    - The TopOGraph class: topograph.md
+    - Tutorials:
+          - Handwritten digits: TopOMetry_Intro_MNIST.md
+          - Single-cell analysis: TopOMetry_Intro_pbmc_3k.md
+          - Scaling up computations: TopOMetry_MOCA.md
+          - Non-euclidean layouts: non_euclid.md
+          - Evaluating results: eval.md
+    - Available models:
+      - Diffusion harmonics: diffusor.md
+      - Fuzzy simplicial sets: fuzzy.md
+      - Continuous k-Nearest-Neighbors: cknn.md
+      - Laplacian Eigenmaps: le.md
+      - Layouts: layouts.md
+
+
+
 theme:
-    logo: img/logo.png
     name: readthedocs
     highlightjs: true
     hljs_languages:
         - python
         - bash
+    icon:
+        logo: img/logo.png
+
 
 plugins:
 - search
