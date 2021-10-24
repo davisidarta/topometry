@@ -56,3 +56,33 @@ pip3 install .
 Please open a note in the [Issue tracker](https://github.com/davisidarta/topometry/issues) if you have any trouble with installation!
 
 
+Now, let's go through a quick start!
+
+
+From a large data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` with default parameters: 
+
+```
+import topo.models as tp
+   
+# Learn topological metrics and basis from data. The default is to use diffusion harmonics.
+tg = tp.TopOGraph()
+tg = tg.fit(data)
+```
+
+Note: `topo.ml` is the high-level model module which contains the `TopOGraph` object.
+
+After learning a topological basis, we can access topological metrics and basis in the ``TopOGraph`` object, and build different
+topological graphs. 
+
+```
+# Learn a topological graph. Again, the default is to use diffusion harmonics.
+tgraph = tg.transform(data) 
+```
+
+Then, it is possible to optimize the topological graph layout. TopOMetry has 5 different layout options: tSNE(), MAP(), 
+TriMAP(), PaCMAP() and MDE().
+
+```
+# Graph layout optimization with MAP
+map_emb, aux = tp.MAP()
+```

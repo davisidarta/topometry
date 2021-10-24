@@ -3,22 +3,108 @@ from warnings import warn
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
+from scipy.sparse.linalg import eigs, eigsh
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import as_float_array
+from scipy.sparse.csgraph import laplacian as csgraph_laplacian
 
 from topo.base.dists import pairwise_special_metric, SPECIAL_METRICS
 from topo.base.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
 
-def LapEigenmap(affinity_matrix, dim, random_state):
-    if random_state is None:
-        random_state = np.random.RandomState()
-    component_embedding = SpectralEmbedding(
-        n_components=dim, affinity="precomputed", random_state=random_state
-    ).fit_transform(affinity_matrix)
-    component_embedding /= component_embedding.max()
-    return component_embedding
+def spectral_decomposition(affinity_matrix, n_eigs, expand=False):
+    N = np.shape(affinity_matrix)[0]
+    D, V = eigsh(affinity_matrix, n_eigs, tol=1e-4, maxiter=(N // 10))
+    D = np.real(D)
+    V = np.real(V)
+    inds = np.argsort(D)[::-1]
+    D = D[inds]
+    V = V[:, inds]
+    # Normalize by the first diffusion component
+    for i in range(V.shape[1]):
+        V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
+    vals = np.array(V)
+    pos = np.sum(vals > 0, axis=0)
+    residual = np.sum(vals < 0, axis=0)
+
+    if expand and len(residual) < 1:
+        # expand eigendecomposition
+        target = n_eigs + 30
+        while residual < 3:
+            while target < 3 * n_eigs:
+                print('Eigengap not found for determined number of components. Expanding eigendecomposition to '
+                      + str(target) + 'components.')
+                D, V = eigsh(affinity_matrix, target, tol=1e-4, maxiter=(N // 10))
+                D = np.real(D)
+                V = np.real(V)
+                inds = np.argsort(D)[::-1]
+                D = D[inds]
+                V = V[:, inds]
+                # Normalize by the first diffusion component
+                vals = np.array(V)
+                for i in range(V.shape[1]):
+                    vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
+                pos = np.sum(vals > 0, axis=0)
+                target = int(target * 1.6)
+                residual = np.sum(vals < 0, axis=0)
+
+            if residual < 1:
+                print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
+                      ' Falling back to `eigen_expansion=False`, will not attempt')
+                expand = False
+    if expand:
+        if len(residual) > 30:
+            target = n_eigs - 15
+            while len(residual) > 29:
+                D, V = eigsh(affinity_matrix, target, tol=1e-4, maxiter=(N // 10))
+                D = np.real(D)
+                V = np.real(V)
+                inds = np.argsort(D)[::-1]
+                D = D[inds]
+                V = V[:, inds]
+                vals = np.array(V)
+                for i in range(V.shape[1]):
+                    vals[:, i] = vals[:, i] / np.linalg.norm(vals[:, i])
+                pos = np.sum(vals > 0, axis=0)
+                residual = np.sum(vals < 0, axis=0)
+                if len(residual) < 15:
+                    break
+                else:
+                    target = pos - int(residual // 2)
+
+            if len(residual) < 1:
+                print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
+                      ' Falling back to `eigen_expansion=False`, will not attempt eigendecomposition expansion.')
+                expand = False
+
+    if not expand:
+        D, V = eigsh(affinity_matrix, n_eigs, tol=1e-4, maxiter=(N // 10))
+        D = np.real(D)
+        V = np.real(V)
+        inds = np.argsort(D)[::-1]
+        D = D[inds]
+        V = V[:, inds]
+
+    # Normalize by the first eigencomponent
+    for i in range(V.shape[1]):
+        V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
+
+    # Normalize eigenvalues
+    D = D / D.max()
+
+    return V, D
+
+
+def LapEigenmap(affinity_matrix, n_eigs, norm_laplacian=True, expand=False, return_evals=True):
+    laplacian = csgraph_laplacian(affinity_matrix, normed=norm_laplacian,
+                                      return_diag=False)
+    V, D = spectral_decomposition(laplacian, n_eigs=n_eigs, expand=expand)
+    if return_evals:
+        return V, D
+    else:
+        return V
+
 
 def component_layout(
     data,
@@ -28,6 +114,7 @@ def component_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    n_jobs=10
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -128,7 +215,7 @@ def component_layout(
     affinity_matrix = np.exp(-(distance_matrix ** 2))
 
     component_embedding = SpectralEmbedding(
-        n_components=dim, affinity="precomputed", random_state=random_state
+        n_components=dim, affinity="precomputed", random_state=random_state, n_jobs=n_jobs
     ).fit_transform(affinity_matrix)
     component_embedding /= component_embedding.max()
 
@@ -144,9 +231,10 @@ def multi_component_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    n_jobs=10
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
-    This will first fid relative positions for the components by spectrally embedding
+    This will first find relative positions for the components by spectrally embedding
     their centroids, then spectrally embed each individual connected component positioning
     them according to the centroid embeddings. This provides a decent embedding of each
     component while placing the components in good relative positions to one another.
@@ -156,7 +244,7 @@ def multi_component_layout(
         The source data -- required so we can generate centroids for each
         connected component of the graph.
     graph: sparse matrix
-        The adjacency matrix of the graph to be emebdded.
+        The adjacency matrix of the graph to be embedded.
     n_components: int
         The number of distinct components to be layed out.
     component_labels: array of shape (n_samples)
@@ -185,6 +273,7 @@ def multi_component_layout(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            n_jobs=n_jobs
         )
     else:
         k = int(np.ceil(n_components / 2.0))

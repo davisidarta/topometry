@@ -3,7 +3,7 @@ import numba
 import numpy as np
 from matplotlib.patches import Ellipse
 from sklearn.neighbors import KDTree
-
+from matplotlib import cm
 try:
     import matplotlib.pyplot as plt
 except ImportError:
@@ -201,6 +201,11 @@ def eval_density_at_point(x, embedding):
         result += eval_gaussian(x, pos=pos, cov=cov)
     return result
 
+
+def get_cmap(n, name='hsv'):
+    return plt.cm.get_cmap(name, n)
+
+
 def create_density_plot(X, Y, embedding):
     Z = np.zeros_like(X)
     tree = KDTree(embedding[:, :2])
@@ -210,10 +215,13 @@ def create_density_plot(X, Y, embedding):
             Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
     return Z / Z.sum()
 
-def plot_bases_scores(bases_scores):
+def plot_bases_scores(bases_scores, return_plot=True):
     keys = bases_scores.keys()
     values = bases_scores.values()
-
+    cmap = get_cmap(len(keys), name='tab20')
+    k_color = list()
+    for k in np.arange(len(keys)):
+        k_color.append(cmap(k))
     pca_vals = list()
     lap_vals = list()
     r_vals = list()
@@ -225,21 +233,32 @@ def plot_bases_scores(bases_scores):
         t_vals.append(val[3])
 
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
-    ax1.bar(keys, pca_vals)
+    fig.suptitle('Bases scores:')
+    ax1.bar(keys, pca_vals, color=k_color)
     ax1.set_title('PCA loss')
-    ax2.bar(keys, lap_vals)
+    ax1.set_xticklabels(keys, rotation=90)
+    ax2.bar(keys, lap_vals, color=k_color)
     ax2.set_title('LE loss')
-    ax3.bar(keys, r_vals)
+    ax2.set_xticklabels(keys, rotation=90)
+    ax3.bar(keys, r_vals, color=k_color)
     ax3.set_title('Geodesic Spearman R')
-    ax4.bar(keys, t_vals)
-    ax4.set_title('Geodesic Kendall Tau')
+    ax3.set_xticklabels(keys, rotation=90)
+    ax4.bar(keys, t_vals, color=k_color)
+    ax4.set_title('Geodesic Kendall T')
+    ax4.set_xticklabels(keys, rotation=90)
 
-    return plt.show()
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
 
-
-def plot_graphs_scores(graphs_scores):
+def plot_graphs_scores(graphs_scores, return_plot=True):
     keys = graphs_scores.keys()
     values = graphs_scores.values()
+    cmap = get_cmap(len(keys), name='tab20')
+    k_color = list()
+    for k in np.arange(len(keys)):
+        k_color.append(cmap(k))
 
     r_vals = list()
     t_vals = list()
@@ -247,18 +266,28 @@ def plot_graphs_scores(graphs_scores):
         r_vals.append(val[0])
         t_vals.append(val[1])
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
-    fig.suptitle('Horizontally stacked subplots')
-    ax1.bar(keys, r_vals)
-    ax2.bar(keys, t_vals)
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig.suptitle('Graphs scores:')
+    ax1.bar(keys, r_vals, color=k_color)
+    ax1.set_title('Geodesic Spearman R')
+    ax1.set_xticklabels(keys, rotation=90)
+    ax2.bar(keys, t_vals, color=k_color)
+    ax2.set_title('Geodesic Kendall T')
+    ax2.set_xticklabels(keys, rotation=90)
 
-    return plt.show()
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
 
 
-def plot_layouts_scores(layouts_scores):
+def plot_layouts_scores(layouts_scores, return_plot=True):
     keys = layouts_scores.keys()
     values = layouts_scores.values()
-
+    cmap = get_cmap(len(keys), name='tab20')
+    k_color = list()
+    for k in np.arange(len(keys)):
+        k_color.append(cmap(k))
     pca_vals = list()
     lap_vals = list()
     r_vals = list()
@@ -270,21 +299,72 @@ def plot_layouts_scores(layouts_scores):
         t_vals.append(val[3])
 
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
-    fig.suptitle('Horizontally stacked subplots')
-    ax1.bar(keys, pca_vals)
-    ax2.bar(keys, lap_vals)
-    ax3.bar(keys, r_vals)
-    ax4.bar(keys, t_vals)
+    fig.suptitle('Layouts scores:')
+    ax1.bar(keys, pca_vals, color=k_color)
+    ax1.set_title('PCA loss')
+    ax1.set_xticklabels(keys, rotation=90)
+    ax2.bar(keys, lap_vals, color=k_color)
+    ax2.set_title('LE loss')
+    ax2.set_xticklabels(keys, rotation=90)
+    ax3.bar(keys, r_vals, color=k_color)
+    ax3.set_title('Geodesic Spearman R')
+    ax3.set_xticklabels(keys, rotation=90)
+    ax4.bar(keys, t_vals, color=k_color)
+    ax4.set_title('Geodesic Kendall T')
+    ax4.set_xticklabels(keys, rotation=90)
+
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
+
+
+
+def plot_all_layouts(TopOGraph, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+    n_bases = 0
+    n_graphs = 0
+    n_layouts = 0
+    if TopOGraph.MSDiffMap is not None:
+        n_bases = n_bases + 1
+    if TopOGraph.CLapMap is not None:
+        n_bases = n_bases + 1
+    if TopOGraph.FuzzyLapMap is not None:
+        n_bases = n_bases + 1
+    if TopOGraph.DiffGraph is not None:
+        n_graphs = n_graphs + 1
+    if TopOGraph.FuzzyGraph is not None:
+        n_graphs = n_graphs + 1
+    if TopOGraph.CknnGraph is not None:
+        n_graphs = n_graphs + 1
+    if TopOGraph.tSNE_Y is not None:
+        n_layouts = n_layouts + 1
+    if TopOGraph.MAP_Y is not None:
+        n_layouts = n_layouts + 1
+    if TopOGraph.TriMAP_Y is not None:
+        n_layouts = n_layouts + 1
+    if TopOGraph.PaCMAP_Y is not None:
+        n_layouts = n_layouts + 1
+    if TopOGraph.MDE_Y is not None:
+        n_layouts = n_layouts + 1
+    embeddings = []
+    emb_number = 0
+    emb_list = list()
+    for emb in embeddings:
+        if emb is not None:
+            emb_number = emb_number + 1
+            emb_list.append(emb)
+    fig, axes_tuple = plt.subplots(n_graphs, n_layouts)
+
+    for i in range(len(emb_list)):
+        axes_tuple[i].scatter(
+            emb_list[i][:, 0],
+            emb_list[i][:, 1],
+            cmap=cmap,
+            c=labels,
+            s=pt_size,
+            marker=marker,
+            alpha=opacity)
 
     return plt.show()
-
-
-
-
-
-
-
-
-
 
 
