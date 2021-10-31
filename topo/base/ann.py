@@ -3,17 +3,15 @@
 # NMSLIB: https://github.com/nmslib/nmslib
 # Wrapper author: Davi Sidarta-Oliveira
 # School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta@gmail.com
+# contact: davisidarta [at] fcm [dot] unicamp [dot] br
 ######################################
 
 import time
-
 import numpy as np
 from scipy.sparse import csr_matrix, find, issparse
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
-
 
 class NMSlibTransformer(TransformerMixin, BaseEstimator):
     """
@@ -23,6 +21,7 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
     https://github.com/nmslib/nmslib.
     Calling 'nn <- NMSlibTransformer()' initializes the class with
      neighbour search parameters.
+
     Parameters
     ----------
     n_neighbors : int (optional, default 30)

@@ -79,12 +79,12 @@ def TopoMDE(data, *tg_kwargs, **mde_kwargs):
     return tg, emb
 
 
-def global_scores(data, emb):
+def global_scores(data, emb, k=5, metric='euclidean', n_jobs=12):
     global_scores_pca = global_score_pca(data, emb)
-    global_scores_lap = global_score_laplacian(data, emb)
+    global_scores_lap = global_score_laplacian(data, emb, k=k, metric=metric, n_jobs=n_jobs)
     return global_scores_pca, global_scores_lap
 
-def local_scores(data, emb, k=10, metric='cosine', n_jobs=12, emb_is_graph=False):
+def local_scores(data, emb, k=10, metric='euclidean', n_jobs=12, emb_is_graph=False):
     try:
         import hnswlib
         _have_hnswlib = True
