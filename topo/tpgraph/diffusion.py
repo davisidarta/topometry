@@ -514,8 +514,8 @@ class Diffusor(TransformerMixin):
             V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
 
         if not self.cache:
-            del self.K
-            del self.T
+            self.K = None
+            self.T = None
             import gc
             gc.collect()
 
