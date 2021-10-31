@@ -6,7 +6,6 @@ import sys
 import time
 
 import numpy as np
-from numpy import random
 from sklearn.base import TransformerMixin, BaseEstimator
 
 import topo.plot as pt
@@ -165,23 +164,25 @@ class TopOGraph(TransformerMixin, BaseEstimator):
          Used in the diffusion harmonics model. Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
          Defaults to 1, which unbiases results from data underlying samplg distribution.
 
-    kernel_use : str (optional, default 'decay_adaptive')
+    kernel_use : str (optional, default 'simple')
          Which type of kernel to use in the diffusion harmonics model. There are four implemented, considering the adaptive
          decay and the neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
          The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.
          (https://doi.org/10.1016/j.acha.2005.07.004) and implemented in Setty et al.
-         (https://doi.org/10.1038/s41587-019-0068-4).
+         (https://doi.org/10.1038/s41587-019-0068-4). It is the fastest option.
          The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
          Those, followed by '_adaptive', apply the neighborhood expansion process. The default and recommended is 'decay_adaptive'.
          The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
-
+         If you're not obtaining good separation between expect clusters, consider changing this to 'decay_adaptive' with
+         a small number of neighbors.
 
     verbosity : int (optional, default 1).
          Controls verbosity. 0 for no verbosity, 1 for minimal (prints warnings and runtimes of major steps), 2 for
           medium (also prints layout optimization messages) and 3 for full (down to neighborhood search, useful for debugging).
 
     cache : bool (optional, default True).
-         Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).
+         Whether to cache intermediate matrices (k-nearest-neighbors, diffusion harmonics etc).
+
 
      """
 
@@ -201,7 +202,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                  verbosity=1,
                  cache_base=True,
                  cache_graph=True,
-                 kernel_use='decay_adaptive',
+                 kernel_use='simple',
                  alpha=1,
                  plot_spectrum=False,
                  eigen_expansion=False,
@@ -517,7 +518,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         self.n = data.shape[0]
         self.m = data.shape[1]
         if self.random_state is None:
-            self.random_state = random.RandomState()
+            self.random_state = np.random.RandomState()
         if self.verbosity >= 1:
             print('Building topological basis...' + 'using ' + str(self.basis) + ' model.')
         if self.basis == 'diffusion':
@@ -790,17 +791,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         else:
             return self
 
-    def spectral_layout(self, X=None, basis=None, target=None, n_components=2, metric='cosine', cache=True):
+    def spectral_layout(self, graph=None, n_components=2, cache=True):
         """
 
         Performs a multicomponent spectral layout of the data and the target similarity matrix.
 
         Parameters
         ----------
-        basis :
-            which basis to use.
-        target : scipy.sparse.csr.csr_matrix.
-            target similarity matrix. If None (default), computes a fuzzy simplicial set with default parameters.
+        graph : scipy.sparse.csr.csr_matrix.
+            affinity matrix (i.e. topological graph). If None (default), uses the default graph from the default basis.
         n_components : int (optional, default 2).
             number of dimensions to embed into.
         cache : bool (optional, default True).
@@ -810,46 +809,71 @@ class TopOGraph(TransformerMixin, BaseEstimator):
         np.ndarray containing the resulting embedding.
 
         """
-        if X is None:
-            if basis is None:
-                basis = self.basis
-            if basis == 'diffusion':
+        if graph is None:
+            if self.basis == 'diffusion':
                 if self.MSDiffMap is None:
                     return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
                 else:
-                    X = self.MSDiffMap
-                if target is None:
-                    if self.db_fuzzy_graph is None:
-                        target = self.fuzzy_graph(X)
-                    else:
-                        target = self.db_fuzzy_graph
-            elif basis == 'continuous':
+                    data = self.MSDiffMap
+                if graph is None:
+                    if self.graph == 'diff':
+                        if self.db_diff_graph is None:
+                            self.transform()
+                        graph = self.db_diff_graph
+                    if self.graph == 'fuzzy':
+                        if self.db_fuzzy_graph is None:
+                            self.transform()
+                        graph = self.db_fuzzy_graph
+                    if self.graph == 'cknn':
+                        if self.db_cknn_graph is None:
+                            self.transform()
+                        graph = self.db_cknn_graph
+
+            elif self.basis == 'continuous':
                 if self.CLapMap is None:
-                    return print('Error: Basis set to \'continuous\', but the continuous basis is not computed!')
+                    return print(
+                        'Error: Basis set to \'continuous\', but the continuous basis is not computed!')
                 else:
-                    X = self.CLapMap
-                if target is None:
-                    if self.cb_fuzzy_graph is None:
-                        target = self.fuzzy_graph(X)
-                    else:
-                        target = self.cb_fuzzy_graph
-            elif basis == 'fuzzy':
+                    data = self.CLapMap
+                if graph is None:
+                    if self.graph == 'diff':
+                        if self.cb_diff_graph is None:
+                            self.transform()
+                        graph = self.cb_diff_graph
+                    if self.graph == 'fuzzy':
+                        if self.cb_fuzzy_graph is None:
+                            self.transform()
+                        graph = self.cb_fuzzy_graph
+                    if self.graph == 'cknn':
+                        if self.cb_cknn_graph is None:
+                            self.transform()
+                        graph = self.cb_cknn_graph
+
+            elif self.basis == 'fuzzy':
                 if self.FuzzyLapMap is None:
                     return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
                 else:
-                    X = self.FuzzyLapMap
-                if target is None:
-                    if self.fb_fuzzy_graph is None:
-                        target = self.fuzzy_graph(X)
-                    else:
-                        target = self.fb_fuzzy_graph
+                    data = self.FuzzyLapMap
+                if graph is None:
+                    if self.graph == 'diff':
+                        if self.fb_diff_graph is None:
+                            self.transform()
+                        graph = self.fb_diff_graph
+                    if self.graph == 'fuzzy':
+                        if self.fb_fuzzy_graph is None:
+                            self.transform()
+                        graph = self.fb_fuzzy_graph
+                    if self.graph == 'cknn':
+                        if self.fb_cknn_graph is None:
+                            self.transform()
+                        graph = self.fb_cknn_graph
 
-        spt_layout = spt.spectral_layout(X, target, n_components, self.random_state, metric=metric, metric_kwds={})
+        spt_layout = spt.spectral_layout(graph=graph, dim=n_components, random_state=self.random_state)
         expansion = 10.0 / np.abs(spt_layout).max()
         spt_layout = (spt_layout * expansion).astype(
             np.float32
         ) + self.random_state.normal(
-            scale=0.0001, size=[target.shape[0], n_components]
+            scale=0.0001, size=[graph.shape[0], n_components]
         ).astype(
             np.float32
         )
@@ -1360,15 +1384,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if self.basis == 'diffusion':
                         if self.db_fuzzy_graph is None:
                             self.db_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.db_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.db_fuzzy_graph, n_components=n_components)
                 if self.basis == 'continuous':
                         if self.cb_fuzzy_graph is None:
                             self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.cb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if self.basis == 'fuzzy':
                         if self.fb_fuzzy_graph is None:
                             self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.fb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
             else:
                 init = self.SpecLayout
 
@@ -1402,7 +1426,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
 
         end = time.time()
         if self.verbosity >= 1:
-            print('         Optimized fuzzy simplicial sets cross-entropy for embedding in = %f (sec)' % (end - start))
+            print('         Optimized MAP embedding in = %f (sec)' % (end - start))
 
         if self.basis == 'diffusion':
             if self.graph == 'diff':
@@ -1494,15 +1518,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if self.basis == 'diffusion':
                         if self.db_fuzzy_graph is None:
                             self.db_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.db_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.db_fuzzy_graph, n_components=n_components)
                 if self.basis == 'continuous':
                         if self.cb_fuzzy_graph is None:
                             self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.cb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if self.basis == 'fuzzy':
                         if self.fb_fuzzy_graph is None:
                             self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.fb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
             else:
                 init = self.SpecLayout
 
@@ -1652,15 +1676,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if self.basis == 'diffusion':
                         if self.db_fuzzy_graph is None:
                             self.db_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.db_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.db_fuzzy_graph, n_components=n_components)
                 if self.basis == 'continuous':
                         if self.cb_fuzzy_graph is None:
                             self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.cb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if self.basis == 'fuzzy':
                         if self.fb_fuzzy_graph is None:
                             self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.fb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
             else:
                 init = self.SpecLayout
 
@@ -1810,15 +1834,15 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 if self.basis == 'diffusion':
                         if self.db_fuzzy_graph is None:
                             self.db_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.db_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.db_fuzzy_graph, n_components=n_components)
                 if self.basis == 'continuous':
                         if self.cb_fuzzy_graph is None:
                             self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.cb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if self.basis == 'fuzzy':
                         if self.fb_fuzzy_graph is None:
                             self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                        init = self.spectral_layout(X=data, target=self.fb_fuzzy_graph, n_components=n_components, metric=self.graph_metric)
+                        init = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
             else:
                 init = self.SpecLayout
 
@@ -2238,7 +2262,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'diff'
                 if self.db_diff_graph is None:
                     self.db_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.db_diff_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.db_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_diff_MAP is None:
                         self.db_diff_MAP = self.MAP(n_components=n_components)
@@ -2252,7 +2276,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'cknn'
                 if self.db_cknn_graph is None:
                     self.db_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.db_cknn_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.db_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_cknn_MAP is None:
                         self.db_cknn_MAP = self.MAP(n_components=n_components)
@@ -2266,7 +2290,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'fuzzy'
                 if self.db_fuzzy_graph is None:
                     self.db_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.db_fuzzy_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.db_fuzzy_graph,n_components=n_components)
                 if run_MAP:
                     if self.db_fuzzy_MAP is None:
                         self.db_fuzzy_MAP = self.MAP(n_components=n_components)
@@ -2290,7 +2314,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'diff'
                 if self.cb_diff_graph is None:
                     self.cb_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.cb_diff_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.cb_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_diff_MAP is None:
                         self.cb_diff_MAP = self.MAP(n_components=n_components)
@@ -2304,7 +2328,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'cknn'
                 if self.cb_cknn_graph is None:
                     self.cb_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.cb_cknn_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.cb_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_cknn_MAP is None:
                         self.cb_cknn_MAP = self.MAP(n_components=n_components)
@@ -2318,7 +2342,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'fuzzy'
                 if self.cb_fuzzy_graph is None:
                     self.cb_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.cb_fuzzy_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_fuzzy_MAP is None:
                         self.cb_fuzzy_MAP = self.MAP(n_components=n_components)
@@ -2342,7 +2366,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'diff'
                 if self.fb_diff_graph is None:
                     self.fb_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.fb_diff_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.fb_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_diff_MAP is None:
                         self.fb_diff_MAP = self.MAP(n_components=n_components)
@@ -2356,7 +2380,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'cknn'
                 if self.fb_diff_graph is None:
                     self.fb_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.fb_cknn_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.fb_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_cknn_MAP is None:
                         self.fb_cknn_MAP = self.MAP(n_components=n_components)
@@ -2370,7 +2394,7 @@ class TopOGraph(TransformerMixin, BaseEstimator):
                 self.graph = 'fuzzy'
                 if self.fb_diff_graph is None:
                     self.fb_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(basis=self.basis, target=self.fb_fuzzy_graph, metric=self.base_metric, n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_fuzzy_MAP is None:
                         self.fb_fuzzy_MAP = self.MAP(n_components=n_components)
