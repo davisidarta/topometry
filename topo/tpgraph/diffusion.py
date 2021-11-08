@@ -6,19 +6,16 @@
 ######################################
 import time
 import warnings
-
 import numpy as np
 import pandas as pd
 from scipy.sparse import (SparseEfficiencyWarning, csr_matrix, find, issparse)
 from scipy.sparse.linalg import eigsh
 from sklearn.base import TransformerMixin
-from sklearn.neighbors import NearestNeighbors
-
-from topo.base import ann
+from topo.base.ann import kNN
 from topo.tpgraph import multiscale
+import matplotlib.pyplot as plt
 
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
-import matplotlib.pyplot as plt
 
 try:
     import hnswlib
@@ -189,6 +186,8 @@ class Diffusor(TransformerMixin):
         self.verbose = verbose
         self.plot_spectrum = plot_spectrum
         self.cache = cache
+        self.omega = None
+        self.omega_new = None
         self.kn = None
         self.scaled_eigs = None
         self.N = None
@@ -198,10 +197,16 @@ class Diffusor(TransformerMixin):
         self.res = None
 
     def __repr__(self):
-        if (self.N is not None) and (self.M is not None):
-            msg = "Diffusor() instance with %i samples and %i observations" % (self.N, self.M) + " and:"
+        if self.metric != 'precomputed':
+            if (self.N is not None) and (self.M is not None):
+                msg = "Diffusor() instance with %i samples and %i observations" % (self.N, self.M) + " and:"
+            else:
+                msg = "Diffusor() instance object without any fitted data."
         else:
-            msg = "Diffusor() instance object without any fitted data."
+            if (self.N is not None) and (self.M is not None):
+                msg = "Diffusor() instance with %i samples" % (self.N) + " and:"
+            else:
+                msg = "Diffusor() instance object without any fitted data."
         if self.K is not None:
             msg = msg + " \n    Diffusion kernel fitted - Diffusor.K"
         if self.T is not None:
@@ -228,10 +233,9 @@ class Diffusor(TransformerMixin):
             Diffusor object with kernel Diffusor.K and the transition potencial Diffusor.T .
 
         """
-        data = X
         start_time = time.time()
-        self.N = data.shape[0]
-        self.M = data.shape[1]
+        self.N = X.shape[0]
+        self.M = X.shape[1]
         if self.backend == 'hnswlib':
             if not _have_hnswlib:
                 if _have_nmslib:
@@ -253,32 +257,27 @@ class Diffusor(TransformerMixin):
         if self.metric == 'lp' and self.backend != 'nmslib':
             print('Fractional norm distances are only available with `backend=\'nmslib\'`. Trying changing to \'nmslib\' backend.')
             self.backend = 'nmslib'
-        if self.backend == 'nmslib':
-            # Construct an approximate k-nearest-neighbors graph
-            anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
-                                          metric=self.metric,
-                                          p=self.p,
-                                          method='hnsw',
-                                          n_jobs=self.n_jobs,
-                                          M=self.M,
-                                          efC=self.efC,
-                                          efS=self.efS,
-                                          verbose=self.verbose).fit(data)
-            knn = anbrs.transform(data)
-        elif self.backend == 'hnwslib':
-            anbrs = ann.HNSWlibTransformer(n_neighbors=self.n_neighbors,
-                                           metric=self.metric,
-                                           n_jobs=self.n_jobs,
-                                           M=self.M,
-                                           efC=self.efC,
-                                           efS=self.efS,
-                                           verbose=False).fit(data)
-            knn = anbrs.transform(data)
-        else:
-            # Construct a k-nearest-neighbors graph
-            nbrs = NearestNeighbors(n_neighbors=int(self.n_neighbors), metric=self.metric, n_jobs=self.n_jobs).fit(
-                data)
-            knn = nbrs.kneighbors_graph(data, mode='distance')
+
+        if self.metric != 'precomputed':
+            knn = kNN(X, n_neighbors=self.n_neighbors,
+                      metric=self.metric,
+                      n_jobs=self.n_jobs,
+                      backend=self.backend,
+                      M=self.M,
+                      efC=self.efC,
+                      efS=self.efS,
+                      verbose=self.verbose)
+
+        elif self.metric == 'precomputed':
+            if self.kernel_use == 'simple_adaptive':
+                self.kernel_use = 'simple'
+            if self.kernel_use == 'decay_adaptive':
+                self.kernel_use = 'decay'
+            if not isinstance(X, csr_matrix):
+                knn = csr_matrix(X)
+            else:
+                knn = X
+
 
         # X, y specific stds: Normalize by the distance of median nearest neighbor to account for neighborhood size.
         median_k = np.floor(self.n_neighbors / 2).astype(np.int)
@@ -290,10 +289,7 @@ class Diffusor(TransformerMixin):
 
         # Distance metrics
         x, y, dists = find(knn)  # k-nearest-neighbor distances
-
-        if self.cache:
-            self.dists = knn
-            self.adap_sd = adap_sd
+        self.adap_sd = adap_sd
 
         # Neighborhood graph expansion
         # define decay as sample's pseudomedian k-nearest-neighbor
@@ -305,32 +301,14 @@ class Diffusor(TransformerMixin):
             self.new_k = int(self.n_neighbors + (self.n_neighbors - pm.max()))
             # increase neighbor search:
             # Construct a new approximate k-nearest-neighbors graph with new k
-            if self.backend == 'nmslib':
-                anbrs_new = ann.NMSlibTransformer(n_neighbors=self.new_k,
-                                              metric=self.metric,
-                                              p=self.p,
-                                              method='hnsw',
-                                              n_jobs=self.n_jobs,
-                                              M=self.M,
-                                              efC=self.efC,
-                                              efS=self.efS,
-                                              verbose=self.verbose).fit(data)
-                knn_new = anbrs_new.transform(data)
-            elif self.backend == 'hnwslib':
-                anbrs_new = ann.HNSWlibTransformer(n_neighbors=self.new_k,
-                                               metric=self.metric,
-                                               n_jobs=self.n_jobs,
-                                               M=self.M,
-                                               efC=self.efC,
-                                               efS=self.efS,
-                                               verbose=False).fit(data)
-                knn_new = anbrs_new.transform(data)
-            else:
-                # Construct a k-nearest-neighbors graph
-                anbrs_new = NearestNeighbors(n_neighbors=int(self.new_k), metric=self.metric, n_jobs=self.n_jobs).fit(
-                    data)
-                knn_new = anbrs_new.kneighbors_graph(data, mode='distance')
-
+            knn_new = kNN(X, n_neighbors=self.new_k,
+                      metric=self.metric,
+                      n_jobs=self.n_jobs,
+                      backend=self.backend,
+                      M=self.M,
+                      efC=self.efC,
+                      efS=self.efS,
+                      verbose=self.verbose)
             x_new, y_new, dists_new = find(knn_new)
 
             # adaptive neighborhood size
@@ -343,10 +321,8 @@ class Diffusor(TransformerMixin):
 
             pm_new = np.interp(adap_nbr, (adap_nbr.min(), adap_nbr.max()), (2, self.new_k))
 
-            if self.cache:
-                self.dists_new = knn_new
-                self.adap_nbr_sd = adap_nbr
-                self.omega_new = pm_new
+            self.adap_nbr_sd = adap_nbr
+            self.omega_new = pm_new
 
         if self.kernel_use == 'simple':
             # X, y specific stds
@@ -644,22 +620,23 @@ class Diffusor(TransformerMixin):
             V[:, i] = V[:, i] / np.linalg.norm(V[:, i])
 
         if not self.cache:
-            del self.K
-            del self.T
+            self.K = None
+            self.T = None
+            import gc
+            gc.collect()
 
         # Create the results dictionary
         self.res = {'EigenVectors': V, 'EigenValues': D}
         self.res['EigenVectors'] = pd.DataFrame(self.res['EigenVectors'])
         self.res["EigenValues"] = pd.Series(self.res["EigenValues"])
 
-
         self.res['MultiscaleComponents'], self.kn, self.scaled_eigs = multiscale.multiscale(self.res,
                                                                                             n_eigs=self.use_eigs,
                                                                                             verbose=self.verbose)
-
         if self.backend == 'nmslib':
             # Construct an approximate k-nearest-neighbors graph
-            anbrs = ann.NMSlibTransformer(n_neighbors=self.n_neighbors,
+            from topo.base.ann import NMSlibTransformer
+            anbrs = NMSlibTransformer(n_neighbors=self.n_neighbors,
                                           metric=self.metric,
                                           p=self.p,
                                           method='hnsw',
@@ -670,7 +647,8 @@ class Diffusor(TransformerMixin):
                                           verbose=self.verbose).fit(self.res['MultiscaleComponents'])
             ind, dists, grad, graph = anbrs.ind_dist_grad(self.res['MultiscaleComponents'])
         elif self.backend == 'hnwslib':
-            anbrs = ann.HNSWlibTransformer(n_neighbors=self.n_neighbors,
+            from topo.base.ann import HNSWlibTransformer
+            anbrs = HNSWlibTransformer(n_neighbors=self.n_neighbors,
                                            metric=self.metric,
                                            n_jobs=self.n_jobs,
                                            M=self.M,
@@ -680,6 +658,7 @@ class Diffusor(TransformerMixin):
             ind, dists, grad, graph = anbrs.ind_dist_grad(self.res['MultiscaleComponents'])
         else:
             # Construct a k-nearest-neighbors graph
+            from sklearn.neighbors import NearestNeighbors
             nbrs = NearestNeighbors(n_neighbors=int(self.n_neighbors), metric=self.metric, n_jobs=self.n_jobs).fit(
                 data)
             dists, ind = nbrs.kneighbors(data, mode='distance')
