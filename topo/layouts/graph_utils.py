@@ -851,12 +851,9 @@ def simplicial_set_embedding(
     elif isinstance(init, str) and init == "spectral":
         # We add a little noise to avoid local minima for optimization to come
         initialisation = _spectral.spectral_layout(
-            data,
             graph,
-            n_components,
-            random_state,
-            metric="precomputed",
-            metric_kwds=metric_kwds,
+            dim=n_components,
+            random_state=random_state
         )
         expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(

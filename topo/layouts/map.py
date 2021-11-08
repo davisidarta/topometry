@@ -185,7 +185,6 @@ def fuzzy_embedding(data,
         # the data matrix X is really only used for determining the number of connected components
         # for the init condition in the UMAP embedding (high-resolution spectral layout)
 
-    start_time = time.time()
     Y, Y_aux = simplicial_set_embedding(data,
                                       graph,
                                       n_components,
@@ -207,11 +206,5 @@ def fuzzy_embedding(data,
                                       euclidean_output,
                                       parallel,
                                       verbose)
-    end_time = time.time()
-    if verbose:
-        print('Layout optimization time = %f (sec), '
-              'adjusted for thread number=%f (sec)' %
-              (end_time - start_time,
-               njobs * float(end_time - start_time)))
 
     return Y, Y_aux
