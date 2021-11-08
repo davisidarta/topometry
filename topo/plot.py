@@ -246,6 +246,7 @@ def plot_bases_scores(bases_scores, return_plot=True):
     ax4.bar(keys, t_vals, color=k_color)
     ax4.set_title('Geodesic Kendall T')
     ax4.set_xticklabels(keys, rotation=90)
+    fig.tight_layout()
 
     if return_plot:
         return plt.show()
@@ -274,6 +275,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True):
     ax2.bar(keys, t_vals, color=k_color)
     ax2.set_title('Geodesic Kendall T')
     ax2.set_xticklabels(keys, rotation=90)
+    fig.tight_layout()
 
     if return_plot:
         return plt.show()
@@ -312,7 +314,7 @@ def plot_layouts_scores(layouts_scores, return_plot=True):
     ax4.bar(keys, t_vals, color=k_color)
     ax4.set_title('Geodesic Kendall T')
     ax4.set_xticklabels(keys, rotation=90)
-
+    fig.tight_layout()
     if return_plot:
         return plt.show()
     else:
