@@ -3,16 +3,105 @@
 # NMSLIB: https://github.com/nmslib/nmslib
 # Wrapper author: Davi Sidarta-Oliveira
 # School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta@gmail.com
+# contact: davisidarta [at] fcm [dot] unicamp [dot] br
 ######################################
 
 import time
-
 import numpy as np
 from scipy.sparse import csr_matrix, find, issparse
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
+
+
+def kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=10, p=11/16, efC=50, efS=50, return_instance=False, verbose=False):
+    """
+    General class for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.
+
+    Parameters
+    ----------
+    X : np.ndarray or scipy.sparse.csr_matrix.
+        Input data.
+
+    n_neighbors : int (optional, default 30)
+        number of nearest-neighbors to look for. In practice,
+        this should be considered the average neighborhood size and thus vary depending
+        on your number of features, samples and data intrinsic dimensionality. Reasonable values
+        range from 5 to 100. Smaller values tend to lead to increased graph structure
+        resolution, but users should beware that a too low value may render granulated and vaguely
+        defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+        values can slightly increase computational time.
+
+    metric : str (optional, default 'cosine').
+        Accepted NMSLIB metrics. Defaults to 'cosine'. Accepted metrics include:
+        -'sqeuclidean'
+        -'euclidean'
+        -'l1'
+        -'lp' - requires setting the parameter `p` - equivalent to minkowski distance
+        -'cosine'
+        -'angular'
+        -'negdotprod'
+        -'levenshtein'
+        -'hamming'
+        -'jaccard'
+        -'jansen-shan'
+
+    n_jobs : int (optional, default 1).
+        number of threads to be used in computation. Defaults to 1. The algorithm is highly
+        scalable to multi-threading.
+
+    M : int (optional, default 30).
+        defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+        (Hierarchical Navigable Small World Graph). However, the actual default maximum number
+        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+        is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
+        HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
+
+    efC : int (optional, default 100).
+        A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
+        and leads to higher accuracy of search. However this also leads to longer indexing times.
+        A reasonable range for this parameter is 50-2000.
+
+    efS : int (optional, default 100).
+        A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
+        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
+
+    Returns
+    -------
+
+    A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.
+
+    """
+    if backend == 'nmslib':
+        # Construct an approximate k-nearest-neighbors graph
+        nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
+                                      metric=metric,
+                                      p=p,
+                                      method='hnsw',
+                                      n_jobs=n_jobs,
+                                      M=M,
+                                      efC=efC,
+                                      efS=efS,
+                                      verbose=verbose).fit(X)
+        knn = nbrs.transform(X)
+    elif backend == 'hnwslib':
+        nbrs = HNSWlibTransformer(n_neighbors=n_neighbors,
+                                       metric=metric,
+                                       n_jobs=n_jobs,
+                                       M=M,
+                                       efC=efC,
+                                       efS=efS,
+                                       verbose=False).fit(X)
+        knn = nbrs.transform(X)
+    else:
+        # Construct a k-nearest-neighbors graph
+        nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs).fit(X)
+        knn = nbrs.kneighbors_graph(X, mode='distance')
+
+    if return_instance:
+        return nbrs, knn
+    else:
+        return knn
 
 
 class NMSlibTransformer(TransformerMixin, BaseEstimator):
@@ -23,6 +112,7 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
     https://github.com/nmslib/nmslib.
     Calling 'nn <- NMSlibTransformer()' initializes the class with
      neighbour search parameters.
+
     Parameters
     ----------
     n_neighbors : int (optional, default 30)
@@ -472,6 +562,7 @@ class HNSWlibTransformer(BaseEstimator):
         self.verbose = verbose
         self.N = None
         self.m = None
+        self.p = None
 
     def fit(self, data):
         import hnswlib
