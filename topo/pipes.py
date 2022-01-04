@@ -5,7 +5,7 @@ from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.layouts.map import fuzzy_embedding
 
 matplotlib.use('Agg')  # plotting backend compatible with screen
-from topo.models import TopOGraph
+from topo.topograph import TopOGraph
 from topo.eval.global_scores import global_score_pca, global_score_laplacian
 from topo.eval.local_scores import knn_spearman_r, knn_kendall_tau
 

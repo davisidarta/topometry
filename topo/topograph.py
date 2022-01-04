@@ -2,23 +2,17 @@
 # Author: Davi Sidarta-Oliveira <davisidarta(at)gmail(dot)com>
 # School of Medical Sciences, University of Campinas, Brazil
 #
-import sys
 import time
+
 import numpy as np
 from sklearn.base import TransformerMixin
-from scipy.sparse import csr_matrix
+
+import topo.spectral._spectral as spt
+from topo.base.ann import kNN
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.multiscale import decay_plot
-import topo.spectral._spectral as spt
-from topo.base.ann import kNN
-
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    print("Matplotlib is required for the plotting functions.")
-    sys.exit()
 
 try:
     from typing import Literal
@@ -320,9 +314,7 @@ class TopOGraph(TransformerMixin):
         self.db_diff_TriMAP = None
         self.db_fuzzy_TriMAP = None
         self.db_cknn_TriMAP = None
-        self.db_diff_tSNE = None
-        self.db_fuzzy_tSNE = None
-        self.db_cknn_tSNE = None
+        self.db_tSNE = None
         self.fb_diff_MAP = None
         self.fb_fuzzy_MAP = None
         self.fb_cknn_MAP = None
@@ -333,9 +325,7 @@ class TopOGraph(TransformerMixin):
         self.fb_diff_TriMAP = None
         self.fb_fuzzy_TriMAP = None
         self.fb_cknn_TriMAP = None
-        self.fb_diff_tSNE = None
-        self.fb_fuzzy_tSNE = None
-        self.fb_cknn_tSNE = None
+        self.fb_tSNE = None
         self.cb_diff_MAP = None
         self.cb_fuzzy_MAP = None
         self.cb_cknn_MAP = None
@@ -346,9 +336,7 @@ class TopOGraph(TransformerMixin):
         self.cb_diff_TriMAP = None
         self.cb_fuzzy_TriMAP = None
         self.cb_cknn_TriMAP = None
-        self.cb_diff_tSNE = None
-        self.cb_fuzzy_tSNE = None
-        self.cb_cknn_tSNE = None
+        self.cb_tSNE = None
         self.db_TriMAP = None
         self.cb_TriMAP = None
         self.fb_TriMAP = None
@@ -368,39 +356,35 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         PaCMAP - .db_PaCMAP"
             if self.db_TriMAP is not None:
                 msg = msg + " \n         TriMAP - .db_TriMAP"
+            if self.db_tSNE is not None:
+                msg = msg + " \n         tSNE - .db_tSNE"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.db_diff_graph is not None:
                 msg = msg + " \n       Diffusion graph - .db_diff_graph"
                 msg = msg + "\n          Graph layouts:"
-                if self.db_diff_tSNE is not None:
-                    msg = msg + " \n         tSNE - .db_diff_tSNE"
                 if self.db_diff_MAP is not None:
                     msg = msg + " \n         MAP - .db_diff_MAP"
                 if self.db_diff_MDE is not None:
                     msg = msg + " \n         MDE - .db_diff_MDE"
-                if (self.db_diff_tSNE is None) and (self.db_diff_MAP is None) and (self.db_diff_MDE is None):
+                if (self.db_diff_MAP is None) and (self.db_diff_MDE is None):
                     msg = msg + " none fitted."
             if self.db_fuzzy_graph is not None:
                 msg = msg + " \n       Fuzzy graph - .db_fuzzy_graph"
                 msg = msg + " \n         Graph layouts:"
-                if self.db_fuzzy_tSNE is not None:
-                    msg = msg + " \n         tSNE - .db_fuzzy_tSNE"
                 if self.db_fuzzy_MAP is not None:
                     msg = msg + " \n         MAP - .db_fuzzy_MAP"
                 if self.db_fuzzy_MDE is not None:
                     msg = msg + " \n         MDE - .db_fuzzy_MDE"
-                if (self.db_fuzzy_tSNE is None) and (self.db_fuzzy_MAP is None) and (self.db_fuzzy_MDE is None):
+                if (self.db_fuzzy_MAP is None) and (self.db_fuzzy_MDE is None):
                     msg = msg + " none fitted."
             if self.db_cknn_graph is not None:
                 msg = msg + " \n       CkNN graph - .db_cknn_graph"
                 msg = msg + " \n         Graph layouts:"
-                if self.db_cknn_tSNE is not None:
-                    msg = msg + " \n         tSNE - .db_cknn_tSNE"
                 if self.db_cknn_MAP is not None:
                     msg = msg + " \n         MAP - .db_cknn_MAP"
                 if self.db_cknn_MDE is not None:
                     msg = msg + " \n         MDE - .db_cknn_MDE"
-                if (self.db_cknn_tSNE is None) and (self.db_cknn_MAP is None) and (self.db_cknn_MDE is None):
+                if (self.db_cknn_MAP is None) and (self.db_cknn_MDE is None):
                     msg = msg + " none fitted."
             if (self.db_diff_graph is None) and (self.db_fuzzy_graph is None) and (self.db_cknn_graph is None):
                 msg = msg + " none fitted."
@@ -415,42 +399,37 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         PaCMAP - .cb_PaCMAP"
             if self.cb_TriMAP is not None:
                 msg = msg + " \n         TriMAP - .cb_TriMAP"
+            if self.cb_tSNE is not None:
+                msg = msg + " \n         tSNE - .cb_tSNE"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.cb_diff_graph is not None:
                 msg = msg + " \n      Diffusion graph - .cb_diff_graph"
                 msg = msg + " \n        Graph layouts:"
-                if self.cb_diff_tSNE is not None:
-                    msg = msg + " \n         tSNE - .cb_diff_tSNE"
                 if self.cb_diff_MAP is not None:
                     msg = msg + " \n         MAP - .cb_diff_MAP"
                 if self.cb_diff_MDE is not None:
                     msg = msg + " \n         MDE - .cb_diff_MDE"
-                if (self.cb_diff_tSNE is None) and (self.cb_diff_MAP is None) and (self.cb_diff_MDE is None):
+                if (self.cb_diff_MAP is None) and (self.cb_diff_MDE is None):
                     msg = msg + " none fitted."
             if self.cb_fuzzy_graph is not None:
                 msg = msg + " \n      Fuzzy graph - .cb_fuzzy_graph"
                 msg = msg + " \n        Graph layouts:"
-
-                if self.cb_fuzzy_tSNE is not None:
-                    msg = msg + " \n         tSNE - .cb_fuzzy_tSNE"
                 if self.cb_fuzzy_MAP is not None:
                     msg = msg + " \n         MAP - .cb_fuzzy_MAP"
                 if self.cb_fuzzy_MDE is not None:
                     msg = msg + " \n         MDE - .cb_fuzzy_MDE"
-                if (self.cb_fuzzy_tSNE is None) and (self.cb_fuzzy_MAP is None) and (self.cb_fuzzy_MDE is None):
+                if (self.cb_fuzzy_MAP is None) and (self.cb_fuzzy_MDE is None):
                     msg = msg + " none fitted."
             if self.cb_cknn_graph is not None:
                 msg = msg + " \n      CkNN graph - .cb_cknn_graph"
                 msg = msg + " \n        Graph layouts:"
-                if self.cb_cknn_tSNE is not None:
-                    msg = msg + " \n         tSNE - .cb_cknn_tSNE"
                 if self.cb_cknn_MAP is not None:
                     msg = msg + " \n         MAP - .cb_cknn_MAP"
                 if self.cb_cknn_MDE is not None:
                     msg = msg + " \n         MDE - .cb_cknn_MDE"
                 if (self.cb_cknn_tSNE is None) and (self.cb_cknn_MAP is None) and (self.cb_cknn_MDE is None):
                     msg = msg + " none fitted."
-            if (self.cb_diff_graph is None) and (self.cb_fuzzy_graph is None) and (self.cb_cknn_graph is None):
+            if (self.cb_fuzzy_graph is None) and (self.cb_cknn_graph is None):
                 msg = msg + " none fitted."
             msg = msg + "\n"
 
@@ -463,41 +442,37 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         PaCMAP - .fb_PaCMAP"
             if self.fb_TriMAP is not None:
                 msg = msg + " \n         TriMAP - .fb_TriMAP"
+            if self.fb_tSNE is not None:
+                msg = msg + " \n         tSNE - .fb_tSNE"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.fb_diff_graph is not None:
                 msg = msg + " \n      Diffusion graph - .fb_diff_graph"
                 msg = msg + " \n        Graph layouts:"
-                if self.fb_diff_tSNE is not None:
-                    msg = msg + " \n         tSNE - .fb_diff_tSNE"
                 if self.fb_diff_MAP is not None:
                     msg = msg + " \n         MAP - .fb_diff_MAP"
                 if self.fb_diff_MDE is not None:
                     msg = msg + " \n         MDE - .fb_diff_MDE"
-                if (self.fb_diff_tSNE is None) and (self.fb_diff_MAP is None) and (self.fb_diff_MDE is None):
+                if (self.fb_diff_MAP is None) and (self.fb_diff_MDE is None):
                     msg = msg + " none fitted."
             if self.fb_fuzzy_graph is not None:
                 msg = msg + " \n      Fuzzy graph - .fb_fuzzy_graph"
                 msg = msg + " \n        Graph layouts:"
-                if self.fb_fuzzy_tSNE is not None:
-                    msg = msg + " \n         tSNE - .fb_fuzzy_tSNE"
                 if self.fb_fuzzy_MAP is not None:
                     msg = msg + " \n         MAP - .fb_fuzzy_MAP"
                 if self.fb_fuzzy_MDE is not None:
                     msg = msg + " \n         MDE - .fb_fuzzy_MDE"
-                if (self.fb_fuzzy_tSNE is None) and (self.fb_fuzzy_MAP is None) and (self.fb_fuzzy_MDE is None):
+                if (self.fb_fuzzy_MAP is None) and (self.fb_fuzzy_MDE is None):
                     msg = msg + " none fitted."
             if self.fb_cknn_graph is not None:
                 msg = msg + " \n      CkNN graph - .fb_cknn_graph"
                 msg = msg + " \n        Graph layouts:"
-                if self.fb_cknn_tSNE is not None:
-                    msg = msg + " \n         tSNE - .fb_cknn_tSNE"
                 if self.fb_cknn_MAP is not None:
                     msg = msg + " \n         MAP - .fb_cknn_MAP"
                 if self.fb_cknn_MDE is not None:
                     msg = msg + " \n         MDE - .fb_cknn_MDE"
                 if (self.fb_cknn_tSNE is None) and (self.fb_cknn_MAP is None) and (self.fb_cknn_MDE is None):
                     msg = msg + " none fitted."
-            if (self.fb_diff_graph is None) and (self.fb_fuzzy_graph is None) and (self.fb_cknn_graph is None):
+            if (self.fb_fuzzy_graph is None) and (self.fb_cknn_graph is None):
                 msg = msg + " none fitted."
             msg = msg + "\n"
 
@@ -1542,7 +1517,7 @@ class TopOGraph(TransformerMixin):
                pair_neighbors=None,
                pair_MN=None,
                pair_FP=None,
-               distance="euclidean",
+               distance="angular",
                lr=1.0,
                num_iters=450,
                intermediate=False):
@@ -1886,65 +1861,24 @@ class TopOGraph(TransformerMixin):
             return print('No MulticoreTSNE installation found. Exiting.')
         if self.SpecLayout is not None:
             init = self.SpecLayout
-        if graph is None:
+        if data is None:
             if self.basis == 'diffusion':
-                if self.graph == 'diff':
-                    if self.db_diff_graph is None:
-                        self.transform()
-                    graph = self.db_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.db_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.db_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.db_cknn_graph is None:
-                        self.transform()
-                    graph = self.db_cknn_graph
-            elif self.basis == 'continuous':
-                if self.graph == 'diff':
-                    if self.cb_diff_graph is None:
-                        self.transform()
-                    graph = self.cb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.cb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.cb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.cb_cknn_graph is None:
-                        self.transform()
-                    graph = self.cb_cknn_graph
-            elif self.basis == 'fuzzy':
-                if self.graph == 'diff':
-                    if self.fb_diff_graph is None:
-                        self.transform()
-                    graph = self.fb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.fb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.fb_cknn_graph is None:
-                        self.transform()
-                    graph = self.fb_cknn_graph
-        else:
-            if data is None:
-                if self.basis == 'diffusion':
-                    if self.MSDiffMap is None:
-                        return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
-                    else:
-                        data = self.MSDiffMap
-                elif self.basis == 'continuous':
-                    if self.CLapMap is None:
-                        return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
-                    else:
-                        data = self.CLapMap
-                elif self.basis == 'fuzzy':
-                    if self.FuzzyLapMap is None:
-                        return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
-                    else:
-                        data = self.FuzzyLapMap
+                if self.MSDiffMap is None:
+                    return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
                 else:
-                    return print('Error: no computed basis or data is provided!')
+                    data = self.MSDiffMap
+            elif self.basis == 'continuous':
+                if self.CLapMap is None:
+                    return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
+                else:
+                    data = self.CLapMap
+            elif self.basis == 'fuzzy':
+                if self.FuzzyLapMap is None:
+                    return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
+                else:
+                    data = self.FuzzyLapMap
+            else:
+                return print('Error: no computed basis or data is provided!')
 
         if isinstance(init, str) and init == 'spectral':
             if self.SpecLayout is None:
@@ -1974,7 +1908,6 @@ class TopOGraph(TransformerMixin):
             verbose = 1
         else:
             verbose = 0
-
         if int(self.n) <= 3000:
             perplexity = 30
         else:
@@ -2004,30 +1937,28 @@ class TopOGraph(TransformerMixin):
 
         if self.basis == 'diffusion':
             if self.graph == 'diff':
-                self.db_diff_tSNE = tSNE_Y
+                self.db_tSNE = tSNE_Y
             if self.graph == 'cknn':
-                self.db_cknn_tSNE = tSNE_Y
+                self.db_tSNE = tSNE_Y
             if self.graph == 'fuzzy':
-                self.db_fuzzy_tSNE = tSNE_Y
+                self.db_tSNE = tSNE_Y
         if self.basis == 'continuous':
             if self.graph == 'diff':
-                self.cb_diff_tSNE = tSNE_Y
+                self.cb_tSNE = tSNE_Y
             if self.graph == 'cknn':
-                self.cb_cknn_tSNE = tSNE_Y
+                self.cb_tSNE = tSNE_Y
             if self.graph == 'fuzzy':
-                self.cb_fuzzy_tSNE = tSNE_Y
+                self.cb_tSNE = tSNE_Y
         if self.basis == 'fuzzy':
             if self.graph == 'diff':
-                self.fb_diff_tSNE = tSNE_Y
+                self.fb_tSNE = tSNE_Y
             if self.graph == 'cknn':
-                self.fb_cknn_tSNE = tSNE_Y
+                self.fb_tSNE = tSNE_Y
             if self.graph == 'fuzzy':
-                self.fb_fuzzy_tSNE = tSNE_Y
-
+                self.fb_tSNE = tSNE_Y
         return tSNE_Y
 
     def affinity_clustering(self, graph=None, damping=0.5, max_iter=200, convergence_iter=15):
-
         from sklearn.cluster import AffinityPropagation
         if self.layout_verbose:
             verbose = True
@@ -2261,20 +2192,32 @@ class TopOGraph(TransformerMixin):
         return str(str(basis) + '_' + str(graph) + '_' + str(layout))
 
     def run_models(self, X,
-                   basis=['diffusion', 'fuzzy', 'continuous'],
+                   bases=['diffusion', 'fuzzy', 'continuous'],
                    graphs=['diff', 'cknn', 'fuzzy']):
-        if str('diffusion') in basis:
+        if ('diffusion' in bases) and (self.MSDiffMap is None):
             run_db = True
-        if str('continuous') in basis:
+        else:
+            run_db = False
+        if ('continuous' in bases) and (self.MSDiffMap is None):
             run_cb = True
-        if str('fuzzy') in basis:
+        else:
+            run_cb = False
+        if ('fuzzy' in bases) and (self.MSDiffMap is None):
             run_fb = True
-        if str('diff') in graphs:
+        else:
+            run_fb = False
+        if 'diff' in graphs:
             run_diff = True
-        if str('cknn') in basis:
+        else:
+            run_diff = False
+        if 'cknn' in graphs:
             run_cknn = True
-        if str('fuzzy') in basis:
+        else:
+            run_cknn = False
+        if 'fuzzy' in graphs:
             run_fuzzy = True
+        else:
+            run_fuzzy = False
         if run_db:
             self.basis = 'diffusion'
             self.fit(X)
@@ -2395,6 +2338,9 @@ class TopOGraph(TransformerMixin):
             if run_TriMAP:
                 if self.db_TriMAP is None:
                     self.db_TriMAP = self.TriMAP(n_components=n_components)
+            if run_tSNE:
+                if self.db_tSNE is None:
+                    self.db_tSNE = self.tSNE(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.db_diff_graph is None:
@@ -2402,13 +2348,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.db_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_diff_MAP is None:
-                        self.db_diff_MAP = self.MAP(n_components=n_components)
+                        self.db_diff_MAP = self.MAP()
                 if run_MDE:
                     if self.db_diff_MDE is None:
                         self.db_diff_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.db_diff_tSNE is None:
-                        self.db_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 if self.db_cknn_graph is None:
@@ -2416,13 +2359,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.db_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_cknn_MAP is None:
-                        self.db_cknn_MAP = self.MAP(n_components=n_components)
+                        self.db_cknn_MAP = self.MAP()
                 if run_MDE:
                     if self.db_cknn_MDE is None:
                         self.db_cknn_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.db_cknn_tSNE is None:
-                        self.db_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 if self.db_fuzzy_graph is None:
@@ -2430,13 +2370,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.db_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_fuzzy_MAP is None:
-                        self.db_fuzzy_MAP = self.MAP(n_components=n_components)
+                        self.db_fuzzy_MAP = self.MAP()
                 if run_MDE:
                     if self.db_fuzzy_MDE is None:
                         self.db_fuzzy_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.db_fuzzy_tSNE is None:
-                        self.db_fuzzy_tSNE = self.tSNE(n_components=n_components)
         if run_cb:
             self.basis = 'continuous'
             if self.CLapMap is None:
@@ -2447,6 +2384,9 @@ class TopOGraph(TransformerMixin):
             if run_TriMAP:
                 if self.cb_TriMAP is None:
                     self.cb_TriMAP = self.TriMAP(n_components=n_components)
+            if run_tSNE:
+                if self.cb_tSNE is None:
+                    self.cb_tSNE = self.tSNE(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.cb_diff_graph is None:
@@ -2454,13 +2394,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.cb_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_diff_MAP is None:
-                        self.cb_diff_MAP = self.MAP(n_components=n_components)
+                        self.cb_diff_MAP = self.MAP()
                 if run_MDE:
                     if self.cb_diff_MDE is None:
                         self.cb_diff_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.cb_diff_tSNE is None:
-                        self.cb_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 if self.cb_cknn_graph is None:
@@ -2468,13 +2405,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.cb_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_cknn_MAP is None:
-                        self.cb_cknn_MAP = self.MAP(n_components=n_components)
+                        self.cb_cknn_MAP = self.MAP()
                 if run_MDE:
                     if self.cb_cknn_MDE is None:
                         self.cb_cknn_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.cb_cknn_tSNE is None:
-                        self.cb_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 if self.cb_fuzzy_graph is None:
@@ -2482,13 +2416,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.cb_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.cb_fuzzy_MAP is None:
-                        self.cb_fuzzy_MAP = self.MAP(n_components=n_components)
+                        self.cb_fuzzy_MAP = self.MAP()
                 if run_MDE:
                     if self.cb_fuzzy_MDE is None:
                         self.cb_fuzzy_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.cb_fuzzy_tSNE is None:
-                        self.cb_fuzzy_tSNE = self.tSNE(n_components=n_components)
         if run_fb:
             self.basis = 'fuzzy'
             if self.FuzzyLapMap is None:
@@ -2499,6 +2430,9 @@ class TopOGraph(TransformerMixin):
             if run_TriMAP:
                 if self.fb_TriMAP is None:
                     self.fb_TriMAP = self.TriMAP(n_components=n_components)
+            if run_tSNE:
+                if self.fb_tSNE is None:
+                    self.fb_tSNE = self.tSNE(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.fb_diff_graph is None:
@@ -2506,13 +2440,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.fb_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_diff_MAP is None:
-                        self.fb_diff_MAP = self.MAP(n_components=n_components)
+                        self.fb_diff_MAP = self.MAP()
                 if run_MDE:
                     if self.fb_diff_MDE is None:
                         self.fb_diff_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.fb_diff_tSNE is None:
-                        self.fb_diff_tSNE = self.tSNE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 if self.fb_diff_graph is None:
@@ -2520,13 +2451,10 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.fb_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_cknn_MAP is None:
-                        self.fb_cknn_MAP = self.MAP(n_components=n_components)
+                        self.fb_cknn_MAP = self.MAP()
                 if run_MDE:
                     if self.fb_cknn_MDE is None:
                         self.fb_cknn_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.fb_cknn_tSNE is None:
-                        self.fb_cknn_tSNE = self.tSNE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 if self.fb_diff_graph is None:
@@ -2534,14 +2462,14 @@ class TopOGraph(TransformerMixin):
                     self.SpecLayout = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.fb_fuzzy_MAP is None:
-                        self.fb_fuzzy_MAP = self.MAP(n_components=n_components)
+                        self.fb_fuzzy_MAP = self.MAP()
                 if run_MDE:
                     if self.fb_fuzzy_MDE is None:
                         self.fb_fuzzy_MDE = self.MDE(n_components=n_components)
-                if run_tSNE:
-                    if self.fb_fuzzy_tSNE is None:
-                        self.fb_fuzzy_tSNE = self.tSNE(n_components=n_components)
+
         return self
+
+
 
     # def plot_all_layouts(self, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
     #     """

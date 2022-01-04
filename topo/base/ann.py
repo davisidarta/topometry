@@ -225,7 +225,11 @@ class NMSlibTransformer(TransformerMixin, BaseEstimator):
         self.verbose = verbose
 
     def fit(self, data):
-        import nmslib
+        try:
+            import nmslib
+        except ImportError:
+            return(print("MNMSlib is required for this function. Please install it with `pip install nmslib`. "))
+
         self.space = {
             'sqeuclidean': 'l2_sparse',
             'euclidean': 'l2_sparse',
@@ -565,7 +569,11 @@ class HNSWlibTransformer(BaseEstimator):
         self.p = None
 
     def fit(self, data):
-        import hnswlib
+        try:
+            import hnswlib
+        except ImportError:
+            return(print("HNSWlib is required for this function. Please install it with `pip install hnswlib`. "))
+
         self.N = data.shape[0]
         self.m = data.shape[1]
         if not isinstance(data, np.ndarray):
