@@ -8,6 +8,3 @@ torch>=1.2
 kneed>=0.6
 pymde>=0.1.5
 setuptools~=45.2.0
-sphinx
-myst-parser
-sphinx-rtd-theme

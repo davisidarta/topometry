@@ -59,8 +59,7 @@ except ImportError:
 
 from topo.layouts.graph_utils import simplicial_set_embedding, find_ab_params
 
-def fuzzy_embedding(data,
-                    graph,
+def fuzzy_embedding(graph,
                     n_components=2,
                     initial_alpha=1,
                     min_dist=0.3,
@@ -94,8 +93,6 @@ def fuzzy_embedding(data,
 
     Parameters
     ----------
-    data : array of shape (n_samples, n_features)
-        The source data to be embedded by UMAP.
     graph : sparse matrix
         The 1-skeleton of the high dimensional fuzzy simplicial set as
         represented by a graph for which we require a sparse matrix for the
@@ -185,26 +182,25 @@ def fuzzy_embedding(data,
         # the data matrix X is really only used for determining the number of connected components
         # for the init condition in the UMAP embedding (high-resolution spectral layout)
 
-    Y, Y_aux = simplicial_set_embedding(data,
-                                      graph,
-                                      n_components,
-                                      initial_alpha,
-                                      a,
-                                      b,
-                                      gamma,
-                                      negative_sample_rate,
-                                      n_epochs,
-                                      init,
-                                      random_state,
-                                      metric,
-                                      metric_kwds,
-                                      densmap,
-                                      densmap_kwds,
-                                      output_dens,
-                                      output_metric,
-                                      output_metric_kwds,
-                                      euclidean_output,
-                                      parallel,
-                                      verbose)
+    Y, Y_aux = simplicial_set_embedding(graph,
+                                        n_components,
+                                        initial_alpha,
+                                        a,
+                                        b,
+                                        gamma,
+                                        negative_sample_rate,
+                                        n_epochs,
+                                        init,
+                                        random_state,
+                                        metric,
+                                        metric_kwds,
+                                        densmap,
+                                        densmap_kwds,
+                                        output_dens,
+                                        output_metric,
+                                        output_metric_kwds,
+                                        euclidean_output,
+                                        parallel,
+                                        verbose)
 
     return Y, Y_aux

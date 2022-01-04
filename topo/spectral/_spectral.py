@@ -375,6 +375,7 @@ def spectral_layout(graph, dim, random_state):
         The dimension of the space into which to embed.
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
+
     Returns
     -------
     embedding: array of shape (n_vertices, dim)

@@ -726,7 +726,6 @@ def make_epochs_per_sample(weights, n_epochs):
 
 
 def simplicial_set_embedding(
-    data,
     graph,
     n_components,
     initial_alpha,
@@ -754,8 +753,6 @@ def simplicial_set_embedding(
     sets.
     Parameters
     ----------
-    data: array of shape (n_samples, n_features)
-        The source data to be embedded by UMAP.
     graph: sparse matrix
         The 1-skeleton of the high dimensional fuzzy simplicial set as
         represented by a graph for which we require a sparse matrix for the
