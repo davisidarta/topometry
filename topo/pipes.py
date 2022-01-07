@@ -617,6 +617,7 @@ def eval_models_layouts(TopOGraph, X,
         layout_scores['NCVis'] = np.absolute(ncvis_scores)
 
 
+
     if eval_db:
         embedding_scores['DB'] = np.absolute(db_scores)
         if eval_PaCMAP:
