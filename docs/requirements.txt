@@ -1,1 +1,7 @@
+<<<<<<< HEAD
 
+=======
+sphinx
+myst-parser
+sphinx-rtd-theme
+>>>>>>> origin/master
