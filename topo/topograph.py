@@ -3,10 +3,8 @@
 # School of Medical Sciences, University of Campinas, Brazil
 #
 import time
-
 import numpy as np
 from sklearn.base import TransformerMixin
-
 import topo.spectral._spectral as spt
 from topo.base.ann import kNN
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
@@ -340,6 +338,9 @@ class TopOGraph(TransformerMixin):
         self.db_TriMAP = None
         self.cb_TriMAP = None
         self.fb_TriMAP = None
+        self.db_NCVis = None
+        self.cb_NCVis = None
+        self.fb_NCVis = None
 
     def __repr__(self):
         if (self.n is not None) and (self.m is not None):
@@ -350,7 +351,8 @@ class TopOGraph(TransformerMixin):
         if self.MSDiffMap is not None:
             msg = msg + " \n .. Multiscale Diffusion Maps fitted - .MSDiffMap"
             msg = msg + " \n    With similarity metrics stored at - .DiffBasis.K and .DiffBasis.T"
-            if (self.db_PaCMAP is not None) and (self.db_TriMAP is not None):
+            if (self.db_PaCMAP is not None) or (self.db_TriMAP is not None) or \
+                    (self.db_tSNE is not None) or (self.db_NCVis is not None):
                 msg = msg + " \n    With layouts:"
             if self.db_PaCMAP is not None:
                 msg = msg + " \n         PaCMAP - .db_PaCMAP"
@@ -358,6 +360,8 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         TriMAP - .db_TriMAP"
             if self.db_tSNE is not None:
                 msg = msg + " \n         tSNE - .db_tSNE"
+            if self.db_NCVis is not None:
+                msg = msg + " \n         NCVis - .db_NCVis"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.db_diff_graph is not None:
                 msg = msg + " \n       Diffusion graph - .db_diff_graph"
@@ -393,7 +397,8 @@ class TopOGraph(TransformerMixin):
         if self.CLapMap is not None:
             msg = msg + " \n .. Continuous (CkNN) Laplacian Eigenmaps fitted - .CLapMap"
             msg = msg + " \n    With similarity metrics stored at - .ContBasis"
-            if (self.cb_PaCMAP is not None) and (self.cb_TriMAP is not None):
+            if (self.cb_PaCMAP is not None) or (self.cb_TriMAP is not None) or \
+                    (self.cb_tSNE is not None) or (self.cb_NCVis is not None):
                 msg = msg + " \n    With layouts:"
             if self.cb_PaCMAP is not None:
                 msg = msg + " \n         PaCMAP - .cb_PaCMAP"
@@ -401,6 +406,8 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         TriMAP - .cb_TriMAP"
             if self.cb_tSNE is not None:
                 msg = msg + " \n         tSNE - .cb_tSNE"
+            if self.cb_NCVis is not None:
+                msg = msg + " \n         NCVis - .cb_NCVis"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.cb_diff_graph is not None:
                 msg = msg + " \n      Diffusion graph - .cb_diff_graph"
@@ -436,7 +443,8 @@ class TopOGraph(TransformerMixin):
         if self.FuzzyLapMap is not None:
             msg = msg + "\n .. Fuzzy (simplicial sets) Laplacian Eigenmaps fitted - .FuzzyLapMap"
             msg = msg + "\n    With similarity metrics stored at - .FuzzyBasis"
-            if (self.fb_PaCMAP is not None) and (self.fb_TriMAP is not None):
+            if (self.fb_PaCMAP is not None) or (self.fb_TriMAP is not None) or \
+                    (self.fb_tSNE is not None) or (self.fb_NCVis is not None):
                 msg = msg + " \n    With layouts:"
             if self.fb_PaCMAP is not None:
                 msg = msg + " \n         PaCMAP - .fb_PaCMAP"
@@ -444,6 +452,8 @@ class TopOGraph(TransformerMixin):
                 msg = msg + " \n         TriMAP - .fb_TriMAP"
             if self.fb_tSNE is not None:
                 msg = msg + " \n         tSNE - .fb_tSNE"
+            if self.fb_NCVis is not None:
+                msg = msg + " \n         NCVis - .fb_NCVis"
             msg = msg + "\n     And the downstream topological graphs:"
             if self.fb_diff_graph is not None:
                 msg = msg + " \n      Diffusion graph - .fb_diff_graph"
@@ -1253,7 +1263,6 @@ class TopOGraph(TransformerMixin):
             random_state=None,
             euclidean_output=True,
             parallel=True,
-            njobs=-1,
             densmap=False,
             densmap_kwds={},
             output_dens=False,
@@ -1453,7 +1462,7 @@ class TopOGraph(TransformerMixin):
 
 
         start = time.time()
-        results = map.fuzzy_embedding(data, graph,
+        results = map.fuzzy_embedding(graph,
                                       n_components=n_components,
                                       initial_alpha=initial_alpha,
                                       min_dist=min_dist,
@@ -1469,7 +1478,6 @@ class TopOGraph(TransformerMixin):
                                       random_state=random_state,
                                       euclidean_output=euclidean_output,
                                       parallel=parallel,
-                                      njobs=njobs,
                                       verbose=self.layout_verbose,
                                       a=None,
                                       b=None,
@@ -1853,6 +1861,26 @@ class TopOGraph(TransformerMixin):
              random_state=None,
              angle=0.5,
              cheat_metric=True):
+        """
+
+        The classic t-SNE embedding, usually on top of a TopOMetry topological basis.
+
+        Parameters
+        ----------
+        data : optional, default None)
+        graph : optional, default None)
+        n_components: int (optional, default 2).
+        early_exaggeration : sets exaggeration
+        n_iter : number of iterations to optmizie
+        n_iter_early_exag : number of iterations in early exaggeration
+        init : np.ndarray (optional, defaults to tg.SpecLayout)
+            Initialisation for the optimization problem.
+        random_state : optional, default None
+
+        Returns
+        -------
+
+        """
         try:
             from MulticoreTSNE import MulticoreTSNE as TSNE
             _have_mc_tsne = True
@@ -1936,27 +1964,65 @@ class TopOGraph(TransformerMixin):
         tSNE_Y = Y
 
         if self.basis == 'diffusion':
-            if self.graph == 'diff':
-                self.db_tSNE = tSNE_Y
-            if self.graph == 'cknn':
-                self.db_tSNE = tSNE_Y
-            if self.graph == 'fuzzy':
-                self.db_tSNE = tSNE_Y
+            self.db_tSNE = tSNE_Y
         if self.basis == 'continuous':
-            if self.graph == 'diff':
-                self.cb_tSNE = tSNE_Y
-            if self.graph == 'cknn':
-                self.cb_tSNE = tSNE_Y
-            if self.graph == 'fuzzy':
-                self.cb_tSNE = tSNE_Y
+            self.cb_tSNE = tSNE_Y
         if self.basis == 'fuzzy':
-            if self.graph == 'diff':
-                self.fb_tSNE = tSNE_Y
-            if self.graph == 'cknn':
-                self.fb_tSNE = tSNE_Y
-            if self.graph == 'fuzzy':
-                self.fb_tSNE = tSNE_Y
+            self.fb_tSNE = tSNE_Y
+
         return tSNE_Y
+
+
+    def NCVis(self,
+              data=None,
+              n_components=2,
+              n_jobs=-1,
+              n_neighbors=15,
+              distance="cosine",
+              M=15,
+              efC=30,
+              random_seed=42,
+              n_epochs=50,
+              n_init_epochs=20,
+              spread=1.0,
+              min_dist=0.4,
+              alpha=1.0,
+              a=None,
+              b=None,
+              alpha_Q=1.,
+              n_noise=None):
+        from topo.layouts import NCVis as ncvis
+        if data is None:
+            if self.basis == 'diffusion':
+                if self.MSDiffMap is None:
+                    return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
+                else:
+                    data = self.MSDiffMap
+            elif self.basis == 'continuous':
+                if self.CLapMap is None:
+                    return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
+                else:
+                    data = self.CLapMap
+            elif self.basis == 'fuzzy':
+                if self.FuzzyLapMap is None:
+                    return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
+                else:
+                    data = self.FuzzyLapMap
+            else:
+                return print('Error: no computed basis or data is provided!')
+
+        NCVis_Y = ncvis(data, n_components=n_components, n_jobs=n_jobs, n_neighbors=n_neighbors, distance=distance,
+                          M=M, efC=efC, random_seed=random_seed, n_epochs=n_epochs, n_init_epochs=n_init_epochs,
+                          spread=spread, min_dist=min_dist, alpha=alpha, alpha_Q=alpha_Q, a=a, b=b, n_noise=n_noise)
+
+        if self.basis == 'diffusion':
+                self.db_NCVis = NCVis_Y
+        if self.basis == 'continuous':
+                self.cb_NCVis = NCVis_Y
+        if self.basis == 'fuzzy':
+                self.fb_NCVis = NCVis_Y
+        return NCVis_Y
+
 
     def affinity_clustering(self, graph=None, damping=0.5, max_iter=200, convergence_iter=15):
         from sklearn.cluster import AffinityPropagation
@@ -2254,7 +2320,7 @@ class TopOGraph(TransformerMixin):
     def run_layouts(self, X, n_components=2,
                     bases=['diffusion', 'fuzzy', 'continuous'],
                     graphs=['diff', 'cknn', 'fuzzy'],
-                    layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP']):
+                    layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']):
         """
 
         Master function to easily run all combinations of possible bases and graphs that approximate the
@@ -2272,8 +2338,9 @@ class TopOGraph(TransformerMixin):
         graphs : str (optional, default ['diff', 'cknn','fuzzy'])
             Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
             ['fuzzy', 'diff'] or ['cknn'], for exemple.
-        layouts : str (optional, default ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP'])
-            Which layouts to compute. Defaults to all 5 options within TopOMetry: tSNE, MAP, MDE, PaCMAP and TriMAP.
+        layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis'])
+            Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
+             TriMAP and NCVis.
             To run only one or two layouts, set it to
             ['tSNE', 'MAP'] or ['PaCMAP'], for exemple.
 
@@ -2327,6 +2394,10 @@ class TopOGraph(TransformerMixin):
             run_TriMAP = True
         else:
             run_TriMAP = False
+        if str('NCVis') in layouts:
+            run_NCVis = True
+        else:
+            run_NCVis = False
         # Run all models and layouts
         if run_db:
             self.basis = 'diffusion'
@@ -2341,6 +2412,9 @@ class TopOGraph(TransformerMixin):
             if run_tSNE:
                 if self.db_tSNE is None:
                     self.db_tSNE = self.tSNE(n_components=n_components)
+            if run_NCVis:
+                if self.db_NCVis is None:
+                    self.db_NCVis = self.NCVis(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.db_diff_graph is None:
@@ -2387,6 +2461,9 @@ class TopOGraph(TransformerMixin):
             if run_tSNE:
                 if self.cb_tSNE is None:
                     self.cb_tSNE = self.tSNE(n_components=n_components)
+            if run_NCVis:
+                if self.cb_NCVis is None:
+                    self.cb_NCVis = self.NCVis(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.cb_diff_graph is None:
@@ -2433,6 +2510,9 @@ class TopOGraph(TransformerMixin):
             if run_tSNE:
                 if self.fb_tSNE is None:
                     self.fb_tSNE = self.tSNE(n_components=n_components)
+            if run_NCVis:
+                if self.fb_NCVis is None:
+                    self.fb_NCVis = self.NCVis(n_components=n_components)
             if run_diff:
                 self.graph = 'diff'
                 if self.fb_diff_graph is None:

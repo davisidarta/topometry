@@ -146,7 +146,7 @@ def draw_simple_ellipse(position, width, height, angle,
                         alpha=0.1, color=None):
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
-    width, height = np.sqrt(width), np.sqrt(height)
+    width, height = np.sqrt(width + 1e-6), np.sqrt(height + 1e-6)
     # Draw the Ellipse
     for nsig in np.linspace(from_size, to_size, n_ellipses):
         ax.add_patch(Ellipse(position, nsig * width, nsig * height,

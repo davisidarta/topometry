@@ -207,9 +207,7 @@
 #   limitations under the License.
 
 import time
-
 from numpy import random
-
 try:
     from typing import Literal
 except ImportError:

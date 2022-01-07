@@ -11,7 +11,7 @@ def global_loss_(X, Y):
     return np.mean(np.power(X.T - A @ Y.T, 2))
 
 
-def global_score_pca(X, Y):
+def global_score_pca(X, Y, n_dims=30):
     """
     Global score
     Input
@@ -31,7 +31,6 @@ def global_score_pca(X, Y):
             if isinstance(X, pd.DataFrame):
                 X = csr_matrix(X.values.T)
 
-    n_dims = Y.shape[1]
     Y_pca = TruncatedSVD(n_components=n_dims).fit_transform(X)
     gs_pca = global_loss_(X, Y_pca)
     gs_emb = global_loss_(X, Y)
