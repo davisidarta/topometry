@@ -24,11 +24,11 @@ and [non-euclidean embedding with single-cell data](Non_euclidean_tutorial.md).
 TopOMetry was developed by [Davi Sidarta-Oliveira](https://twitter.com/davisidarta).
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 3
     :glob:
     :titlesonly:
 
-    about
+    welcome
     installation
     quickstart
     topograph
