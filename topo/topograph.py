@@ -2011,9 +2011,14 @@ class TopOGraph(TransformerMixin):
             else:
                 return print('Error: no computed basis or data is provided!')
 
+        start = time.time()
         NCVis_Y = ncvis(data, n_components=n_components, n_jobs=n_jobs, n_neighbors=n_neighbors, distance=distance,
                           M=M, efC=efC, random_seed=random_seed, n_epochs=n_epochs, n_init_epochs=n_init_epochs,
                           spread=spread, min_dist=min_dist, alpha=alpha, alpha_Q=alpha_Q, a=a, b=b, n_noise=n_noise)
+
+        end = time.time()
+        if self.verbosity >= 1:
+            print('         Obtained NCVis embedding in = %f (sec)' % (end - start))
 
         if self.basis == 'diffusion':
                 self.db_NCVis = NCVis_Y
@@ -2071,11 +2076,17 @@ class TopOGraph(TransformerMixin):
                         self.transform()
                     graph = self.fb_cknn_graph
 
+        start = time.time()
         labels = AffinityPropagation(damping=damping, max_iter=max_iter,
                                      convergence_iter=convergence_iter,
                                      copy=False, preference=None, verbose=verbose,
                                      affinity='precomputed', random_state=self.random_state).fit_predict(
             graph.toarray())
+
+        end = time.time()
+        if self.verbosity >= 1:
+            print('         Affinity clustering performed in = %f (sec)' % (end - start))
+
 
         if self.basis == 'diffusion':
             if self.graph == 'diff':
@@ -2324,7 +2335,8 @@ class TopOGraph(TransformerMixin):
         """
 
         Master function to easily run all combinations of possible bases and graphs that approximate the
-        [Laplace-Beltrami Operator](), and the 5 layout options within TopOMetry: tSNE, MAP, MDE, PaCMAP and TriMAP.
+        [Laplace-Beltrami Operator](), and the 6 layout options within TopOMetry: tSNE, MAP, MDE, PaCMAP, TriMAP,
+         and NCVis.
 
         Parameters
         ----------

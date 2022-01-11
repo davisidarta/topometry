@@ -41,8 +41,8 @@ dataset = fetch_20newsgroups(subset='all',
                              shuffle=True, random_state=42)
 ```
 
-    CPU times: user 260 ms, sys: 16 ms, total: 276 ms
-    Wall time: 336 ms
+    CPU times: user 261 ms, sys: 46.7 ms, total: 307 ms
+    Wall time: 391 ms
 
 
 
@@ -177,8 +177,8 @@ word_doc_matrix = vectorizer.fit_transform(dataset.data)
 embedding = umap.UMAP(n_components=2, metric='hellinger').fit(word_doc_matrix)
 ```
 
-    CPU times: user 3min 27s, sys: 5.55 s, total: 3min 33s
-    Wall time: 45.3 s
+    CPU times: user 3min 27s, sys: 5.39 s, total: 3min 33s
+    Wall time: 1min 7s
 
 
 
@@ -215,7 +215,7 @@ emb_db_diff_map = tg.MAP() # by default computes a spectral initialisation
 ```
 
     Computing neighborhood graph...
-     Base kNN graph computed in 3.418954 (sec)
+     Base kNN graph computed in 8.535140 (sec)
     Building topological basis...using diffusion model.
 
 
@@ -223,11 +223,11 @@ emb_db_diff_map = tg.MAP() # by default computes a spectral initialisation
       warnings.warn("No knee/elbow found")
 
 
-     Topological basis fitted with multiscale self-adaptive diffusion maps in 2.843612 (sec)
+     Topological basis fitted with multiscale self-adaptive diffusion maps in 4.803387 (sec)
         Building topological graph...
-         Topological `diff` graph extracted in = 0.983984 (sec)
+         Topological `diff` graph extracted in = 1.875015 (sec)
              Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...
-             Optimized MAP embedding in = 16.711213 (sec)
+             Optimized MAP embedding in = 24.982344 (sec)
 
 
 Please note that, for the simplicity of this tutorial, we want to keep the figure style constant. Thus, we'll continue to use the UMAP plotting function, and will only update the coordinates of the points so that they correspond to those we just computed with TopOMetry.
@@ -240,15 +240,15 @@ t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
 ```
 
 
+    
+![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_22_0.png)
+    
+
+
+
 ```python
 
 ```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_23_0.png)
-    
-
 
 Beyond separating known categories, this plot gives us insights in their relationships (i.g. atheism and religion topics connected at the lower left), this plot tells us more about the poorly separated topics. Apparently, these categories hold defined subcategories within them.
 
@@ -263,7 +263,11 @@ emb_db_ncvis = tg.NCVis()
 emb_db_mde = tg.MDE()
 ```
 
-             Obtained TriMAP embedding in = 53.506121 (sec)
+             Obtained PaCMAP embedding in = 90.969480 (sec)
+             Obtained TriMAP embedding in = 78.697911 (sec)
+             Obtained tSNE embedding in = 117.070226 (sec)
+             Obtained NCVis embedding in = 7.062480 (sec)
+             Obtained MDE embedding in = 56.139197 (sec)
 
 
 PaCMAP
@@ -330,14 +334,33 @@ MDE
 
 
 ```python
+db_diff_mde = tg.MDE(snapshot_every=5, mem_size=1,  n_epochs=6000, init=tg.SpecLayout)
+tg.MDE_problem.play(savepath= '20NewsGroups_db_diff_MDE.gif', marker_size=0.5, color_by=hover_df['category'],  figsize_inches=(8,8), axis_limits=[-12, 12])
+```
+
+             Obtained MDE embedding in = 18.463227 (sec)
+
+
+
+      0%|          | 0/6 [00:00<?, ?it/s]
+
+
+
+    
+![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_36_2.png)
+    
+
+
+
+```python
 embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_mde
+embedding_topometry.embedding_ = db_diff_mde
 t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
 ```
 
 
     
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_36_0.png)
+![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_37_0.png)
     
 
 
