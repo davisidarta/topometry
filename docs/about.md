@@ -18,6 +18,6 @@ visualizations to obtain further insight from data. You can also use TopOMetry t
 by using its dimensionality reduced bases to compute k-nearest-neighbors instead of PCA, or its topological graphs as
 affinity matrices for other algorithms.
 
-![TopOMetry in a glance](img/Sup_Fig1_TopOMetry_Models_Without_MultiTopOGraph.png)
+![TopOMetry in a glance](img/TopOGraph_models.png)
 
 TopOMetry was developed by [Davi Sidarta-Oliveira](https://twitter.com/davisidarta).

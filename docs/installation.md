@@ -40,9 +40,10 @@ If your CPU supports advanced instructions, we recommend you install nmslib sepa
 ```
 pip3 install --no-binary :all: nmslib
 ```
-Then, you can install TopOMetry and its other requirements with pip:
+Then, you can install TopOMetry and its other requirements with pip. These include default data science libraries 
+and some layout methods.
 ```
-pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde
+pip3 install numpy pandas annoy scipy numba torch scikit-learn kneed pymde trimap pacmap multicoretsne ncvis
 ```
 ```
 pip3 install topometry
