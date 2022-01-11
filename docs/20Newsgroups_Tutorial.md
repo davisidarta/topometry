@@ -1,6 +1,6 @@
 # Using TopOMetry for document embedding
 
-    This tutorial reproduces an UMAP example on the [20 newsgroups dataset](http://qwone.com/~jason/20Newsgroups/) for document embedding, and compares its results to those of TopOMetry models. The 20 newsgroups dataset is a collection of forum posts, labelled by topic. The task here is to represent this high-dimensional information in a comprehensive visualization in which news within the same topic end up close together, and different topics get separated from each other. By the end of this tutorial, we'll see TopOMetry recoveries a lot of substructure that was missed by UMAP. This is possible by first harnessing topological information, and then using different layout methods to visualize and interpret it.
+This tutorial reproduces an UMAP example on the [20 newsgroups dataset](http://qwone.com/~jason/20Newsgroups/) for document embedding, and compares its results to those of TopOMetry models. The 20 newsgroups dataset is a collection of forum posts, labelled by topic. The task here is to represent this high-dimensional information in a comprehensive visualization in which news within the same topic end up close together, and different topics get separated from each other. By the end of this tutorial, we'll see TopOMetry recoveries a lot of substructure that was missed by UMAP. This is possible by first harnessing topological information, and then using different layout methods to visualize and interpret it.
 
 Load required libraries:
 
@@ -332,6 +332,7 @@ t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
 
 MDE
 
+With MDE, we can also visualize the optimization process of the graph layout.
 
 ```python
 db_diff_mde = tg.MDE(snapshot_every=5, mem_size=1,  n_epochs=6000, init=tg.SpecLayout)
