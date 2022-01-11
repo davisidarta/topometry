@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es5",
+    "sourceMap": true,
+    "experimentalDecorators": true
+  },
+  "files": [
+    "gulpfile",
+    "main",
+    "Lyricfier",
+    "render/plugins/MusicMatch",
+    "render/plugins/SearchLyrics",
+    "render/plugins/SearchWikia",
+    "render/Searcher.ts",
+    "render/NormalizeTitles.ts",
+    "render/LyricfierRender.ts",
+    "render/SettingsRender.ts",
+    "render/SongRender.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

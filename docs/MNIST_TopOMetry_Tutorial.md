@@ -1,8 +1,8 @@
 # Quick-start with the MNIST digits dataset
 
-    This tutorial covers a quick-start with TopOMetry using the MNIST handwritten digits dataset. This is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into latent orthogonal bases and to visualize comprehensive layouts of this data.
+This tutorial covers a quick-start with TopOMetry using the MNIST handwritten digits dataset. This is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into latent orthogonal bases and to visualize comprehensive layouts of this data.
     
-    First, we'll load some libraries:
+First, we'll load some libraries:
 
 
 ```python
@@ -14,10 +14,11 @@ from scipy.sparse import csr_matrix
 import topo as tp
 from sklearn.datasets import load_digits
 from matplotlib import pyplot as plt
-%matplotlib inline
+import matplotlib
+matplotlib.use('TkAgg')
 ```
 
-    Next, we'll load the MNIST handwritten digits dataset from scikit-learn:
+Next, we'll load the MNIST handwritten digits dataset from scikit-learn:
 
 
 ```python
@@ -28,12 +29,12 @@ digits = load_digits()
 data = csr_matrix(digits.data)
 ```
 
-    Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopOMetry to coordinate analyses between the multiple other classes available in the library. The TopOGraph can learn similarities, new orthogonal bases and affinity graphs with any pairwise combination of three algorithms: Diffusion Maps, Continuous-k-Nearest Neighbors and fuzzy simplicial sets, rendering 9 model options (3 bases x 3 graphs). By default, the TopOGraph runs the 'diffusion' basis and the 'diff' graph.  
+Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopOMetry to coordinate analyses between the multiple other classes available in the library. The TopOGraph can learn similarities, new orthogonal bases and affinity graphs with any pairwise combination of three algorithms: Diffusion Maps, Continuous-k-Nearest Neighbors and fuzzy simplicial sets, rendering 9 model options (3 bases x 3 graphs). By default, the TopOGraph runs the 'diffusion' basis and the 'diff' graph.  
 
 
 ```python
 # Set up a TopOGraph object:
-tg = tp.TopOGraph(n_jobs=12, n_eigs=20)
+tg = tp.TopOGraph(n_jobs=12, base_knn=30, graph_knn=30)
 
 # Fit a topological orthogonal basis:
 tg.fit(data)
@@ -43,25 +44,22 @@ db_diff_graph = tg.transform()
 ```
 
     Computing neighborhood graph...
-     Base kNN graph computed in 0.192627 (sec)
+     Base kNN graph computed in 0.327524 (sec)
     Building topological basis...using diffusion model.
-     Topological basis fitted with multiscale self-adaptive diffusion maps in 0.555791 (sec)
+     Topological basis fitted with multiscale self-adaptive diffusion maps in 5.381607 (sec)
         Building topological graph...
-         Topological `diff` graph extracted in = 0.152692 (sec)
+         Topological `diff` graph extracted in = 0.457535 (sec)
 
 
-    /home/davi/.local/lib/python3.9/site-packages/kneed/knee_locator.py:304: UserWarning: No knee/elbow found
-      warnings.warn("No knee/elbow found")
+We'll perform the first visualization with [PaCMAP](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled 
+Manifold Approximation and Projection) , one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
 
-
-(http://jmlr.org/papers/v22/20-1061.html) , one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
-
-* MAP (Manifold Approximation and Projection)[] - a lighter (UMAP)[] with looser assumptions
-* tSNE (t-Stochasthic Neighborhood Embedding)[] - a classic of visualization
-* MDE (Minimum Distortion Embedding)[] - the ultimate swiss-army knife for graph layout optimization
-* TriMAP[] - dimensionality reduction using triplets
-* NCVis (Noise Contrastive Visualization)[] - for blazing fast performance
-* PaCMAP (Pairwise-Controlled Manifold Approximation and Projection)[] - for global/local balanced embeddings
+* MAP (Manifold Approximation and Projection) - a lighter 
+[UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
+* [tSNE](https://github.com/DmitryUlyanov/Multicore-TSNE) (t-Stochasthic Neighborhood Embedding) - a classic of visualization, with parallelization
+* [MDE](https://github.com/cvxgrp/pymde) (Minimum Distortion Embedding) - the ultimate swiss-army knife for graph layout optimization
+* [TriMAP](https://github.com/eamid/trimap) - dimensionality reduction using triplets
+* [NCVis](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - for blazing fast performance
 
 For this tutorial, we'll first visualize the graph layout with PaCMAP:
 
@@ -79,7 +77,7 @@ db_PaCMAP = tg.PaCMAP(num_iters=1000, distance='angular')
       elif Yinit == "random":
 
 
-             Obtained PaCMAP embedding in = 106.948818 (sec)
+             Obtained PaCMAP embedding in = 148.994418 (sec)
 
 
 
@@ -110,10 +108,11 @@ emb_db_diff_map = tg.MAP()
 emb_db_diff_mde = tg.MDE()
 ```
 
-             Obtained TriMAP embedding in = 47.268870 (sec)
-             Obtained tSNE embedding in = 12.291106 (sec)
-             Optimized MAP embedding in = 14.215852 (sec)
-             Obtained MDE embedding in = 3.011959 (sec)
+             Obtained TriMAP embedding in = 40.621682 (sec)
+             Obtained tSNE embedding in = 12.994221 (sec)
+             Obtained NCVis embedding in = 3.997455 (sec)
+             Optimized MAP embedding in = 22.084571 (sec)
+             Obtained MDE embedding in = 103.949019 (sec)
 
 
 
@@ -214,61 +213,4 @@ plt.title('db_diff_MDE projection of the Digits dataset', fontsize=12)
     
 
 
-We can also quantify how much each method preserves global and local structure:
-
-
-```python
-results = tp.pipes.eval_models_layouts(tg, data, bases=['diffusion'], graphs=['diff'],
-                                       layouts=['MAP', 'tSNE', 'PaCMAP', 'TriMAP', 'MDE', 'NCVis'])
-```
-
-    Computing scores...
-    Computing PCA for comparison...
-    Computing UMAP...
-    Computing default tSNE...
-    Computing default PaCMAP...
-
-
-    /home/davi/.local/lib/python3.9/site-packages/pacmap/pacmap.py:383: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
-      if Yinit is None or Yinit == "pca":
-    /home/davi/.local/lib/python3.9/site-packages/pacmap/pacmap.py:389: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
-      elif Yinit == "random":
-
-
-    Computing default TriMAP...
-    Computing default MDE...
-    Computing default NCVis...
-
-
-
-    ---------------------------------------------------------------------------
-
-    TypeError                                 Traceback (most recent call last)
-
-    /tmp/ipykernel_71762/2342656512.py in <module>
-    ----> 1 results = tp.pipes.eval_models_layouts(tg, data, bases=['diffusion'], graphs=['diff'],
-          2                                        layouts=['MAP', 'tSNE', 'PaCMAP', 'TriMAP', 'MDE', 'NCVis'])
-
-
-    ~/.local/lib/python3.9/site-packages/topo/pipes.py in eval_models_layouts(TopOGraph, X, bases, graphs, layouts)
-        610 
-        611         import ncvis
-    --> 612         ncvis_emb = ncvis.NCVis(distance=TopOGraph.graph_metric,
-        613                                 n_neighbors=TopOGraph.graph_knn, n_jobs=TopOGraph.n_jobs)
-        614         ncvis_pca, ncvis_lap = global_scores(X, ncvis_emb, n_dim=TopOGraph.n_eigs)
-
-
-    wrapper/ncvis.pyx in ncvis.NCVis.__init__()
-
-
-    TypeError: __init__() got an unexpected keyword argument 'n_jobs'
-
-
-
-```python
-plot_layouts_scores = results[2]
-```
-
-That's it for this tutorial! I hope TopOMetry can be useful for your work!
-
-Of course, you're now wondering: 
+That's it for this tutorial!

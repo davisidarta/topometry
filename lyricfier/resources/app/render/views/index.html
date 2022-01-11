@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:v-on="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta charset="UTF-8">
+        <title>Lyricfier</title>
+        <link type="text/css" rel="stylesheet" href="../css/main.css" media="screen">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+        <LyricfierRender></LyricfierRender>
+        <script type="text/javascript" src="../../node_modules/jquery/dist/jquery.min.js"></script>
+        <script>
+            const LyricfierRender = require('../LyricfierRender');
+            const lyrics = new LyricfierRender({
+                el: 'LyricfierRender'
+            });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+.idea/
+typings/
+*.js
+*.map
+.vscode/
