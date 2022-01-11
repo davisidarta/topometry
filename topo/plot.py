@@ -146,7 +146,7 @@ def draw_simple_ellipse(position, width, height, angle,
                         alpha=0.1, color=None):
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
-    width, height = np.sqrt(width + 1e-6), np.sqrt(height + 1e-6)
+    width, height = np.sqrt(width + 10e-8), np.sqrt(height + 10e-8)
     # Draw the Ellipse
     for nsig in np.linspace(from_size, to_size, n_ellipses):
         ax.add_patch(Ellipse(position, nsig * width, nsig * height,
@@ -167,6 +167,7 @@ def gaussian_potential(emb, dims=[2, 3, 4],
                             ax, n_ellipses=1,
                             color=colors[labels[i]],
                             from_size=1.0, to_size=1.0, alpha=0.01)
+
     ax.scatter(emb.T[0],
                emb.T[1],
                cmap=cmap,
@@ -283,7 +284,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True):
         return fig
 
 
-def plot_layouts_scores(layouts_scores, return_plot=True):
+def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8)):
     keys = layouts_scores.keys()
     values = layouts_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -300,7 +301,7 @@ def plot_layouts_scores(layouts_scores, return_plot=True):
         r_vals.append(val[2])
         t_vals.append(val[3])
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=figsize)
     fig.suptitle('Layouts scores:')
     ax1.bar(keys, pca_vals, color=k_color)
     ax1.set_title('PCA loss')
