@@ -1,6 +1,6 @@
 # The `TopOGraph` class
 
-::: topo.topograph.TopOGraph
+::: topo.TopOGraph
     handler: python
     selection:
       members:
