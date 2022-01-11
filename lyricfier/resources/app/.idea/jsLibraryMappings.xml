@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="JavaScriptLibraryMappings">
+    <file url="file://$PROJECT_DIR$" libraries="{lyricfier/node_modules}" />
+    <file url="file://$PROJECT_DIR$/build/lyricfier-linux-ia32/resources/app" libraries="{lyricfier/build/lyricfier-linux-ia32/resources/app/node_modules}" />
+    <file url="file://$PROJECT_DIR$/build/lyricfier-mas-x64/lyricfier.app/Contents/Resources/app" libraries="{lyricfier/build/lyricfier-mas-x64/lyricfier.app/Contents/Resources/app/node_modules}" />
+    <file url="file://$PROJECT_DIR$/build/lyricfier-win32-ia32/resources/app" libraries="{lyricfier/build/lyricfier-win32-ia32/resources/app/node_modules}" />
+  </component>
+</project>

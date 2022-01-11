@@ -1,0 +1,8 @@
+{
+  "resolution": "main",
+  "tree": {
+    "src": "https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/c3a7af70a9dbc18e77b221de4d6dfddb3a27ede4/electron-json-storage/electron-json-storage.d.ts",
+    "raw": "registry:dt/electron-json-storage#0.0.0+20160324000215",
+    "typings": "https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/c3a7af70a9dbc18e77b221de4d6dfddb3a27ede4/electron-json-storage/electron-json-storage.d.ts"
+  }
+}
