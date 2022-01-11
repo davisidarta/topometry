@@ -1,6 +1,6 @@
 site_name: TopOMetry Documentation
 nav:
-    - Welcome!: about.md
+    - Welcome!: index.md
     - Installation: installation.md
     - The TopOGraph class: topograph.md
     - Quick-start: quickstart.md

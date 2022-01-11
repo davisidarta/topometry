@@ -79,7 +79,7 @@ def TopoMDE(data, *tg_kwargs, **mde_kwargs):
     return tg, emb
 
 
-def global_scores(data, emb, k=5, metric='euclidean', n_dim=30, n_jobs=12):
+def global_scores(data, emb, k=5, metric='euclidean', n_dim=10, n_jobs=12):
     global_scores_pca = global_score_pca(data, emb, n_dim)
     global_scores_lap = global_score_laplacian(data, emb, k=k, metric=metric, n_jobs=n_jobs)
     return global_scores_pca, global_scores_lap
@@ -604,17 +604,16 @@ def eval_models_layouts(TopOGraph, X,
         mde_on_pca_scores = mde_on_pca_pca, mde_on_pca_lap, mde_on_pca_r, mde_on_pca_t
         layout_scores['MDE_on_PCA'] = np.absolute(mde_on_pca_scores)
 
-    if eval_NCVis:
-        if TopOGraph.verbosity >= 1:
-            print('Computing default NCVis...')
-
-        import ncvis
-        ncvis_emb = ncvis.NCVis(distance=TopOGraph.graph_metric,
-                                n_neighbors=TopOGraph.graph_knn)
-        ncvis_pca, ncvis_lap = global_scores(X, ncvis_emb, n_dim=TopOGraph.n_eigs)
-        ncvis_r, ncvis_t = local_scores(TopOGraph.base_knn_graph, ncvis_emb, data_is_graph=True)
-        ncvis_scores = ncvis_pca, ncvis_lap, ncvis_r, ncvis_t
-        layout_scores['NCVis'] = np.absolute(ncvis_scores)
+    # if eval_NCVis:
+    #     if TopOGraph.verbosity >= 1:
+    #         print('Computing default NCVis...')
+    #
+    #     import ncvis
+    #     ncvis_emb = ncvis.NCVis(n_neighbors=TopOGraph.graph_knn)
+    #     ncvis_pca, ncvis_lap = global_scores(X, ncvis_emb, n_dim=TopOGraph.n_eigs)
+    #     ncvis_r, ncvis_t = local_scores(TopOGraph.base_knn_graph, ncvis_emb, data_is_graph=True)
+    #     ncvis_scores = ncvis_pca, ncvis_lap, ncvis_r, ncvis_t
+    #     layout_scores['NCVis'] = np.absolute(ncvis_scores)
 
     if eval_db:
         embedding_scores['DB'] = np.absolute(db_scores)
