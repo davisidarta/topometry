@@ -1,8 +1,8 @@
 # Quick-start with the MNIST digits dataset
 
-This tutorial covers a quick-start with TopOMetry using the MNIST handwritten digits dataset. This is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into latent orthogonal bases and to visualize comprehensive layouts of this data.
+    This tutorial covers a quick-start with TopOMetry using the MNIST handwritten digits dataset. This is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into latent orthogonal bases and to visualize comprehensive layouts of this data.
     
-First, we'll load some libraries:
+    First, we'll load some libraries:
 
 
 ```python
@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 ```
 
-Next, we'll load the MNIST handwritten digits dataset from scikit-learn:
+    Next, we'll load the MNIST handwritten digits dataset from scikit-learn:
 
 
 ```python
@@ -29,7 +29,7 @@ digits = load_digits()
 data = csr_matrix(digits.data)
 ```
 
-Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopOMetry to coordinate analyses between the multiple other classes available in the library. The TopOGraph can learn similarities, new orthogonal bases and affinity graphs with any pairwise combination of three algorithms: Diffusion Maps, Continuous-k-Nearest Neighbors and fuzzy simplicial sets, rendering 9 model options (3 bases x 3 graphs). By default, the TopOGraph runs the 'diffusion' basis and the 'diff' graph.  
+    Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopOMetry to coordinate analyses between the multiple other classes available in the library. The TopOGraph can learn similarities, new orthogonal bases and affinity graphs with any pairwise combination of three algorithms: Diffusion Maps, Continuous-k-Nearest Neighbors and fuzzy simplicial sets, rendering 9 model options (3 bases x 3 graphs). By default, the TopOGraph runs the 'diffusion' basis and the 'diff' graph.  
 
 
 ```python
@@ -51,15 +51,14 @@ db_diff_graph = tg.transform()
          Topological `diff` graph extracted in = 0.457535 (sec)
 
 
-We'll perform the first visualization with [PaCMAP](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled 
-Manifold Approximation and Projection) , one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
+(http://jmlr.org/papers/v22/20-1061.html) , one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
 
-* MAP (Manifold Approximation and Projection) - a lighter 
-[UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
-* [tSNE](https://github.com/DmitryUlyanov/Multicore-TSNE) (t-Stochasthic Neighborhood Embedding) - a classic of visualization, with parallelization
-* [MDE](https://github.com/cvxgrp/pymde) (Minimum Distortion Embedding) - the ultimate swiss-army knife for graph layout optimization
-* [TriMAP](https://github.com/eamid/trimap) - dimensionality reduction using triplets
-* [NCVis](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - for blazing fast performance
+* MAP (Manifold Approximation and Projection)[] - a lighter (UMAP)[] with looser assumptions
+* tSNE (t-Stochasthic Neighborhood Embedding)[] - a classic of visualization
+* MDE (Minimum Distortion Embedding)[] - the ultimate swiss-army knife for graph layout optimization
+* TriMAP[] - dimensionality reduction using triplets
+* NCVis (Noise Contrastive Visualization)[] - for blazing fast performance
+* PaCMAP (Pairwise-Controlled Manifold Approximation and Projection)[] - for global/local balanced embeddings
 
 For this tutorial, we'll first visualize the graph layout with PaCMAP:
 
