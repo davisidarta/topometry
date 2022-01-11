@@ -6,9 +6,6 @@ to visualize them with different layout optimization algorithms. The main object
 the [Laplace-Beltrami Operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator), a natural way to describe
 data geometry and its high-dimensional topology.
 
-For more context on TopOMetry and its usefulness to extract phenotypic topology from
-[single-cell data](https://en.wikipedia.org/wiki/Single-cell_analysis), see [our manuscript]().
-
 TopOMetry main class is the [TopOGraph](https://topometry.readthedocs.io/en/latest/topograph/) object. In a ``TopOGraph``, topological metrics are recovered with diffusion
 harmonics, fuzzy simplicial sets or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or
 fuzzy or continuous versions of Laplacian Eigenmaps). On top of these basis, new graphs can be learned using k-nearest-neighbors
