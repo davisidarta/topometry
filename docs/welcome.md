@@ -1,4 +1,4 @@
-# About
+# Welcome to TopOMetry
 
 TopOMetry (Topologically Optimized geoMetry) is a high-level python library to explore data topology.
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
