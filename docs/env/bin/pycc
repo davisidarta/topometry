@@ -1,3 +1,0 @@
-#!/home/davi/Desktop/topometry_docs/docs/env/bin/python3
-from numba.pycc import main
-main()
