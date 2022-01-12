@@ -36,7 +36,9 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
+    'sphinx.'
 ]
+autodoc_mock_imports = ['pandas', 'numba']
 
 autosummary_generate = True
 
