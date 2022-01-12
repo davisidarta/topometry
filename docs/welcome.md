@@ -17,4 +17,8 @@ affinity matrices for other algorithms.
 
 ![TopOMetry in a glance](img/TopOGraph_models.png)
 
+Check the tutorials on [MNIST](MNIST_TopOMetry_Tutorial.md), [NLP](20Newsgroups_Tutorial.md)
+and [non-euclidean embedding with single-cell data](Non_euclidean_tutorial.md).
+
+
 TopOMetry was developed by [Davi Sidarta-Oliveira](https://twitter.com/davisidarta).
