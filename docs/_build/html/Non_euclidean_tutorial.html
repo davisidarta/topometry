@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Embedding to non-euclidean spaces with MAP &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Using TopOMetry for document embedding" href="20Newsgroups_Tutorial.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> TopOMetry
+            <img src="_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick-start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="topograph.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MNIST_TopOMetry_Tutorial.html">MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="20Newsgroups_Tutorial.html">Using TopOMetry for document embedding</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Embedding to non-euclidean spaces with MAP</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Non_euclidean_tutorial.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="embedding-to-non-euclidean-spaces-with-map">
+<h1>Embedding to non-euclidean spaces with MAP<a class="headerlink" href="#embedding-to-non-euclidean-spaces-with-map" title="Permalink to this headline"></a></h1>
+<p>MAP (Manifold Approximation and Projection) is a lighter version of <span class="xref myst">UMAP</span> with fewer assumptions. It simply performs the graph layout by optimizing the cross-entropy between a similarity graph and an initialized lower-dimensional embedding. The graph construction is conveniently done by TopOMetry with a loose manifold hypothesis only, and a spectral initialization is used.</p>
+<p>For the purpose of data visualization, data is usually embedded to a 2D euclidean plane. However, several new studies (particularly involving single-cell data) have pointed to the utility of performing non-euclidean embeddings<span class="xref myst">1</span><span class="xref myst">2</span><span class="xref myst">3</span>. Here, we show how to perform these embeddings within TopOMetry. Please note this heavily relies on previous work on UMAP.</p>
+<p>The key idea is we can embed data to any given space, such as spheres, hyperboloids and so on.</p>
+<p>Let’s begin installing some basic packages</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Installing some basic packages</span>
+<span class="c1">#!pip install scanpy pymde umap-learn hnswlib nmslib kneed</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Installing TopOMetry</span>
+<span class="c1">#!pip install -i https://test.pypi.org/simple/ topometry==0.0.2.7</span>
+</pre></div>
+</div>
+<p>To start we’ll load the usual selection of libraries.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">scanpy</span> <span class="k">as</span> <span class="nn">sc</span>
+<span class="kn">import</span> <span class="nn">topo</span> <span class="k">as</span> <span class="nn">tp</span>
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+</pre></div>
+</div>
+<p>As a test dataset we’ll use 3k PBMCs from a Healthy Donor from 10X Genomics available in Scanpy and <a class="reference external" href="https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/pbmc3k">here.</a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">adata</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">pbmc3k_processed</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>After loading the data and QC, instead using PCA for linear dimensional reduction, we can use the TopOGraph to make a diffusion-based dimensional reduction to get the topological metrics that we gonna use on the graphs.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start up the TopOGraph</span>
+<span class="n">tg</span> <span class="o">=</span> <span class="n">tp</span><span class="o">.</span><span class="n">TopOGraph</span><span class="p">(</span><span class="n">n_jobs</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> 
+                         <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                         <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;hnwslib&#39;</span><span class="p">,</span>
+                         <span class="n">plot_spectrum</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">tg</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">adata</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+<span class="n">db_diff_graph</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">transform</span><span class="p">()</span>
+
+<span class="c1"># Minimize divergence between the diffusion basis and diffusion graph</span>
+<span class="n">emb_db_diff_map</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">()</span> <span class="c1"># by default computes a spectral initialisation</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Computing neighborhood graph...
+ Base kNN graph computed in 0.968834 (sec)
+Building topological basis...using diffusion model.
+ Topological basis fitted with multiscale self-adaptive diffusion maps in 4.009577 (sec)
+    Building topological graph...
+     Topological `diff` graph extracted in = 0.295706 (sec)
+         Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...
+         Optimized MAP embedding in = 20.603816 (sec)
+</pre></div>
+</div>
+<p>Now we need to find the clusters. Here we clustering with leiden</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sc</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">leiden</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">adjacency</span><span class="o">=</span><span class="n">db_diff_graph</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">labels</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;leiden&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="plane-embeddings">
+<h2>Plane embeddings<a class="headerlink" href="#plane-embeddings" title="Permalink to this headline"></a></h2>
+<p>TopOMetry works fine even for a plane embedding, the most common and useful way to plot the data.</p>
+<p>We can plot a scatter plotting on a 2D euclidean space.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">emb_db_diff_map</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_14_0.png" /></p>
+<p>Or a 3D euclidean space.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">init</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">spectral_layout</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">db_diff_emb3d</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">scatter3d</span><span class="p">(</span><span class="n">db_diff_emb3d</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 20.987566 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_16_1.png" /></p>
+</section>
+<section id="spherical-embeddings">
+<h2>Spherical embeddings<a class="headerlink" href="#spherical-embeddings" title="Permalink to this headline"></a></h2>
+<p>Now properly using non-euclidean spaces, we can plot the data as dots on a spherical space.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">db_diff_sphere</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">output_metric</span><span class="o">=</span><span class="s1">&#39;haversine&#39;</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">sphere</span><span class="p">(</span><span class="n">db_diff_sphere</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 19.752358 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_19_1.png" /></p>
+</section>
+<section id="torus-embedding">
+<h2>Torus embedding<a class="headerlink" href="#torus-embedding" title="Permalink to this headline"></a></h2>
+<p>TopOMetry allows you to vizualize your data as a donut, using for this the torus embedding. Torus is a surface of revolution generated by revolving a circle in three-dimensional space about an axis. See more details <a class="reference external" href="https://en.wikipedia.org/wiki/Torus">here</a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">db_diff_map_torus</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">output_metric</span><span class="o">=</span><span class="s1">&#39;torus&#39;</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">toroid</span><span class="p">(</span><span class="n">db_diff_map_torus</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 21.147666 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_22_1.png" /></p>
+</section>
+<section id="hyperboloid-embedding">
+<h2>Hyperboloid embedding<a class="headerlink" href="#hyperboloid-embedding" title="Permalink to this headline"></a></h2>
+<p>On data science, it is common to use hyperbolic representations for hierarchical data (see more context <a class="reference external" href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6534139/">here</a>). We can use the <a class="reference external" href="https://en.wikipedia.org/wiki/Hyperboloid_model">hyperboloid model</a> on TopOMetry to see our data in this space:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">db_diff_map_hyper</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">output_metric</span><span class="o">=</span><span class="s1">&#39;hyperboloid&#39;</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">hyperboloid</span><span class="p">(</span><span class="n">db_diff_map_hyper</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 21.251467 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_25_1.png" /></p>
+<p>Usually, we use <a class="reference external" href="https://en.wikipedia.org/wiki/Poincar%C3%A9_disk_model">Poincare’s disk model</a> for this visualization of a hyperbolic space.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">init</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">spectral_layout</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">db_diff_map_poinc</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span> <span class="n">output_metric</span><span class="o">=</span><span class="s1">&#39;poincare&#39;</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">poincare</span><span class="p">(</span><span class="n">db_diff_map_poinc</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 20.321989 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_27_1.png" /></p>
+</section>
+<section id="gaussian-energy-embedding">
+<h2>Gaussian-Energy Embedding<a class="headerlink" href="#gaussian-energy-embedding" title="Permalink to this headline"></a></h2>
+<p>Unlike most approaches that represent nodes as point vectors in a low-dimensional continuous space, each one with exact values for every parameter, we can embed each node as a Gaussian distribution and infers a probability distribution over all possible values, allowing us to capture uncertainty about the representation. See more context <a class="reference external" href="https://doi.org/10.1371/journal.pcbi.1008186">here</a> and <a class="reference external" href="https://arxiv.org/abs/1707.03815v4">here</a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">init</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">spectral_layout</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">db_dmap_gauss</span> <span class="o">=</span> <span class="n">tg</span><span class="o">.</span><span class="n">MAP</span><span class="p">(</span><span class="n">output_metric</span><span class="o">=</span><span class="s1">&#39;gaussian_energy&#39;</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span> <span class="n">n_components</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">tp</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">gaussian_potential</span><span class="p">(</span><span class="n">db_dmap_gauss</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>         Optimized MAP embedding in = 21.749812 (sec)
+</pre></div>
+</div>
+<p><img alt="png" src="_images/Non_euclidean_tutorial_30_1.png" /></p>
+</section>
+<section id="that-was-it-for-this-tutorial">
+<h2>That was it for this tutorial!<a class="headerlink" href="#that-was-it-for-this-tutorial" title="Permalink to this headline"></a></h2>
+<p>Let me know if you have any questions. Feel free to <a class="reference external" href="https://github.com/davisidarta/topometry/issues">open an issue</a> or to contact me via davisidarta&#64;fcm.unicamp.br.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="20Newsgroups_Tutorial.html" class="btn btn-neutral float-left" title="Using TopOMetry for document embedding" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
