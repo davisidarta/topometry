@@ -15,7 +15,7 @@ data geometry and its high-dimensional topology.
     welcome
     installation
     quickstart
-    topograph
+    api
     MNIST_TopOMetry_Tutorial
     20Newsgroups_Tutorial
     Non_euclidean_tutorial
