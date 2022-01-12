@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Using TopOMetry for document embedding &mdash; TopOMetry  documentation</title>
+  <title>Example 2: using TopOMetry for document embedding &mdash; TopOMetry  documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
     <link rel="shortcut icon" href="_static/favicon.ico"/>
@@ -19,8 +19,8 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Embedding to non-euclidean spaces with MAP" href="Non_euclidean_tutorial.html" />
-    <link rel="prev" title="MNIST digits" href="MNIST_TopOMetry_Tutorial.html" /> 
+    <link rel="next" title="Example 3: embedding to non-euclidean spaces with MAP" href="Non_euclidean_tutorial.html" />
+    <link rel="prev" title="Example 1: MNIST digits" href="MNIST_TopOMetry_Tutorial.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -44,9 +44,9 @@
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation and dependencies</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick-start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="API.html">API</a></li>
-<li class="toctree-l1"><a class="reference internal" href="MNIST_TopOMetry_Tutorial.html">MNIST digits</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Using TopOMetry for document embedding</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MNIST_TopOMetry_Tutorial.html">Example 1: MNIST digits</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Example 2: using TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Non_euclidean_tutorial.html">Example 3: embedding to non-euclidean spaces with MAP</a></li>
 </ul>
 
         </div>
@@ -63,7 +63,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>Using TopOMetry for document embedding</li>
+      <li>Example 2: using TopOMetry for document embedding</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/20Newsgroups_Tutorial.md.txt" rel="nofollow"> View page source</a>
       </li>
@@ -73,8 +73,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section class="tex2jax_ignore mathjax_ignore" id="using-topometry-for-document-embedding">
-<h1>Using TopOMetry for document embedding<a class="headerlink" href="#using-topometry-for-document-embedding" title="Permalink to this headline"></a></h1>
+  <section class="tex2jax_ignore mathjax_ignore" id="example-2-using-topometry-for-document-embedding">
+<h1>Example 2: using TopOMetry for document embedding<a class="headerlink" href="#example-2-using-topometry-for-document-embedding" title="Permalink to this headline"></a></h1>
 <p>This tutorial reproduces an UMAP example on the <a class="reference external" href="http://qwone.com/~jason/20Newsgroups/">20 newsgroups dataset</a> for document embedding, and compares its results to those of TopOMetry models. The 20 newsgroups dataset is a collection of forum posts, labelled by topic. The task here is to represent this high-dimensional information in a comprehensive visualization in which news within the same topic end up close together, and different topics get separated from each other. By the end of this tutorial, we’ll see TopOMetry recoveries a lot of substructure that was missed by UMAP. This is possible by first harnessing topological information, and then using different layout methods to visualize and interpret it.</p>
 <p>Load required libraries:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
@@ -346,8 +346,8 @@ We do not claim any of particular model to perform better or worse beforehand - 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="MNIST_TopOMetry_Tutorial.html" class="btn btn-neutral float-left" title="MNIST digits" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="Non_euclidean_tutorial.html" class="btn btn-neutral float-right" title="Embedding to non-euclidean spaces with MAP" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="MNIST_TopOMetry_Tutorial.html" class="btn btn-neutral float-left" title="Example 1: MNIST digits" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Non_euclidean_tutorial.html" class="btn btn-neutral float-right" title="Example 3: embedding to non-euclidean spaces with MAP" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

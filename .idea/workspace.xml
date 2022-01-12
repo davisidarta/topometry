@@ -24,33 +24,107 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="- Further cleaning and fixing previous commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/api.doctree" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/setup.doctree" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/api.rst.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/setup.rst.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/api.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/diffusor.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/diffusor.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/installation.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/installation.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/py-modindex.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/quickstart.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/quickstart.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/requirements.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/requirements.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/search.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/search.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/setup.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/welcome.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/welcome.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/api.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/API.rst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/setup.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/API.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/API.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/MNIST_TopOMetry_Tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MNIST_TopOMetry_Tutorial.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/Non_euclidean_tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/Non_euclidean_tutorial.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/20Newsgroups_Tutorial.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/API.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/MNIST_TopOMetry_Tutorial.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/Non_euclidean_tutorial.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/diffusor.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/installation.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/quickstart.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/requirements.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/welcome.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/.buildinfo" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/API.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_16_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_22_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_28_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_30_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_32_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_34_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_36_2.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/20Newsgroups_Tutorial_37_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_11_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_12_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_13_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_14_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_15_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/MNIST_TopOMetry_Tutorial_8_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_14_0.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_16_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_19_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_22_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_25_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_27_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/Non_euclidean_tutorial_30_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/TopOGraph_models.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/20Newsgroups_Tutorial.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/API.rst.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/MNIST_TopOMetry_Tutorial.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/Non_euclidean_tutorial.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/diffusor.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/installation.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/quickstart.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/requirements.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/welcome.md.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/basic.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/badge_only.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/Roboto-Slab-Bold.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/Roboto-Slab-Bold.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/Roboto-Slab-Regular.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/Roboto-Slab-Regular.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/fontawesome-webfont.eot" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/fontawesome-webfont.svg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/fontawesome-webfont.ttf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/fontawesome-webfont.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/fontawesome-webfont.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-bold-italic.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-bold-italic.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-bold.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-bold.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-normal-italic.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-normal-italic.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-normal.woff" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/fonts/lato-normal.woff2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/theme.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/doctools.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/documentation_options.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/favicon.ico" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/file.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/jquery-3.5.1.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/jquery.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/badge_only.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/html5shiv-printshiv.min.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/html5shiv.min.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/theme.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/language_data.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/logo.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/minus.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/plus.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/pygments.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/searchtools.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/underscore-1.13.1.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/underscore.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/diffusor.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/installation.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/quickstart.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/requirements.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/search.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/welcome.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/diffusor.md" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -102,7 +176,7 @@
       <updated>1636342423331</updated>
       <workItem from="1636342424871" duration="2003000" />
       <workItem from="1641948899408" duration="35000" />
-      <workItem from="1641949513541" duration="10502000" />
+      <workItem from="1641949513541" duration="11355000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
