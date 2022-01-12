@@ -56,8 +56,8 @@ class TopOGraph(TransformerMixin):
      The topological graphs can then be visualized with multiple existing layout optimization tools.
 
     Parameters
-     ----------
-     base_knn : int (optional, default 10).
+    ----------
+    base_knn : int (optional, default 10).
          Number of k-nearest-neighbors to use when learning topological similarities.
          Consider this as a calculus discretization threshold (i.e. approaches zero in the limit of large data).
          For practical purposes, the minimum amount of samples one would
@@ -65,37 +65,37 @@ class TopOGraph(TransformerMixin):
          and maps, to a certain extend, however at the expense of fine-grained resolution. In practice, the default
          value of 10 performs quite well for almost all cases.
 
-     graph_knn : int (optional, default 10).
+    graph_knn : int (optional, default 10).
          Similar to `base_knn`, but used to learning topological graphs from the orthogonal bases.
 
-     n_eigs : int (optional, default 100).
+    n_eigs : int (optional, default 100).
          Number of components to compute. This number can be iterated to get different views
          from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
          computed diffusion components. If `basis` is set to `continuous` or `fuzzy`, this is the number of
          computed eigenvectors of the Laplacian Eigenmaps from the learned topological similarities.
 
-     basis : 'diffusion', 'continuous' or 'fuzzy' (optional, default 'diffusion').
+    basis : 'diffusion', 'continuous' or 'fuzzy' (optional, default 'diffusion').
          Which topological basis model to learn from data. If `diffusion`, performs an optimized, anisotropic, adaptive
          diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
          topological basis with Laplacian Eigenmaps. If `fuzzy`, computes affinities using
          fuzzy simplicial sets, and a topological basis with Laplacian Eigenmaps.
 
-     graph : 'diff', 'cknn' or 'fuzzy' (optional, default 'diff').
+    graph : 'diff', 'cknn' or 'fuzzy' (optional, default 'diff').
          Which topological graph model to learn from the built basis. If 'diff', uses a second-order diffusion process
          to learn similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors
          algorithm. If 'fuzzy', builds a fuzzy simplicial set graph from the active basis. All these
          algorithms learn graph-oriented topological metrics from the learned basis.
 
     backend : str 'hnwslib', 'nmslib' or 'sklearn' (optional, default 'nmslib').
-        Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
-        are 'hnwslib'  and 'nmslib' (default). For exact nearest-neighbors, use 'sklearn'.
+         Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
+         are 'hnwslib'  and 'nmslib' (default). For exact nearest-neighbors, use 'sklearn'.
 
-            * If using 'nmslib', a sparse
-            csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
+         * If using 'nmslib', a sparse
+         csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
 
-            * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
-            is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
-            TopOMetry and will automatically convert the input array to csr_matrix for performance.
+         * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
+         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
+         TopOMetry and will automatically convert the input array to csr_matrix for performance.
 
 
 
@@ -103,7 +103,7 @@ class TopOGraph(TransformerMixin):
         Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
         'cosine'. Users are encouraged to explore different metrics, such as 'euclidean' and 'inner_product'.
         The 'hamming' and 'jaccard' distances are also available for string vectors.
-        Accepted metrics include NMSLib*, HNSWlib** and sklearn metrics. Some examples are:
+        Accepted metrics include NMSLib(*), HNSWlib(**) and sklearn(***) metrics. Some examples are:
 
         -'sqeuclidean' (**, ***)
 
@@ -128,6 +128,7 @@ class TopOGraph(TransformerMixin):
         -'jaccard' (*)
 
         -'jansen-shan' (*)
+
 
 
     graph_metric : str (optional, default 'cosine').
@@ -177,8 +178,6 @@ class TopOGraph(TransformerMixin):
              *The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
 
              *Those, followed by '_adaptive', apply the neighborhood expansion process.
-
-
 
          The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
          If you're not obtaining good separation between expect clusters, consider changing this to 'decay_adaptive' with
@@ -2336,25 +2335,24 @@ class TopOGraph(TransformerMixin):
 
         Master function to easily run all combinations of possible bases and graphs that approximate the
         [Laplace-Beltrami Operator](), and the 6 layout options within TopOMetry: tSNE, MAP, MDE, PaCMAP, TriMAP,
-         and NCVis.
+        and NCVis.
 
         Parameters
         ----------
         X : np.ndarray or scipy.sparse.csr_matrix
-            Data matrix.
+         Data matrix.
         n_components : int (optional, default 2).
-            Number of components for visualization.
+         Number of components for visualization.
         bases : str (optional, default ['diffusion', 'continuous','fuzzy'])
-            Which bases to compute. Defaults to all. To run only one or two bases, set it to
-            ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
+         Which bases to compute. Defaults to all. To run only one or two bases, set it to
+         ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
         graphs : str (optional, default ['diff', 'cknn','fuzzy'])
-            Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
-            ['fuzzy', 'diff'] or ['cknn'], for exemple.
+         Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
+         ['fuzzy', 'diff'] or ['cknn'], for exemple.
         layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis'])
-            Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
-             TriMAP and NCVis.
-            To run only one or two layouts, set it to
-            ['tSNE', 'MAP'] or ['PaCMAP'], for exemple.
+         Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
+         TriMAP and NCVis. To run only one or two layouts, set it to
+         ['tSNE', 'MAP'] or ['PaCMAP'], for exemple.
 
         Returns
         -------
