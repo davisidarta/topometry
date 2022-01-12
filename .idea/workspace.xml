@@ -24,7 +24,33 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="- Further cleaning and fixing previous commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/api.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/setup.doctree" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/api.rst.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/setup.rst.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/api.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/diffusor.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/diffusor.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/installation.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/installation.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/py-modindex.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/quickstart.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/quickstart.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/requirements.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/requirements.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/search.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/search.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/setup.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/welcome.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/welcome.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/api.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/API.rst" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/setup.rst" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,7 +102,7 @@
       <updated>1636342423331</updated>
       <workItem from="1636342424871" duration="2003000" />
       <workItem from="1641948899408" duration="35000" />
-      <workItem from="1641949513541" duration="9608000" />
+      <workItem from="1641949513541" duration="10502000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
