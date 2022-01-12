@@ -51,17 +51,18 @@ db_diff_graph = tg.transform()
          Topological `diff` graph extracted in = 0.457535 (sec)
 
 
-(http://jmlr.org/papers/v22/20-1061.html) , one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
+We'll perform the first visualization with [PaCMAP](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled 
+Manifold Approximation and Projection), one of the 6 graph layout optimization methods included in TopOMetry. The other methods are:
 
-* MAP (Manifold Approximation and Projection)[] - a lighter (UMAP)[] with looser assumptions
-* tSNE (t-Stochasthic Neighborhood Embedding)[] - a classic of visualization
-* MDE (Minimum Distortion Embedding)[] - the ultimate swiss-army knife for graph layout optimization
-* TriMAP[] - dimensionality reduction using triplets
-* NCVis (Noise Contrastive Visualization)[] - for blazing fast performance
-* PaCMAP (Pairwise-Controlled Manifold Approximation and Projection)[] - for global/local balanced embeddings
+* MAP (Manifold Approximation and Projection) - a lighter 
+[UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
+* [MDE](https://github.com/cvxgrp/pymde) (Minimum Distortion Embedding) - the ultimate swiss-army knife for graph layout optimization
+* [tSNE](https://github.com/DmitryUlyanov/Multicore-TSNE) (t-Stochasthic Neighborhood Embedding) - a classic of visualization, with parallelization
+* [TriMAP](https://github.com/eamid/trimap) - dimensionality reduction using triplets
+* [NCVis](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - for blazing fast performance
 
-For this tutorial, we'll first visualize the graph layout with PaCMAP:
-
+MAP and MDE use the topological graphs obtained by `TopOGraph.transform()`, while other methods need only
+the topological basis learned with `TopOGraph.fit()`.
 
 ```python
 db_PaCMAP = tg.PaCMAP(num_iters=1000, distance='angular')
