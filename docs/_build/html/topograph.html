@@ -452,6 +452,31 @@ TriMAP and NCVis. To run only one or two layouts, set it to
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="topo.TopOGraph.scree_plot">
+<span class="sig-name descname"><span class="pre">scree_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">basis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_eigs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'knee'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">curve</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.TopOGraph.scree_plot" title="Permalink to this definition"></a></dt>
+<dd><p>Visualize the scree plot of information entropy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>basis</strong> (<em>str</em><em> (</em><em>optional</em><em>, </em><em>default None</em><em>)</em><em></em>) – If <cite>None</cite>, will use the default basis. Otherwise, uses the specified basis
+(must be ‘diffusion’, ‘continuous’ or ‘fuzzy’).</p></li>
+<li><p><strong>use_eigs</strong> (<em>int</em><em> or </em><em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'knee'</em><em>)</em><em></em>) – Number of eigenvectors to use. If ‘max’, expands to the maximum number of positive eigenvalues
+(reach of numerical precision), else to the maximum amount of computed components.
+If ‘knee’, uses Kneedle to find an optimal cutoff point, and expands it by <code class="docutils literal notranslate"><span class="pre">expansion</span></code>.
+If ‘comp_gap’, tries to find a discrete eigengap from the computation process.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em><em></em>) – Controls verbosity</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>A nice plot.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="topo.TopOGraph.spectral_layout">
 <span class="sig-name descname"><span class="pre">spectral_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.TopOGraph.spectral_layout" title="Permalink to this definition"></a></dt>
 <dd><p>Performs a multicomponent spectral layout of the data and the target similarity matrix.</p>
