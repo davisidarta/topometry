@@ -663,10 +663,8 @@ class TopOGraph(TransformerMixin):
 
     def scree_plot(self, basis=None, use_eigs='knee', curve=None, verbose=False):
         """
-
         Visualize the scree plot of information entropy.
 
-        ----------
         Parameters
         ----------
         `basis` : str (optional, default None).
@@ -684,7 +682,6 @@ class TopOGraph(TransformerMixin):
 
         Returns
         -------
-
         A nice plot.
 
         """
