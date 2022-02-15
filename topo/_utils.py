@@ -5,6 +5,32 @@ from typing import Union, Callable, Optional
 from weakref import WeakSet
 
 
+def save_pkl(TopOGraph, wd=None, filename='topograph.pkl'):
+    try:
+        import pickle
+    except ImportError:
+        return (print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`'))
+
+    if wd is None:
+        import os
+        wd = os.getcwd()
+    with open(wd + filename, 'wb') as output:
+        pickle.dump(TopOGraph, output, pickle.HIGHEST_PROTOCOL)
+    return print('TopOGraph saved at ' + wd + filename)
+
+def read_pkl(wd=None, filename='topograph.pkl'):
+    try:
+        import pickle
+    except ImportError:
+        return (print('Pickle is needed for loading the TopOGraph. Please install it with `pip3 install pickle`'))
+
+    if wd is None:
+        import os
+        wd = os.getcwd()
+    with open(wd + filename, 'rb') as input:
+        TopOGraph = pickle.load(input)
+    return TopOGraph
+
 def _one_of_ours(obj, root: str):
     return (
         hasattr(obj, "__name__")

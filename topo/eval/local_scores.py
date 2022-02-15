@@ -1,7 +1,6 @@
 from scipy.spatial.distance import squareform
 from scipy.stats import spearmanr, kendalltau
 from scipy.sparse.csgraph import shortest_path
-from scipy.sparse import csr_matrix
 import numpy as np
 
 def geodesic_distance(data, method='J', unweighted=False):
@@ -28,10 +27,3 @@ def knn_kendall_tau(data_graph, embedding_graph, path_method='J', subsample_idx=
     embedded_dist = geodesic_distance(embedding_graph, method=path_method, unweighted=unweighted)
     res, _ = kendalltau(squareform(geodesic_dist), squareform(embedded_dist))
     return res
-
-
-
-
-
-
-
