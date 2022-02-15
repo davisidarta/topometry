@@ -33,7 +33,7 @@ def multiscale(res,
 
     """
     use_eigs = len(np.array(res["EigenValues"])) // 2
-    evals = np.absolute(np.array(res["EigenValues"]))
+    evals = np.array(res["EigenValues"])
     kn = KneeLocator(range(0, len(evals)), evals, S=30,
                      curve='convex', direction='decreasing', interp_method='polynomial')
     if n_eigs == 'knee':

@@ -216,7 +216,7 @@ def create_density_plot(X, Y, embedding):
             Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
     return Z / Z.sum()
 
-def plot_bases_scores(bases_scores, return_plot=True):
+def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8)):
     keys = bases_scores.keys()
     values = bases_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -233,7 +233,7 @@ def plot_bases_scores(bases_scores, return_plot=True):
         r_vals.append(val[2])
         t_vals.append(val[3])
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=figsize)
     fig.suptitle('Bases scores:')
     ax1.bar(keys, pca_vals, color=k_color)
     ax1.set_title('PCA loss')
@@ -254,7 +254,7 @@ def plot_bases_scores(bases_scores, return_plot=True):
     else:
         return fig
 
-def plot_graphs_scores(graphs_scores, return_plot=True):
+def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8)):
     keys = graphs_scores.keys()
     values = graphs_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -268,7 +268,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True):
         r_vals.append(val[0])
         t_vals.append(val[1])
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     fig.suptitle('Graphs scores:')
     ax1.bar(keys, r_vals, color=k_color)
     ax1.set_title('Geodesic Spearman R')
