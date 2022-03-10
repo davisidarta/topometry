@@ -56,6 +56,8 @@
 <p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="topograph.html">TopOGraph</a></li>
+</ul>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="autoapi/index.html">API Reference</a></li>
 </ul>
 
@@ -85,6 +87,8 @@
              
   <section class="tex2jax_ignore mathjax_ignore" id="quick-start">
 <h1>Quick-start<a class="headerlink" href="#quick-start" title="Permalink to this headline"></a></h1>
+<section id="fitting-a-topograph">
+<h2>Fitting a TopOGraph<a class="headerlink" href="#fitting-a-topograph" title="Permalink to this headline"></a></h2>
 <p>Now, let’s go through a quick start!</p>
 <p>TopOMetry functions around</p>
 <p>From a  data matrix <code class="docutils literal notranslate"><span class="pre">data</span></code> (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a <code class="docutils literal notranslate"><span class="pre">TopoGraph</span></code>
@@ -116,6 +120,36 @@ TriMAP, PaCMAP and MDE.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">tp</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">map_emb</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="computing-several-models-at-once">
+<h2>Computing several models at once<a class="headerlink" href="#computing-several-models-at-once" title="Permalink to this headline"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">tp.pipes.</span></code></p>
+<p>If no parameters are passed to the <code class="docutils literal notranslate"><span class="pre">ct.topological_workflow</span></code> function, by default it will perform the following steps:</p>
+<p>Similarity learning and building a topological orthogonal basis with:</p>
+<ul class="simple">
+<li><p>Multiscale diffusion maps (<code class="docutils literal notranslate"><span class="pre">'diffusion'</span></code>)</p></li>
+<li><p>Fuzzy simplicial sets Laplacian Eigenmaps (‘fuzzy’);</p></li>
+</ul>
+<p>Learn the topological graphs with:</p>
+<ul class="simple">
+<li><p>Diffusion harmonics (<code class="docutils literal notranslate"><span class="pre">'diff'</span></code>)</p></li>
+<li><p>Fuzzy simplicial sets</p></li>
+</ul>
+<p>Next, it performs layout optimization with:</p>
+<ul class="simple">
+<li><p>MAP - a lighter <a class="reference external" href="https://umap-learn.readthedocs.io/en/latest/index.html">UMAP</a> with looser assumptions;</p>
+<ul>
+<li><p>MAP and MDE use information both from the orthogonal basis and the topological graph</p></li>
+</ul>
+</li>
+<li><p><a class="reference external" href="https://web.stanford.edu/~boyd/papers/min_dist_emb.html">MDE</a> - a general framework for graph layout optimization, with the pyMDE implementation.</p></li>
+<li><p><a class="reference external" href="https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf?fbclid=IwA">t-SNE</a> - using <a class="reference external" href="https://github.com/DmitryUlyanov/Multicore-TSNE">MulticoreTSNE</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/2012.04456">PaCMAP</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/1910.00204">TriMAP</a></p></li>
+<li><p><a class="reference external" href="https://dl.acm.org/doi/abs/10.1145/3366423.3380061">NCVis</a></p></li>
+</ul>
+<p>And perform layout optimization with</p>
+</section>
 </section>
 
 
