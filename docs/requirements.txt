@@ -7,3 +7,4 @@ sphinx
 myst-parser
 sphinx-rtd-theme
 sphinx-autoapi
+topometry
