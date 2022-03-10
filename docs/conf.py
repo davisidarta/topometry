@@ -11,10 +11,20 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
+from os import path
 import sys
-sys.path.insert(0, os.path.abspath('..'))
 
+sys.path.insert(0, path.abspath('./'))
+sys.path.insert(0, path.abspath('../../'))
+
+import topo as package
+
+pkg_name = package.__name__
+pkg_file = package.__file__
+pkg_version = str(package.__version__)
+pkg_location = path.dirname(path.dirname(pkg_file))
+
+autoapi_dirs = ['../../topometry']
 
 # -- Project information -----------------------------------------------------
 
@@ -30,7 +40,7 @@ github_version = 'master'
 # -- General configuration ---------------------------------------------------
 
 github_url = f'https://github.com/{github_user}/{github_repo}/'
-gh_page_url = f'https://{github_user}.github.io/{github_repo}/'
+gh_page_url = f'https://{github_repo}.readthedocs.io/'
 
 html_baseurl = gh_page_url
 html_context = {
@@ -97,7 +107,6 @@ autodoc_default_options = {
 
 # -- General default extension configuration ------------------------------
 
-
 # autodoc options
 autodoc_docstring_signature = True
 autodoc_inherit_docstrings = False
@@ -106,7 +115,6 @@ autodoc_typehints = 'none'
 
 autoapi_type = 'python'
 autoapi_generate_api_docs = True
-autoapi_dirs = ['../../topometry/topo']
 
 autodoc_default_options=["members"]
 
