@@ -85,7 +85,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv',
                     'docs/run_livereload.py', 'docs/conf.py', 'base/dists.py',
                     'base/sparse.py', ]
 
-
+master_doc = 'index'
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
