@@ -19,8 +19,8 @@ MOCK_MODULES = [ 'numba']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
-sys.path.insert(0, path.abspath('./'))
-sys.path.insert(0, path.abspath('../../'))
+# sys.path.insert(0, path.abspath('./'))
+# sys.path.insert(0, path.abspath('../../'))
 
 import topo as package
 
@@ -81,7 +81,9 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv',
+                    'docs/run_livereload.py', 'docs/conf.py', 'base/dists.py',
+                    'base/sparse.py', ]
 
 
 # -- Options for HTML output -------------------------------------------------

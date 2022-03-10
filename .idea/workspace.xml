@@ -23,6 +23,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Improving docs">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/conf.py" beforeDir="false" afterPath="$PROJECT_DIR$/docs/conf.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -136,7 +137,7 @@
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
       <workItem from="1646775497747" duration="23658000" />
-      <workItem from="1646879239950" duration="16749000" />
+      <workItem from="1646879239950" duration="17587000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -285,7 +286,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646901017102</updated>
     </task>
-    <option name="localTasksCounter" value="22" />
+    <task id="LOCAL-00022" summary="Improving docs">
+      <created>1646901153972</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1646901153979</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
