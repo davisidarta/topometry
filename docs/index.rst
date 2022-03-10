@@ -13,7 +13,7 @@ data geometry and its high-dimensional topology.
     :titlesonly:
     :caption: Intro:
 
-    welcome
+    about
     installation
     quickstart
 
