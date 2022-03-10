@@ -2,7 +2,6 @@ from .ann import NMSlibTransformer
 
 try:
     import numba
-
     _have_numba = True
 except ImportError:
     _have_numba = False
