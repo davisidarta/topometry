@@ -26,7 +26,7 @@ data geometry and its high-dimensional topology.
     Non_euclidean_tutorial
 
 .. toctree::
-    :maxdepth: 4
+    :maxdepth: 2
     :caption: API Menu:
 
     topograph
