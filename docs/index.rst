@@ -18,8 +18,7 @@ data geometry and its high-dimensional topology.
     quickstart
 
 .. toctree::
-    :maxdepth: 2
-    :titlesonly:
+    :maxdepth: 3
     :caption: Tutorials:
 
     MNIST_TopOMetry_Tutorial
