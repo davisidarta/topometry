@@ -73,7 +73,6 @@ extensions = [
 #                         'torch', 'kneed', 'nmslib', 'hnswlib', 'pymde',
 #                         'pacmap', 'trimap', 'ncvis', 'multicoretsne']
 
-autosummary_generate = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -105,21 +104,8 @@ source_suffix = {
     '.md': 'markdown',
 }
 
-autodoc_default_options = {
-    'members': 'var1, var2',
-    'member-order': 'bysource',
-    'special-members': '__init__',
-    'undoc-members': False,
-    'exclude-members': '__weakref__'
-}
-
 # -- General default extension configuration ------------------------------
 
-# autodoc options
-autodoc_docstring_signature = True
-autodoc_inherit_docstrings = False
-autodoc_preserve_defaults = True
-autodoc_typehints = 'none'
 
 autoapi_type = 'python'
 autoapi_generate_api_docs = True
