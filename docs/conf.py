@@ -13,6 +13,12 @@
 #
 from os import path
 import sys
+import mock
+
+MOCK_MODULES = ['numpy', 'scipy', 'matplotlib', 'matplotlib', 'numba', 'scikit-learn', 'kneed',
+                'pandas', 'torch', 'pandas']
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
 
 sys.path.insert(0, path.abspath('./'))
 sys.path.insert(0, path.abspath('../../'))

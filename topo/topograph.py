@@ -2785,3 +2785,21 @@ class TopOGraph(TransformerMixin):
     #     return plt.show()
     # def plot_runtime_comparison(self):
 
+    def write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True):
+        try:
+            import pickle
+        except ImportError:
+            return (print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`'))
+
+        if TopOGraph.base_nbrs_class is not None:
+            if remove_base_class:
+                TopOGraph.base_nbrs_class = None
+            else:
+                return(print('TopOGraph cannot be pickled with the NMSlib base class.'))
+
+        if wd is None:
+            import os
+            wd = os.getcwd()
+        with open(wd + filename, 'wb') as output:
+            pickle.dump(TopOGraph, output, pickle.HIGHEST_PROTOCOL)
+        return print('TopOGraph saved at ' + wd + filename)
