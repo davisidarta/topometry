@@ -5,7 +5,7 @@ from typing import Union, Callable, Optional
 from weakref import WeakSet
 
 
-def write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True):
+def save_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True):
     try:
         import pickle
     except ImportError:
