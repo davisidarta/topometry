@@ -29,7 +29,7 @@ pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
 
-autoapi_dirs = ['../../../topometry']
+autoapi_dirs = ['../../topometry']
 
 # -- Project information -----------------------------------------------------
 
@@ -66,6 +66,7 @@ extensions = [
     # 'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
+    'sphinx.ext.intersphinx',
     'autoapi.extension',
 ]
 # autodoc_mock_imports = ['pandas', 'numba', 'matplotlib',
