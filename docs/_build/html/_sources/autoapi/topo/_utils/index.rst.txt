@@ -13,7 +13,7 @@ Functions
 
 .. autoapisummary::
 
-   topo._utils.save_pkl
+   topo._utils.write_pkl
    topo._utils.read_pkl
    topo._utils._one_of_ours
    topo._utils.descend_classes_and_funcs
@@ -22,7 +22,7 @@ Functions
 
 
 
-.. py:function:: save_pkl(TopOGraph, wd=None, filename='topograph.pkl')
+.. py:function:: write_pkl(TopOGraph, wd=None, filename='topograph.pkl')
 
 
 .. py:function:: read_pkl(wd=None, filename='topograph.pkl')

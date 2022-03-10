@@ -33,25 +33,6 @@ Functions
 
 .. autoapisummary::
 
-   topo.tpgraph.euclidean
-   topo.tpgraph.standardised_euclidean
-   topo.tpgraph.cosine
-   topo.tpgraph.correlation
-   topo.tpgraph.bray_curtis
-   topo.tpgraph.canberra
-   topo.tpgraph.chebyshev
-   topo.tpgraph.manhattan
-   topo.tpgraph.mahalanobis
-   topo.tpgraph.minkowski
-   topo.tpgraph.dice
-   topo.tpgraph.hamming
-   topo.tpgraph.jaccard
-   topo.tpgraph.kulsinski
-   topo.tpgraph.rogers_tanimoto
-   topo.tpgraph.russellrao
-   topo.tpgraph.sokal_michener
-   topo.tpgraph.sokal_sneath
-   topo.tpgraph.yule
    topo.tpgraph.cknn_graph
    topo.tpgraph.kNN
    topo.tpgraph.multiscale
@@ -65,93 +46,6 @@ Attributes
 
    topo.tpgraph._have_hnswlib
    topo.tpgraph._have_nmslib
-
-
-.. py:function:: euclidean(x, y)
-
-   Standard euclidean distance.
-   ..math::
-       D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
-
-
-.. py:function:: standardised_euclidean(x, y, sigma=_mock_ones)
-
-   Euclidean distance standardised against a vector of standard
-       deviations per coordinate.
-       ..math::
-           D(x, y) = \sqrt{\sum_i
-   rac{(x_i - y_i)**2}{v_i}}
-
-
-
-.. py:function:: cosine(x, y)
-
-
-.. py:function:: correlation(x, y)
-
-
-.. py:function:: bray_curtis(x, y)
-
-
-.. py:function:: canberra(x, y)
-
-
-.. py:function:: chebyshev(x, y)
-
-   Chebyshev or l-infinity distance.
-   ..math::
-       D(x, y) = \max_i |x_i - y_i|
-
-
-.. py:function:: manhattan(x, y)
-
-   Manhattan, taxicab, or l1 distance.
-   ..math::
-       D(x, y) = \sum_i |x_i - y_i|
-
-
-.. py:function:: mahalanobis(x, y, vinv=_mock_identity)
-
-
-.. py:function:: minkowski(x, y, p=2)
-
-   Minkowski distance.
-       ..math::
-           D(x, y) = \left(\sum_i |x_i - y_i|^p
-   ight)^{
-   rac{1}{p}}
-       This is a general distance. For p=1 it is equivalent to
-       manhattan distance, for p=2 it is Euclidean distance, and
-       for p=infinity it is Chebyshev distance. In general it is better
-       to use the more specialised functions for those distances.
-
-
-
-.. py:function:: dice(x, y)
-
-
-.. py:function:: hamming(x, y)
-
-
-.. py:function:: jaccard(x, y)
-
-
-.. py:function:: kulsinski(x, y)
-
-
-.. py:function:: rogers_tanimoto(x, y)
-
-
-.. py:function:: russellrao(x, y)
-
-
-.. py:function:: sokal_michener(x, y)
-
-
-.. py:function:: sokal_sneath(x, y)
-
-
-.. py:function:: yule(x, y)
 
 
 .. py:function:: cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf', include_self=False, is_sparse=True, return_instance=False)

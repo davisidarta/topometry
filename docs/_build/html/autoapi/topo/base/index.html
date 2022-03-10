@@ -117,274 +117,97 @@
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sign" title="topo.base.sign"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sign</span></code></a>(a)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.euclidean" title="topo.base.euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">euclidean</span></code></a>(x, y)</p></td>
-<td><p>Standard euclidean distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.euclidean_grad" title="topo.base.euclidean_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">euclidean_grad</span></code></a>(x, y)</p></td>
-<td><p>Standard euclidean distance and its gradient.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.standardised_euclidean" title="topo.base.standardised_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">standardised_euclidean</span></code></a>(x, y, sigma=_mock_ones)</p></td>
-<td><p>Euclidean distance standardised against a vector of standard</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.standardised_euclidean_grad" title="topo.base.standardised_euclidean_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">standardised_euclidean_grad</span></code></a>(x, y, sigma=_mock_ones)</p></td>
-<td><p>Euclidean distance standardised against a vector of standard</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.manhattan" title="topo.base.manhattan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manhattan</span></code></a>(x, y)</p></td>
-<td><p>Manhattan, taxicab, or l1 distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.manhattan_grad" title="topo.base.manhattan_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manhattan_grad</span></code></a>(x, y)</p></td>
-<td><p>Manhattan, taxicab, or l1 distance with gradient.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.chebyshev" title="topo.base.chebyshev"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chebyshev</span></code></a>(x, y)</p></td>
-<td><p>Chebyshev or l-infinity distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.chebyshev_grad" title="topo.base.chebyshev_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chebyshev_grad</span></code></a>(x, y)</p></td>
-<td><p>Chebyshev or l-infinity distance with gradient.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.minkowski" title="topo.base.minkowski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">minkowski</span></code></a>(x, y, p=2)</p></td>
-<td><p>Minkowski distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.minkowski_grad" title="topo.base.minkowski_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">minkowski_grad</span></code></a>(x, y, p=2)</p></td>
-<td><p>Minkowski distance with gradient.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.poincare" title="topo.base.poincare"><code class="xref py py-obj docutils literal notranslate"><span class="pre">poincare</span></code></a>(u, v)</p></td>
-<td><p>Poincare distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.hyperboloid_grad" title="topo.base.hyperboloid_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hyperboloid_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.weighted_minkowski" title="topo.base.weighted_minkowski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">weighted_minkowski</span></code></a>(x, y, w=_mock_ones, p=2)</p></td>
-<td><p>A weighted version of Minkowski distance.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.weighted_minkowski_grad" title="topo.base.weighted_minkowski_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">weighted_minkowski_grad</span></code></a>(x, y, w=_mock_ones, p=2)</p></td>
-<td><p>A weighted version of Minkowski distance with gradient.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.mahalanobis" title="topo.base.mahalanobis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mahalanobis</span></code></a>(x, y, vinv=_mock_identity)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.mahalanobis_grad" title="topo.base.mahalanobis_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mahalanobis_grad</span></code></a>(x, y, vinv=_mock_identity)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.hamming" title="topo.base.hamming"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hamming</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.canberra" title="topo.base.canberra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canberra</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.canberra_grad" title="topo.base.canberra_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canberra_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.bray_curtis" title="topo.base.bray_curtis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bray_curtis</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.bray_curtis_grad" title="topo.base.bray_curtis_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bray_curtis_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.jaccard" title="topo.base.jaccard"><code class="xref py py-obj docutils literal notranslate"><span class="pre">jaccard</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.matching" title="topo.base.matching"><code class="xref py py-obj docutils literal notranslate"><span class="pre">matching</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.dice" title="topo.base.dice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dice</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.kulsinski" title="topo.base.kulsinski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">kulsinski</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.rogers_tanimoto" title="topo.base.rogers_tanimoto"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rogers_tanimoto</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.russellrao" title="topo.base.russellrao"><code class="xref py py-obj docutils literal notranslate"><span class="pre">russellrao</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sokal_michener" title="topo.base.sokal_michener"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sokal_michener</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sokal_sneath" title="topo.base.sokal_sneath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sokal_sneath</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.haversine" title="topo.base.haversine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">haversine</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.haversine_grad" title="topo.base.haversine_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">haversine_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.yule" title="topo.base.yule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">yule</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.cosine" title="topo.base.cosine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cosine</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.cosine_grad" title="topo.base.cosine_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cosine_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.correlation" title="topo.base.correlation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">correlation</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.hellinger" title="topo.base.hellinger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hellinger</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.hellinger_grad" title="topo.base.hellinger_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hellinger_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#id0" title="topo.base.approx_log_Gamma"><code class="xref py py-obj docutils literal notranslate"><span class="pre">approx_log_Gamma</span></code></a>(x)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#id9" title="topo.base.log_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_beta</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#id10" title="topo.base.log_single_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_single_beta</span></code></a>(x)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.ll_dirichlet" title="topo.base.ll_dirichlet"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ll_dirichlet</span></code></a>(data1, data2)</p></td>
-<td><p>The symmetric relative log likelihood of rolling data2 vs data1</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.symmetric_kl" title="topo.base.symmetric_kl"><code class="xref py py-obj docutils literal notranslate"><span class="pre">symmetric_kl</span></code></a>(x, y, z=1e-11)</p></td>
-<td><p>symmetrized KL divergence between two probability distributions</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.symmetric_kl_grad" title="topo.base.symmetric_kl_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">symmetric_kl_grad</span></code></a>(x, y, z=1e-11)</p></td>
-<td><p>symmetrized KL divergence and its gradient</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.correlation_grad" title="topo.base.correlation_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">correlation_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sinkhorn_distance" title="topo.base.sinkhorn_distance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sinkhorn_distance</span></code></a>(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.spherical_gaussian_energy_grad" title="topo.base.spherical_gaussian_energy_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spherical_gaussian_energy_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.diagonal_gaussian_energy_grad" title="topo.base.diagonal_gaussian_energy_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">diagonal_gaussian_energy_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.gaussian_energy_grad" title="topo.base.gaussian_energy_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gaussian_energy_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.spherical_gaussian_grad" title="topo.base.spherical_gaussian_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spherical_gaussian_grad</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.get_discrete_params" title="topo.base.get_discrete_params"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_discrete_params</span></code></a>(data, metric)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.categorical_distance" title="topo.base.categorical_distance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">categorical_distance</span></code></a>(x, y)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.hierarchical_categorical_distance" title="topo.base.hierarchical_categorical_distance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hierarchical_categorical_distance</span></code></a>(x, y, cat_hierarchy=[{}])</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.ordinal_distance" title="topo.base.ordinal_distance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ordinal_distance</span></code></a>(x, y, support_size=1.0)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.count_distance" title="topo.base.count_distance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">count_distance</span></code></a>(x, y, poisson_lambda=1.0, normalisation=1.0)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.levenshtein" title="topo.base.levenshtein"><code class="xref py py-obj docutils literal notranslate"><span class="pre">levenshtein</span></code></a>(x, y, normalisation=1.0, max_distance=20)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.parallel_special_metric" title="topo.base.parallel_special_metric"><code class="xref py py-obj docutils literal notranslate"><span class="pre">parallel_special_metric</span></code></a>(X, Y=None, metric=hellinger)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.chunked_parallel_special_metric" title="topo.base.chunked_parallel_special_metric"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chunked_parallel_special_metric</span></code></a>(X, Y=None, metric=hellinger, chunk_size=16)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.pairwise_special_metric" title="topo.base.pairwise_special_metric"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pairwise_special_metric</span></code></a>(X, Y=None, metric='hellinger', kwds=None)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.norm" title="topo.base.norm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">norm</span></code></a>(vec)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.norm" title="topo.base.norm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">norm</span></code></a>(vec)</p></td>
 <td><p>Compute the (standard l2) norm of a vector.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.arr_unique" title="topo.base.arr_unique"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_unique</span></code></a>(arr)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.arr_unique" title="topo.base.arr_unique"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_unique</span></code></a>(arr)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.arr_union" title="topo.base.arr_union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_union</span></code></a>(ar1, ar2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.arr_union" title="topo.base.arr_union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_union</span></code></a>(ar1, ar2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.arr_intersect" title="topo.base.arr_intersect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_intersect</span></code></a>(ar1, ar2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.arr_intersect" title="topo.base.arr_intersect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arr_intersect</span></code></a>(ar1, ar2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_sum" title="topo.base.sparse_sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sum</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_sum" title="topo.base.sparse_sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sum</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_diff" title="topo.base.sparse_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_diff</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_diff" title="topo.base.sparse_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_diff</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_mul" title="topo.base.sparse_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_mul</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_mul" title="topo.base.sparse_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_mul</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.general_sset_intersection" title="topo.base.general_sset_intersection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">general_sset_intersection</span></code></a>(indptr1, indices1, data1, indptr2, indices2, data2, result_row, result_col, result_val, right_complement=False, mix_weight=0.5)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.general_sset_intersection" title="topo.base.general_sset_intersection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">general_sset_intersection</span></code></a>(indptr1, indices1, data1, indptr2, indices2, data2, result_row, result_col, result_val, right_complement=False, mix_weight=0.5)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.general_sset_union" title="topo.base.general_sset_union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">general_sset_union</span></code></a>(indptr1, indices1, data1, indptr2, indices2, data2, result_row, result_col, result_val)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.general_sset_union" title="topo.base.general_sset_union"><code class="xref py py-obj docutils literal notranslate"><span class="pre">general_sset_union</span></code></a>(indptr1, indices1, data1, indptr2, indices2, data2, result_row, result_col, result_val)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_euclidean" title="topo.base.sparse_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_euclidean</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_euclidean" title="topo.base.sparse_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_euclidean</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_manhattan" title="topo.base.sparse_manhattan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_manhattan</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_manhattan" title="topo.base.sparse_manhattan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_manhattan</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_chebyshev" title="topo.base.sparse_chebyshev"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_chebyshev</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_chebyshev" title="topo.base.sparse_chebyshev"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_chebyshev</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_minkowski" title="topo.base.sparse_minkowski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_minkowski</span></code></a>(ind1, data1, ind2, data2, p=2.0)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_minkowski" title="topo.base.sparse_minkowski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_minkowski</span></code></a>(ind1, data1, ind2, data2, p=2.0)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_hamming" title="topo.base.sparse_hamming"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_hamming</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_hamming" title="topo.base.sparse_hamming"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_hamming</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_canberra" title="topo.base.sparse_canberra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_canberra</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_canberra" title="topo.base.sparse_canberra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_canberra</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_bray_curtis" title="topo.base.sparse_bray_curtis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_bray_curtis</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_bray_curtis" title="topo.base.sparse_bray_curtis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_bray_curtis</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_jaccard" title="topo.base.sparse_jaccard"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_jaccard</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_jaccard" title="topo.base.sparse_jaccard"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_jaccard</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_matching" title="topo.base.sparse_matching"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_matching</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_matching" title="topo.base.sparse_matching"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_matching</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_dice" title="topo.base.sparse_dice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_dice</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_dice" title="topo.base.sparse_dice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_dice</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_kulsinski" title="topo.base.sparse_kulsinski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_kulsinski</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_kulsinski" title="topo.base.sparse_kulsinski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_kulsinski</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_rogers_tanimoto" title="topo.base.sparse_rogers_tanimoto"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_rogers_tanimoto</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_rogers_tanimoto" title="topo.base.sparse_rogers_tanimoto"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_rogers_tanimoto</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_russellrao" title="topo.base.sparse_russellrao"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_russellrao</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_russellrao" title="topo.base.sparse_russellrao"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_russellrao</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_sokal_michener" title="topo.base.sparse_sokal_michener"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sokal_michener</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_sokal_michener" title="topo.base.sparse_sokal_michener"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sokal_michener</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_sokal_sneath" title="topo.base.sparse_sokal_sneath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sokal_sneath</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_sokal_sneath" title="topo.base.sparse_sokal_sneath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_sokal_sneath</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_cosine" title="topo.base.sparse_cosine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_cosine</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_cosine" title="topo.base.sparse_cosine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_cosine</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_hellinger" title="topo.base.sparse_hellinger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_hellinger</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_hellinger" title="topo.base.sparse_hellinger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_hellinger</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_correlation" title="topo.base.sparse_correlation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_correlation</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_correlation" title="topo.base.sparse_correlation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_correlation</span></code></a>(ind1, data1, ind2, data2, n_features)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#id0" title="topo.base.approx_log_Gamma"><code class="xref py py-obj docutils literal notranslate"><span class="pre">approx_log_Gamma</span></code></a>(x)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.approx_log_Gamma" title="topo.base.approx_log_Gamma"><code class="xref py py-obj docutils literal notranslate"><span class="pre">approx_log_Gamma</span></code></a>(x)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#id9" title="topo.base.log_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_beta</span></code></a>(x, y)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.log_beta" title="topo.base.log_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_beta</span></code></a>(x, y)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#id10" title="topo.base.log_single_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_single_beta</span></code></a>(x)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.log_single_beta" title="topo.base.log_single_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_single_beta</span></code></a>(x)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_ll_dirichlet" title="topo.base.sparse_ll_dirichlet"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_ll_dirichlet</span></code></a>(ind1, data1, ind2, data2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_ll_dirichlet" title="topo.base.sparse_ll_dirichlet"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_ll_dirichlet</span></code></a>(ind1, data1, ind2, data2)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -398,34 +221,19 @@
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base._mock_identity" title="topo.base._mock_identity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_mock_identity</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base._have_numba" title="topo.base._have_numba"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_have_numba</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base._mock_cost" title="topo.base._mock_cost"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_mock_cost</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base._mock_identity" title="topo.base._mock_identity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_mock_identity</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base._mock_ones" title="topo.base._mock_ones"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_mock_ones</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_named_distances" title="topo.base.sparse_named_distances"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_named_distances</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.named_distances" title="topo.base.named_distances"><code class="xref py py-obj docutils literal notranslate"><span class="pre">named_distances</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_need_n_features" title="topo.base.sparse_need_n_features"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_need_n_features</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.named_distances_with_gradients" title="topo.base.named_distances_with_gradients"><code class="xref py py-obj docutils literal notranslate"><span class="pre">named_distances_with_gradients</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.DISCRETE_METRICS" title="topo.base.DISCRETE_METRICS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DISCRETE_METRICS</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.SPECIAL_METRICS" title="topo.base.SPECIAL_METRICS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SPECIAL_METRICS</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.sparse_named_distances" title="topo.base.sparse_named_distances"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_named_distances</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.sparse_need_n_features" title="topo.base.sparse_need_n_features"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sparse_need_n_features</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#topo.base.SPARSE_SPECIAL_METRICS" title="topo.base.SPARSE_SPECIAL_METRICS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SPARSE_SPECIAL_METRICS</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.base.SPARSE_SPECIAL_METRICS" title="topo.base.SPARSE_SPECIAL_METRICS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SPARSE_SPECIAL_METRICS</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -568,473 +376,13 @@ and returns a transformed version of <cite>X</cite>.</p>
 </dd></dl>
 
 <dl class="py data">
+<dt class="sig sig-object py" id="topo.base._have_numba">
+<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">_have_numba</span></span><em class="property"><span class="w"> </span><span class="pre">=</span> <span class="pre">True</span></em><a class="headerlink" href="#topo.base._have_numba" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
 <dt class="sig sig-object py" id="topo.base._mock_identity">
 <span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">_mock_identity</span></span><a class="headerlink" href="#topo.base._mock_identity" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base._mock_cost">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">_mock_cost</span></span><a class="headerlink" href="#topo.base._mock_cost" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base._mock_ones">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">_mock_ones</span></span><a class="headerlink" href="#topo.base._mock_ones" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.sign">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">sign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.sign" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.euclidean">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.euclidean" title="Permalink to this definition"></a></dt>
-<dd><p>Standard euclidean distance.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sqrt</span><span class="p">{</span>\<span class="n">sum_i</span> <span class="p">(</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span><span class="p">}</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.euclidean_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">euclidean_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.euclidean_grad" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>Standard euclidean distance and its gradient.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>D(x, y) = sqrt{sum_i (x_i - y_i)^2}</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>rac{dD(x, y)}{dx} = (x_i - y_i)/D(x,y)</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.standardised_euclidean">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">standardised_euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_ones</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.standardised_euclidean" title="Permalink to this definition"></a></dt>
-<dd><dl>
-<dt>Euclidean distance standardised against a vector of standard</dt><dd><p>deviations per coordinate.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sqrt</span><span class="p">{</span>\<span class="n">sum_i</span>
-</pre></div>
-</div>
-</dd>
-</dl>
-<p>rac{(x_i - y_i)**2}{v_i}}</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.standardised_euclidean_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">standardised_euclidean_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_ones</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.standardised_euclidean_grad" title="Permalink to this definition"></a></dt>
-<dd><dl>
-<dt>Euclidean distance standardised against a vector of standard</dt><dd><p>deviations per coordinate with gradient.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sqrt</span><span class="p">{</span>\<span class="n">sum_i</span>
-</pre></div>
-</div>
-</dd>
-</dl>
-<p>rac{(x_i - y_i)**2}{v_i}}</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.manhattan">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">manhattan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.manhattan" title="Permalink to this definition"></a></dt>
-<dd><p>Manhattan, taxicab, or l1 distance.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sum_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.manhattan_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">manhattan_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.manhattan_grad" title="Permalink to this definition"></a></dt>
-<dd><p>Manhattan, taxicab, or l1 distance with gradient.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sum_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.chebyshev">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">chebyshev</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.chebyshev" title="Permalink to this definition"></a></dt>
-<dd><p>Chebyshev or l-infinity distance.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">max_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.chebyshev_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">chebyshev_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.chebyshev_grad" title="Permalink to this definition"></a></dt>
-<dd><p>Chebyshev or l-infinity distance with gradient.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">max_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.minkowski">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">minkowski</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.minkowski" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>Minkowski distance.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>D(x, y) = left(sum_i <a href="#id1"><span class="problematic" id="id2">|</span></a>x_i - y_i|^p</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>ight)^{
-rac{1}{p}}</p>
-<blockquote>
-<div><p>This is a general distance. For p=1 it is equivalent to
-manhattan distance, for p=2 it is Euclidean distance, and
-for p=infinity it is Chebyshev distance. In general it is better
-to use the more specialised functions for those distances.</p>
-</div></blockquote>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.minkowski_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">minkowski_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.minkowski_grad" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>Minkowski distance with gradient.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>D(x, y) = left(sum_i <a href="#id3"><span class="problematic" id="id4">|</span></a>x_i - y_i|^p</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>ight)^{
-rac{1}{p}}</p>
-<blockquote>
-<div><p>This is a general distance. For p=1 it is equivalent to
-manhattan distance, for p=2 it is Euclidean distance, and
-for p=infinity it is Chebyshev distance. In general it is better
-to use the more specialised functions for those distances.</p>
-</div></blockquote>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.poincare">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">poincare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">u</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.poincare" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>Poincare distance.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>delta (u, v) = 2</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>rac{ lVert  u - v
-Vert ^2 }{ ( 1 - lVert  u
-Vert ^2 ) ( 1 - lVert  v
-Vert ^2 ) }</p>
-<blockquote>
-<div><p>D(x, y) = operatorname{arcosh} (1+delta (u,v))</p>
-</div></blockquote>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.hyperboloid_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">hyperboloid_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.hyperboloid_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.weighted_minkowski">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">weighted_minkowski</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_ones</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.weighted_minkowski" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>A weighted version of Minkowski distance.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>D(x, y) = left(sum_i w_i <a href="#id5"><span class="problematic" id="id6">|</span></a>x_i - y_i|^p</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>ight)^{
-rac{1}{p}}</p>
-<blockquote>
-<div><p>If weights w_i are inverse standard deviations of data in each dimension
-then this represented a standardised Minkowski distance (and is
-equivalent to standardised Euclidean distance for p=1).</p>
-</div></blockquote>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.weighted_minkowski_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">weighted_minkowski_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_ones</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.weighted_minkowski_grad" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>A weighted version of Minkowski distance with gradient.</dt><dd><dl class="simple">
-<dt>..math::</dt><dd><p>D(x, y) = left(sum_i w_i <a href="#id7"><span class="problematic" id="id8">|</span></a>x_i - y_i|^p</p>
-</dd>
-</dl>
-</dd>
-</dl>
-<p>ight)^{
-rac{1}{p}}</p>
-<blockquote>
-<div><p>If weights w_i are inverse standard deviations of data in each dimension
-then this represented a standardised Minkowski distance (and is
-equivalent to standardised Euclidean distance for p=1).</p>
-</div></blockquote>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.mahalanobis">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">mahalanobis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vinv</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_identity</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.mahalanobis" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.mahalanobis_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">mahalanobis_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vinv</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_identity</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.mahalanobis_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.hamming">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">hamming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.hamming" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.canberra">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">canberra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.canberra" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.canberra_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">canberra_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.canberra_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.bray_curtis">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">bray_curtis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.bray_curtis" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.bray_curtis_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">bray_curtis_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.bray_curtis_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.jaccard">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">jaccard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.jaccard" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.matching">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">matching</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.matching" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.dice">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">dice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.dice" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.kulsinski">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">kulsinski</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.kulsinski" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.rogers_tanimoto">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">rogers_tanimoto</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.rogers_tanimoto" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.russellrao">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">russellrao</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.russellrao" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.sokal_michener">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">sokal_michener</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.sokal_michener" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.sokal_sneath">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">sokal_sneath</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.sokal_sneath" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.haversine">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">haversine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.haversine" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.haversine_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">haversine_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.haversine_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.yule">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">yule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.yule" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.cosine">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">cosine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.cosine" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.cosine_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">cosine_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.cosine_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.correlation">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">correlation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.correlation" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.hellinger">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">hellinger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.hellinger" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.hellinger_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">hellinger_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.hellinger_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.approx_log_Gamma">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">approx_log_Gamma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.approx_log_Gamma" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.log_beta">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.log_beta" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.log_single_beta">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_single_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.log_single_beta" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.ll_dirichlet">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">ll_dirichlet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.ll_dirichlet" title="Permalink to this definition"></a></dt>
-<dd><p>The symmetric relative log likelihood of rolling data2 vs data1
-in n trials on a die that rolled data1 in sum(data1) trials.
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">data1</span><span class="p">,</span> <span class="n">data2</span><span class="p">)</span> <span class="o">=</span> <span class="n">DirichletMultinomail</span><span class="p">(</span><span class="n">data2</span> <span class="o">|</span> <span class="n">data1</span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.symmetric_kl">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">symmetric_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-11</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.symmetric_kl" title="Permalink to this definition"></a></dt>
-<dd><blockquote>
-<div><p>symmetrized KL divergence between two probability distributions
-..math:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span>
-</pre></div>
-</div>
-</div></blockquote>
-<p>rac{D_{KL}left(x Vert y
-ight) + D_{KL}left(y Vert x
-ight)}{2}</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.symmetric_kl_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">symmetric_kl_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-11</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.symmetric_kl_grad" title="Permalink to this definition"></a></dt>
-<dd><p>symmetrized KL divergence and its gradient</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.correlation_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">correlation_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.correlation_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.sinkhorn_distance">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">sinkhorn_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_identity</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cost</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_cost</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxiter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.sinkhorn_distance" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.spherical_gaussian_energy_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">spherical_gaussian_energy_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.spherical_gaussian_energy_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.diagonal_gaussian_energy_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">diagonal_gaussian_energy_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.diagonal_gaussian_energy_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.gaussian_energy_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">gaussian_energy_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.gaussian_energy_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.spherical_gaussian_grad">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">spherical_gaussian_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.spherical_gaussian_grad" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.get_discrete_params">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">get_discrete_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.get_discrete_params" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.categorical_distance">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">categorical_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.categorical_distance" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.hierarchical_categorical_distance">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">hierarchical_categorical_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cat_hierarchy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[{}]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.hierarchical_categorical_distance" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.ordinal_distance">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">ordinal_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">support_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.ordinal_distance" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.count_distance">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">count_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poisson_lambda</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalisation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.count_distance" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.levenshtein">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">levenshtein</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalisation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.levenshtein" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base.named_distances">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">named_distances</span></span><a class="headerlink" href="#topo.base.named_distances" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base.named_distances_with_gradients">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">named_distances_with_gradients</span></span><a class="headerlink" href="#topo.base.named_distances_with_gradients" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base.DISCRETE_METRICS">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">DISCRETE_METRICS</span></span><em class="property"><span class="w"> </span><span class="pre">=</span> <span class="pre">['categorical',</span> <span class="pre">'hierarchical_categorical',</span> <span class="pre">'ordinal',</span> <span class="pre">'count',</span> <span class="pre">'string']</span></em><a class="headerlink" href="#topo.base.DISCRETE_METRICS" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="topo.base.SPECIAL_METRICS">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">SPECIAL_METRICS</span></span><a class="headerlink" href="#topo.base.SPECIAL_METRICS" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.parallel_special_metric">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">parallel_special_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">hellinger</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.parallel_special_metric" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.chunked_parallel_special_metric">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">chunked_parallel_special_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">hellinger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunk_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.chunked_parallel_special_metric" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="topo.base.pairwise_special_metric">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">pairwise_special_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hellinger'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.pairwise_special_metric" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -1181,18 +529,18 @@ ight)}{2}</p>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">approx_log_Gamma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition"></a></dt>
+<dt class="sig sig-object py" id="topo.base.approx_log_Gamma">
+<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">approx_log_Gamma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.approx_log_Gamma" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="id9">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id9" title="Permalink to this definition"></a></dt>
+<dt class="sig sig-object py" id="topo.base.log_beta">
+<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.log_beta" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="id10">
-<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_single_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id10" title="Permalink to this definition"></a></dt>
+<dt class="sig sig-object py" id="topo.base.log_single_beta">
+<span class="sig-prename descclassname"><span class="pre">topo.base.</span></span><span class="sig-name descname"><span class="pre">log_single_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.base.log_single_beta" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
