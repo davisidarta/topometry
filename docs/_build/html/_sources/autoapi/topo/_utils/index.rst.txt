@@ -13,16 +13,12 @@ Functions
 
 .. autoapisummary::
 
-   topo._utils.write_pkl
    topo._utils.read_pkl
    topo._utils._one_of_ours
    topo._utils.descend_classes_and_funcs
    topo._utils.getdoc
    topo._utils.annotate_doc_types
 
-
-
-.. py:function:: write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True)
 
 
 .. py:function:: read_pkl(wd=None, filename='topograph.pkl')
