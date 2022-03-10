@@ -24,35 +24,23 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Pre-print release">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/_utils/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/_utils/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/topograph/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/topograph/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/TopOGraph_models.png" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_images/TopOGraph_models.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/topograph/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/topograph/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/conf/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/run_livereload/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/setup/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/ann/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/dists/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/topograph/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/topograph/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/topograph.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/topograph.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/conf.py" beforeDir="false" afterPath="$PROJECT_DIR$/docs/conf.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FlaskConsoleOptions" custom-start-script="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))">
+    <envs>
+      <env key="FLASK_APP" value="app" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))" />
+    <option name="myEnvs">
+      <map>
+        <entry key="FLASK_APP" value="app" />
+      </map>
+    </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -100,6 +88,7 @@
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
     <property name="node.js.selected.package.tslint" value="(autodetect)" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
+    <property name="settings.editor.selected.configurable" value="org.jetbrains.plugins.github.ui.GithubSettingsConfigurable" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -148,7 +137,7 @@
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
       <workItem from="1646775497747" duration="23658000" />
-      <workItem from="1646879239950" duration="12309000" />
+      <workItem from="1646879239950" duration="12524000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -234,7 +223,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646893160279</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="Pre-print release">
+      <created>1646896635513</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1646896635513</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
