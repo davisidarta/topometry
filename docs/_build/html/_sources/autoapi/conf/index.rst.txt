@@ -13,7 +13,7 @@ Module Contents
    
 
 .. py:data:: pkg_name
-   
+   :annotation: = topometry
 
    
 
@@ -174,11 +174,6 @@ Module Contents
 
 .. py:data:: autoapi_generate_api_docs
    :annotation: = True
-
-   
-
-.. py:data:: autodoc_default_options
-   :annotation: = ['members']
 
    
 
