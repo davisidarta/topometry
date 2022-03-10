@@ -48,7 +48,6 @@ Functions
 
 .. autoapisummary::
 
-   topo.save_pkl
    topo.read_pkl
    topo.annotate_doc_types
 
@@ -592,9 +591,6 @@ Attributes
 
       :returns: *Populates the TopOMetry object slots.*
 
-
-
-.. py:function:: save_pkl(TopOGraph, wd=None, filename='topograph.pkl')
 
 
 .. py:function:: read_pkl(wd=None, filename='topograph.pkl')

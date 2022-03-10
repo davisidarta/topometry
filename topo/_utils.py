@@ -5,11 +5,17 @@ from typing import Union, Callable, Optional
 from weakref import WeakSet
 
 
-def save_pkl(TopOGraph, wd=None, filename='topograph.pkl'):
+def write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True):
     try:
         import pickle
     except ImportError:
         return (print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`'))
+
+    if TopOGraph.base_nbrs_class is not None:
+        if remove_base_class:
+            TopOGraph.base_nbrs_class = None
+        else:
+            return(print('TopOGraph cannot be pickled with the NMSlib base class.'))
 
     if wd is None:
         import os
