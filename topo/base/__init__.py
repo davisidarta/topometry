@@ -6,6 +6,7 @@ try:
 except ImportError:
     _have_numba = False
 
+
 if _have_numba:
     from .dists import *
     from .sparse import *
