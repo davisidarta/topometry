@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.layouts.ncvis &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://topometry.readthedocs.io/autoapi/topo/layouts/ncvis/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="../../../../about.html" />
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../about.html">About TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../topograph.html">TopOGraph</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.layouts.ncvis</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/layouts/ncvis/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.layouts.ncvis">
+<span id="topo-layouts-ncvis"></span><h1><a class="reference internal" href="#module-topo.layouts.ncvis" title="topo.layouts.ncvis"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.layouts.ncvis</span></code></a><a class="headerlink" href="#module-topo.layouts.ncvis" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.layouts.ncvis.NCVis" title="topo.layouts.ncvis.NCVis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">NCVis</span></code></a>(data, n_components=2, n_jobs=-1, n_neighbors=15, distance='cosine', M=15, efC=30, random_seed=42, n_epochs=50, n_init_epochs=20, spread=1.0, min_dist=0.4, alpha=1.0, a=None, b=None, alpha_Q=1.0, n_noise=None)</p></td>
+<td><p>Runs Noise Contrastive Visualization ((NCVis)[<a class="reference external" href="https://dl.acm.org/doi/abs/10.1145/3366423.3380061">https://dl.acm.org/doi/abs/10.1145/3366423.3380061</a>])</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.layouts.ncvis.NCVis">
+<span class="sig-prename descclassname"><span class="pre">topo.layouts.ncvis.</span></span><span class="sig-name descname"><span class="pre">NCVis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-</span> <span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_init_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spread</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_Q</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.layouts.ncvis.NCVis" title="Permalink to this definition"></a></dt>
+<dd><p>Runs Noise Contrastive Visualization ((NCVis)[<a class="reference external" href="https://dl.acm.org/doi/abs/10.1145/3366423.3380061">https://dl.acm.org/doi/abs/10.1145/3366423.3380061</a>])
+for dimensionality reduction and graph layout .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_components</strong> (<em>int</em>) – Desired dimensionality of the embedding.</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – The maximum number of threads to use. In case n_threads &lt; 1, it defaults to the number of available CPUs.</p></li>
+<li><p><strong>n_neighbors</strong> (<em>int</em>) – Number of nearest neighbours in the high dimensional space to consider.</p></li>
+<li><p><strong>M</strong> (<em>int</em>) – The number of bi-directional links created for every new element during construction of HNSW.
+See <a class="reference external" href="https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md">https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md</a></p></li>
+<li><p><strong>efC</strong> (<em>int</em>) – The size of the dynamic list for the nearest neighbors (used during the search) in HNSW.
+See <a class="reference external" href="https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md">https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md</a></p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – Random seed to initialize the generators. Notice, however, that the result may still depend on the number of threads.</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – The total number of epochs to run. During one epoch the positions of each nearest neighbors pair are updated.</p></li>
+<li><p><strong>n_init_epochs</strong> (<em>int</em>) – The number of epochs used for initialization. During one epoch the positions of each nearest neighbors pair are updated.</p></li>
+<li><p><strong>spread</strong> (<em>float</em>) – The effective scale of embedded points. In combination with <code class="docutils literal notranslate"><span class="pre">min_dist</span></code>
+this determines how clustered/clumped the embedded points are.
+See <a class="reference external" href="https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/">https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/</a><a href="#id1"><span class="problematic" id="id2">umap_</span></a>.py#L1143</p></li>
+<li><p><strong>min_dist</strong> (<em>float</em>) – The effective minimum distance between embedded points. Smaller values
+will result in a more clustered/clumped embedding where nearby points
+on the manifold are drawn closer together, while larger values will
+result on a more even dispersal of points. The value should be set
+relative to the <code class="docutils literal notranslate"><span class="pre">spread</span></code> value, which determines the scale at which
+embedded points will be spread out.
+See <a class="reference external" href="https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/">https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/</a><a href="#id3"><span class="problematic" id="id4">umap_</span></a>.py#L1135</p></li>
+<li><p><strong>a</strong> (<em>(</em><em>optional</em><em>, </em><em>default None</em><em>)</em>) – More specific parameters controlling the embedding. If None these values
+are set automatically as determined by <code class="docutils literal notranslate"><span class="pre">min_dist</span></code> and <code class="docutils literal notranslate"><span class="pre">spread</span></code>.
+See <a class="reference external" href="https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/">https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/</a><a href="#id5"><span class="problematic" id="id6">umap_</span></a>.py#L1179</p></li>
+<li><p><strong>b</strong> (<em>(</em><em>optional</em><em>, </em><em>default None</em><em>)</em>) – More specific parameters controlling the embedding. If None these values
+are set automatically as determined by <code class="docutils literal notranslate"><span class="pre">min_dist</span></code> and <code class="docutils literal notranslate"><span class="pre">spread</span></code>.
+See <a class="reference external" href="https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/">https://github.com/lmcinnes/umap/blob/834184f9c0455f26db13ab148c0abd2d3767d968/umap/</a><a href="#id7"><span class="problematic" id="id8">umap_</span></a>.py#L1183</p></li>
+<li><p><strong>alpha</strong> (<em>float</em>) – Learning rate for the embedding positions.</p></li>
+<li><p><strong>alpha_Q</strong> (<em>float</em>) – Learning rate for the normalization constant.</p></li>
+<li><p><strong>n_noise</strong> (<em>int</em><em> or </em><em>ndarray of ints</em>) – <dl class="simple">
+<dt>Number of noise samples to use per data sample. If ndarray is provided, n_epochs is set to its length.</dt><dd><dl class="simple">
+<dt>If n_noise is None, it is set to dynamic sampling with noise level gradually increasing</dt><dd><p>from 0 to fixed value.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>distance</strong> (<em>str {'euclidean'</em><em>, </em><em>'cosine'</em><em>, </em><em>'correlation'</em><em>, </em><em>'inner_product'}</em>) – Distance to use for nearest neighbors search.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
