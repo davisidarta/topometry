@@ -15,11 +15,11 @@ from os import path
 import sys
 import mock
 
-MOCK_MODULES = [ 'numba']
+MOCK_MODULES = ['numba']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
-sys.path.insert(0, path.abspath('./'))
+# sys.path.insert(0, path.abspath('./'))
 sys.path.insert(0, path.abspath('../../'))
 
 import topo as package
