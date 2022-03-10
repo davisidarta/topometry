@@ -24,12 +24,12 @@ sys.path.insert(0, path.abspath('../../'))
 
 import topo as package
 
-pkg_name = package.__name__
+pkg_name = 'topometry'
 pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
 
-autoapi_dirs = ['../../topo']
+autoapi_dirs = ['../../topometry']
 
 # -- Project information -----------------------------------------------------
 
