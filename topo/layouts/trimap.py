@@ -231,7 +231,7 @@ except ImportError:
 # TriMAP
 
 def TriMAP(X,
-           init,
+           init=None,
            n_dims=2,
            n_inliers=10,
            n_outliers=5,

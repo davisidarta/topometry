@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.spectral.spectral &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://davisidarta.github.io/topometry/autoapi/topo/spectral/spectral/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../topograph.html">TopOGraph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.spectral.spectral</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/spectral/spectral/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.spectral.spectral">
+<span id="topo-spectral-spectral"></span><h1><a class="reference internal" href="#module-topo.spectral.spectral" title="topo.spectral.spectral"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.spectral.spectral</span></code></a><a class="headerlink" href="#module-topo.spectral.spectral" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.spectral.LapEigenmap" title="topo.spectral.spectral.LapEigenmap"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LapEigenmap</span></code></a>(affinity_matrix, dim, random_state)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.spectral.component_layout" title="topo.spectral.spectral.component_layout"><code class="xref py py-obj docutils literal notranslate"><span class="pre">component_layout</span></code></a>(data, n_components, component_labels, dim, random_state, metric='euclidean', metric_kwds={})</p></td>
+<td><p>Provide a layout relating the separate connected components. This is done</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.spectral.multi_component_layout" title="topo.spectral.spectral.multi_component_layout"><code class="xref py py-obj docutils literal notranslate"><span class="pre">multi_component_layout</span></code></a>(data, graph, n_components, component_labels, dim, random_state, metric='euclidean', metric_kwds={})</p></td>
+<td><p>Specialised layout algorithm for dealing with graphs with many connected components.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.spectral.spectral_layout" title="topo.spectral.spectral.spectral_layout"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spectral_layout</span></code></a>(data, graph, dim, random_state, metric='euclidean', metric_kwds={})</p></td>
+<td><p>Given a graph compute the spectral embedding of the graph. This is</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.spectral.spectral_clustering" title="topo.spectral.spectral.spectral_clustering"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spectral_clustering</span></code></a>(init, max_svd_restarts=30, n_iter_max=30, random_state=None, copy=True)</p></td>
+<td><p>Search for a partition matrix (clustering) which is closest to the</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.spectral.LapEigenmap">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.spectral.</span></span><span class="sig-name descname"><span class="pre">LapEigenmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">affinity_matrix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.spectral.LapEigenmap" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.spectral.component_layout">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.spectral.</span></span><span class="sig-name descname"><span class="pre">component_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">component_labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.spectral.component_layout" title="Permalink to this definition"></a></dt>
+<dd><p>Provide a layout relating the separate connected components. This is done
+by taking the centroid of each component and then performing a spectral embedding
+of the centroids.
+:param data: The source data – required so we can generate centroids for each</p>
+<blockquote>
+<div><p>connected component of the graph.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>is_dist</strong> (<em>bool</em>) – Whether if X is a distance or affinity matrix.</p></li>
+<li><p><strong>n_components</strong> (<em>int</em>) – The number of distinct components to be layed out.</p></li>
+<li><p><strong>component_labels</strong> (<em>array of shape</em><em> (</em><em>n_samples</em><em>)</em>) – For each vertex in the graph the label of the component to
+which the vertex belongs.</p></li>
+<li><p><strong>dim</strong> (<em>int</em>) – The chosen embedding dimension.</p></li>
+<li><p><strong>metric</strong> (<em>string</em><em> or </em><em>callable</em><em> (</em><em>optional</em><em>, </em><em>default 'euclidean'</em><em>)</em>) – The metric used to measure distances among the source data points.</p></li>
+<li><p><strong>metric_kwds</strong> (<em>dict</em><em> (</em><em>optional</em><em>, </em><em>default {}</em><em>)</em>) – Keyword arguments to be passed to the metric function.
+If metric is ‘precomputed’, ‘linkage’ keyword can be used to specify
+‘average’, ‘complete’, or ‘single’ linkage. Default is ‘average’</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>component_embedding</strong> (<em>array of shape (n_components, dim)</em>) – The <code class="docutils literal notranslate"><span class="pre">dim</span></code>-dimensional embedding of the <code class="docutils literal notranslate"><span class="pre">n_components</span></code>-many
+connected components.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.spectral.multi_component_layout">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.spectral.</span></span><span class="sig-name descname"><span class="pre">multi_component_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">component_labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.spectral.multi_component_layout" title="Permalink to this definition"></a></dt>
+<dd><p>Specialised layout algorithm for dealing with graphs with many connected components.
+This will first fid relative positions for the components by spectrally embedding
+their centroids, then spectrally embed each individual connected component positioning
+them according to the centroid embeddings. This provides a decent embedding of each
+component while placing the components in good relative positions to one another.
+:param data: The source data – required so we can generate centroids for each</p>
+<blockquote>
+<div><p>connected component of the graph.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>graph</strong> (<em>sparse matrix</em>) – The adjacency matrix of the graph to be emebdded.</p></li>
+<li><p><strong>n_components</strong> (<em>int</em>) – The number of distinct components to be layed out.</p></li>
+<li><p><strong>component_labels</strong> (<em>array of shape</em><em> (</em><em>n_samples</em><em>)</em>) – For each vertex in the graph the label of the component to
+which the vertex belongs.</p></li>
+<li><p><strong>dim</strong> (<em>int</em>) – The chosen embedding dimension.</p></li>
+<li><p><strong>metric</strong> (<em>string</em><em> or </em><em>callable</em><em> (</em><em>optional</em><em>, </em><em>default 'euclidean'</em><em>)</em>) – The metric used to measure distances among the source data points.</p></li>
+<li><p><strong>metric_kwds</strong> (<em>dict</em><em> (</em><em>optional</em><em>, </em><em>default {}</em><em>)</em>) – Keyword arguments to be passed to the metric function.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>embedding</strong> (<em>array of shape (n_samples, dim)</em>) – The initial embedding of <code class="docutils literal notranslate"><span class="pre">graph</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.spectral.spectral_layout">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.spectral.</span></span><span class="sig-name descname"><span class="pre">spectral_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.spectral.spectral_layout" title="Permalink to this definition"></a></dt>
+<dd><p>Given a graph compute the spectral embedding of the graph. This is
+simply the eigenvectors of the laplacian of the graph. Here we use the
+normalized laplacian.
+:param data: The source data
+:type data: array of shape (n_samples, n_features)
+:param graph: The (weighted) adjacency matrix of the graph as a sparse matrix.
+:type graph: sparse matrix
+:param dim: The dimension of the space into which to embed.
+:type dim: int
+:param random_state: A state capable being used as a numpy random state.
+:type random_state: numpy RandomState or equivalent</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><strong>embedding</strong> (<em>array of shape (n_vertices, dim)</em>) – The spectral embedding of the graph.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.spectral.spectral_clustering">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.spectral.</span></span><span class="sig-name descname"><span class="pre">spectral_clustering</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">init</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_svd_restarts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iter_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.spectral.spectral_clustering" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Search for a partition matrix (clustering) which is closest to the</dt><dd><p>eigenvector embedding.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>init</strong> (<em>array-like of shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_clusters</em><em>)</em>) – The embedding space of the samples.</p></li>
+<li><p><strong>max_svd_restarts</strong> (<em>int</em><em>, </em><em>default=30</em>) – Maximum number of attempts to restart SVD if convergence fails</p></li>
+<li><p><strong>n_iter_max</strong> (<em>int</em><em>, </em><em>default=30</em>) – Maximum number of iterations to attempt in rotation and partition
+matrix search if machine precision convergence is not reached</p></li>
+<li><p><strong>random_state</strong> (<em>int</em><em>, </em><em>RandomState instance</em><em>, </em><em>default=None</em>) – Determines random number generation for rotation matrix initialization.
+Use an int to make the randomness deterministic.
+See <span class="xref std std-term">Glossary</span>.</p></li>
+<li><p><strong>copy</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to copy vectors, or perform in-place normalization.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>labels</strong> (<em>array of integers, shape: n_samples</em>) – The labels of the clusters.</p>
+</dd>
+</dl>
+<p class="rubric">References</p>
+<ul class="simple">
+<li><p>Multiclass spectral clustering, 2003
+Stella X. Yu, Jianbo Shi
+<a class="reference external" href="https://www1.icsi.berkeley.edu/~stellayu/publication/doc/2003kwayICCV.pdf">https://www1.icsi.berkeley.edu/~stellayu/publication/doc/2003kwayICCV.pdf</a></p></li>
+</ul>
+<p class="rubric">Notes</p>
+<p>The eigenvector embedding is used to iteratively search for the
+closest discrete partition.  First, the eigenvector embedding is
+normalized to the space of partition matrices. An optimal discrete
+partition matrix closest to this normalized embedding multiplied by
+an initial rotation is calculated.  Fixing this discrete partition
+matrix, an optimal rotation matrix is calculated.  These two
+calculations are performed until convergence.  The discrete partition
+matrix is returned as the clustering solution.  Used in spectral
+clustering, this method tends to be faster and more robust to random
+initialization than k-means.</p>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

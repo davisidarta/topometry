@@ -14,9 +14,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 
 
-def kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=10, p=11/16, efC=50, efS=50, return_instance=False, verbose=False):
+def kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=15, p=11/16, efC=50, efS=50, return_instance=False, verbose=False):
+
     """
-    General class for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.
+    General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.
 
     Parameters
     ----------

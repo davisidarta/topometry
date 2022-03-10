@@ -1,0 +1,470 @@
+:py:mod:`topo.tpgraph`
+======================
+
+.. py:module:: topo.tpgraph
+
+
+Submodules
+----------
+.. toctree::
+   :titlesonly:
+   :maxdepth: 1
+
+   cknn/index.rst
+   diffusion/index.rst
+   multiscale/index.rst
+
+
+Package Contents
+----------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   topo.tpgraph.CkNearestNeighbors
+   topo.tpgraph.Diffusor
+
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   topo.tpgraph.euclidean
+   topo.tpgraph.standardised_euclidean
+   topo.tpgraph.cosine
+   topo.tpgraph.correlation
+   topo.tpgraph.bray_curtis
+   topo.tpgraph.canberra
+   topo.tpgraph.chebyshev
+   topo.tpgraph.manhattan
+   topo.tpgraph.mahalanobis
+   topo.tpgraph.minkowski
+   topo.tpgraph.dice
+   topo.tpgraph.hamming
+   topo.tpgraph.jaccard
+   topo.tpgraph.kulsinski
+   topo.tpgraph.rogers_tanimoto
+   topo.tpgraph.russellrao
+   topo.tpgraph.sokal_michener
+   topo.tpgraph.sokal_sneath
+   topo.tpgraph.yule
+   topo.tpgraph.cknn_graph
+   topo.tpgraph.kNN
+   topo.tpgraph.multiscale
+
+
+
+Attributes
+~~~~~~~~~~
+
+.. autoapisummary::
+
+   topo.tpgraph._have_hnswlib
+   topo.tpgraph._have_nmslib
+
+
+.. py:function:: euclidean(x, y)
+
+   Standard euclidean distance.
+   ..math::
+       D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+
+
+.. py:function:: standardised_euclidean(x, y, sigma=_mock_ones)
+
+   Euclidean distance standardised against a vector of standard
+       deviations per coordinate.
+       ..math::
+           D(x, y) = \sqrt{\sum_i
+   rac{(x_i - y_i)**2}{v_i}}
+
+
+
+.. py:function:: cosine(x, y)
+
+
+.. py:function:: correlation(x, y)
+
+
+.. py:function:: bray_curtis(x, y)
+
+
+.. py:function:: canberra(x, y)
+
+
+.. py:function:: chebyshev(x, y)
+
+   Chebyshev or l-infinity distance.
+   ..math::
+       D(x, y) = \max_i |x_i - y_i|
+
+
+.. py:function:: manhattan(x, y)
+
+   Manhattan, taxicab, or l1 distance.
+   ..math::
+       D(x, y) = \sum_i |x_i - y_i|
+
+
+.. py:function:: mahalanobis(x, y, vinv=_mock_identity)
+
+
+.. py:function:: minkowski(x, y, p=2)
+
+   Minkowski distance.
+       ..math::
+           D(x, y) = \left(\sum_i |x_i - y_i|^p
+   ight)^{
+   rac{1}{p}}
+       This is a general distance. For p=1 it is equivalent to
+       manhattan distance, for p=2 it is Euclidean distance, and
+       for p=infinity it is Chebyshev distance. In general it is better
+       to use the more specialised functions for those distances.
+
+
+
+.. py:function:: dice(x, y)
+
+
+.. py:function:: hamming(x, y)
+
+
+.. py:function:: jaccard(x, y)
+
+
+.. py:function:: kulsinski(x, y)
+
+
+.. py:function:: rogers_tanimoto(x, y)
+
+
+.. py:function:: russellrao(x, y)
+
+
+.. py:function:: sokal_michener(x, y)
+
+
+.. py:function:: sokal_sneath(x, y)
+
+
+.. py:function:: yule(x, y)
+
+
+.. py:function:: cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf', include_self=False, is_sparse=True, return_instance=False)
+
+
+.. py:class:: CkNearestNeighbors(n_neighbors=10, delta=1.0, metric='euclidean', t='inf', include_self=False, is_sparse=True)
+
+   Bases: :py:obj:`object`
+
+   This object provides the all logic of CkNN.
+   :param n_neighbors: int, optional, default=5
+                       Number of neighbors to estimate the density around the point.
+                       It appeared as a parameter `k` in the paper.
+   :param delta: float, optional, default=1.0
+                 A parameter to decide the radius for each points. The combination
+                 radius increases in proportion to this parameter.
+   :param metric: str, optional, default='euclidean'
+                  The metric of each points. This parameter depends on the parameter
+                  `metric` of scipy.spatial.distance.pdist.
+   :param t: 'inf' or float or int, optional, default='inf'
+             The decay parameter of heat kernel. The weights are calculated as
+             follow:
+                 W_{ij} = exp(-(||x_{i}-x_{j}||^2)/t)
+             For more infomation, read the paper 'Laplacian Eigenmaps for
+             Dimensionality Reduction and Data Representation', Belkin, et. al.
+   :param include_self: bool, optional, default=True
+                        All diagonal elements are 1.0 if this parameter is True.
+   :param is_sparse: bool, optional, default=True
+                     The method `cknneighbors_graph` returns csr_matrix object if this
+                     parameter is True else returns ndarray object.
+   :param return_adjacency: bool, optional, default=False
+                            Whether to return the adjacency matrix instead of the estimated similarity.
+
+   .. py:method:: __repr__(self)
+
+      Return repr(self).
+
+
+   .. py:method:: cknneighbors_graph(self, X)
+
+      A method to calculate the CkNN graph
+      :param X: ndarray
+                The data matrix.
+
+      return: csr_matrix (if self.is_sparse is True)
+              or ndarray(if self.is_sparse is False)
+
+
+
+.. py:function:: kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=15, p=11 / 16, efC=50, efS=50, return_instance=False, verbose=False)
+
+   General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.
+
+   :param X: Input data.
+   :type X: np.ndarray or scipy.sparse.csr_matrix.
+   :param n_neighbors: number of nearest-neighbors to look for. In practice,
+                       this should be considered the average neighborhood size and thus vary depending
+                       on your number of features, samples and data intrinsic dimensionality. Reasonable values
+                       range from 5 to 100. Smaller values tend to lead to increased graph structure
+                       resolution, but users should beware that a too low value may render granulated and vaguely
+                       defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+                       values can slightly increase computational time.
+   :type n_neighbors: int (optional, default 30)
+   :param metric: Accepted NMSLIB metrics. Defaults to 'cosine'. Accepted metrics include:
+                  -'sqeuclidean'
+                  -'euclidean'
+                  -'l1'
+                  -'lp' - requires setting the parameter `p` - equivalent to minkowski distance
+                  -'cosine'
+                  -'angular'
+                  -'negdotprod'
+                  -'levenshtein'
+                  -'hamming'
+                  -'jaccard'
+                  -'jansen-shan'
+   :type metric: str (optional, default 'cosine').
+   :param n_jobs: number of threads to be used in computation. Defaults to 1. The algorithm is highly
+                  scalable to multi-threading.
+   :type n_jobs: int (optional, default 1).
+   :param M: defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+             (Hierarchical Navigable Small World Graph). However, the actual default maximum number
+             of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+             is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
+             HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
+   :type M: int (optional, default 30).
+   :param efC: A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
+               and leads to higher accuracy of search. However this also leads to longer indexing times.
+               A reasonable range for this parameter is 50-2000.
+   :type efC: int (optional, default 100).
+   :param efS: A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
+               expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
+   :type efS: int (optional, default 100).
+
+   :returns: *A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.*
+
+
+.. py:data:: _have_hnswlib
+   :annotation: = True
+
+   
+
+.. py:data:: _have_nmslib
+   :annotation: = True
+
+   
+
+.. py:class:: Diffusor(n_neighbors=10, n_eigs=50, use_eigs='max', metric='cosine', kernel_use='simple', eigen_expansion=True, plot_spectrum=False, verbose=False, cache=False, alpha=1, n_jobs=10, backend='nmslib', p=None, M=15, efC=50, efS=50, norm=False, transitions=True)
+
+   Bases: :py:obj:`sklearn.base.TransformerMixin`
+
+   Sklearn-compatible estimator for using fast anisotropic diffusion with an adaptive neighborhood search algorithm. The
+   Diffusion Maps algorithm was initially proposed by Coifman et al in 2005, and was augmented by the work of many.
+   This implementation aggregates recent advances in diffusion harmonics, and innovates only by implementing an
+   adaptively decaying kernel (the rate of decay is dependent on neighborhood density)
+   and an adaptive neighborhood estimation approach.
+
+   :param n_eigs: Number of diffusion components to compute. This number can be iterated to get different views
+                  from data at distinct spectral resolution.
+   :type n_eigs: int (optional, default 50)
+   :param use_eigs: Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
+                    (reach of numerical precision), else to the maximum amount of computed components.
+                    If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
+                    If 'comp_gap', tries to find a discrete eigengap from the computation process.
+   :type use_eigs: int or str (optional, default 'knee')
+
+   n_neighbors : int (optional, default 10)
+       Number of k-nearest-neighbors to compute. The adaptive kernel will normalize distances by each cell
+       distance of its median neighbor. Nonetheless, this hyperparameter remains as an user input regarding
+       the minimal sample neighborhood resolution that drives the computation of the diffusion metrics. For
+       practical purposes, the minimum amount of samples one would expect to constitute a neighborhood of its
+       own. Increasing `k` can generate more globally-comprehensive metrics and maps, to a certain extend,
+       however at the expense of fine-grained resolution. More generally, consider this a calculus
+       discretization threshold.
+
+   backend : str (optional, default 'hnwslib')
+       Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
+       are 'hnwslib' (default) and 'nmslib'. For exact nearest-neighbors, use 'sklearn'.
+
+   metric : str (optional, default 'cosine')
+       Distance metric for building an approximate kNN graph. Defaults to
+       'cosine'. Users are encouraged to explore different metrics, such as 'euclidean' and 'inner_product'.
+       The 'hamming' and 'jaccard' distances are also available for string vectors.
+        Accepted metrics include NMSLib*, HNSWlib** and sklearn metrics. Some examples are:
+
+       -'sqeuclidean' (*, **)
+
+       -'euclidean' (*, **)
+
+       -'l1' (*)
+
+       -'lp' - requires setting the parameter ``p`` (*) - similar to Minkowski
+
+       -'cosine' (*, **)
+
+       -'inner_product' (**)
+
+       -'angular' (*)
+
+       -'negdotprod' (*)
+
+       -'levenshtein' (*)
+
+       -'hamming' (*)
+
+       -'jaccard' (*)
+
+       -'jansen-shan' (*)
+
+   p : int or float (optional, default 11/16 )
+       P for the Lp metric, when ``metric='lp'``.  Can be fractional. The default 11/16 approximates
+       an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
+       See https://en.wikipedia.org/wiki/Lp_space for some context.
+
+   transitions : bool (optional, default False)
+       Whether to estimate the diffusion transitions graph. If `True`, maps a basis encoding neighborhood
+        transitions probability during eigendecomposition. If 'False' (default), maps the diffusion kernel.
+
+   alpha : int or float (optional, default 1)
+       Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
+           Defaults to 1, which is suitable for normalized data.
+
+   kernel_use : str (optional, default 'decay_adaptive')
+       Which type of kernel to use. There are four implemented, considering the adaptive decay and the
+       neighborhood expansion, written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'. The first, 'simple'
+       , is a locally-adaptive kernel similar to that proposed by Nadler et al.(https://doi.org/10.1016/j.acha.2005.07.004)
+       and implemented in Setty et al. (https://doi.org/10.1038/s41587-019-0068-4). The 'decay' option applies an
+       adaptive decay rate, but no neighborhood expansion. Those, followed by '_adaptive', apply the neighborhood expansion process.
+        The default and recommended is 'decay_adaptive'.
+       The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
+
+   transitions : bool (optional, default False)
+       Whether to decompose the transition graph when transforming.
+   norm : bool (optional, default True)
+       Whether to normalize the kernel transition probabilities to approximate the LPO.
+   eigen_expansion : bool (optional, default False)
+       Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).
+   n_jobs : int (optional, default 4)
+       Number of threads to use in calculations. Defaults to 4 for safety, but performance
+       scales dramatically when using more threads.
+   plot_spectrum : bool (optional, default False)
+       Whether to plot the spectrum decay analysis.
+   verbose : bool (optional, default False)
+       Controls verbosity.
+   cache : bool (optional, default True)
+       Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).
+
+   .. rubric:: Example
+
+   import numpy as np
+   from sklearn.datasets import load_digits
+   from scipy.sparse import csr_matrix
+   from topo.tpgraph.diffusion import Diffusor
+
+   digits = load_digits()
+   data = csr_matrix(digits)
+
+   diff = Diffusor().fit(data)
+
+   msdiffmap = diff.transform(data)
+
+   .. py:method:: __repr__(self)
+
+      Return repr(self).
+
+
+   .. py:method:: fit(self, X)
+
+      Fits an adaptive anisotropic diffusion kernel to the data.
+
+      :param X: input data. Takes in numpy arrays and scipy csr sparse matrices.
+      :param Use with sparse data for top performance. You can adjust a series of:
+      :param parameters that can make the process faster and more informational depending:
+      :param on your dataset.:
+
+      :returns: *Diffusor object with kernel Diffusor.K and the transition potencial Diffusor.T .*
+
+
+   .. py:method:: transform(self, X)
+
+       Fits the renormalized Laplacian approximating the Laplace Beltrami-Operator
+       in a discrete eigendecomposition. Then multiscales the resulting components.
+       Parameters
+       ----------
+       X :
+           input data. Takes in numpy arrays and scipy csr sparse matrices.
+       Use with sparse data for top performance. You can adjust a series of
+       parameters that can make the process faster and more informational depending
+       on your dataset.
+
+       Returns
+       -------
+
+      ``Diffusor.res['MultiscaleComponents']]``
+
+
+
+
+   .. py:method:: ind_dist_grad(self, data)
+
+      Utility function to get indices, distances and gradients from a multiscale diffusion map.
+
+      :param data: Input data matrix (numpy array, pandas df, csr_matrix).
+
+      :returns: *A tuple containing neighborhood indices, distances, gradient and a knn graph.*
+
+
+   .. py:method:: res_dict(self)
+
+      :returns: * *Dictionary containing normalized and multiscaled Diffusion Components*
+                * *(Diffusor.res['StructureComponents']), their eigenvalues['EigenValues'] and*
+                * *non - multiscaled components(['EigenVectors']).*
+
+
+   .. py:method:: rescale(self, n_eigs=None)
+
+      Re-scale the multiscale procedure to a new number of components.
+
+      :param self:
+      :type self: Diffusor object.
+      :param n_eigs:
+      :type n_eigs: int. Number of diffusion components to multiscale.
+
+      :returns: *np.ndarray containing the new multiscaled basis.*
+
+
+   .. py:method:: spectrum_plot(self, bla=None)
+
+      Plot the decay spectra.
+
+      :param self:
+      :type self: Diffusor object.
+      :param bla:
+      :type bla: Here only for autodoc's sake.
+
+      :returns: *A nice plot of the diffusion spectra.*
+
+
+
+.. py:function:: multiscale(res, n_eigs='max', verbose=True)
+
+   Learn multiscale maps from the diffusion basis.
+   :param verbose:
+   :param res: Results from the dbMAP framework. Expects dictionary containing numerical
+               'EigenVectors' and 'EigenValues'.
+   :type res: dict
+   :param n_eigs: Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
+                  (reach of numerical precision), else to the maximum amount of computed components.
+                  If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
+                  If 'comp_gap', tries to find a discrete eigengap from the computation process.
+   :type n_eigs: int or str (optional, default 'max')
+   :param verbose: Controls verbosity.
+   :type verbose: bool
+
+   :returns: *np.ndarray containing the multiscale diffusion components.*
+
+

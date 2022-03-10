@@ -216,7 +216,7 @@ def create_density_plot(X, Y, embedding):
             Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
     return Z / Z.sum()
 
-def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8)):
+def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8), fontsize=20):
     keys = bases_scores.keys()
     values = bases_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -224,37 +224,27 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8)):
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
     pca_vals = list()
-    lap_vals = list()
     r_vals = list()
-    t_vals = list()
     for val in values:
         pca_vals.append(val[0])
-        lap_vals.append(val[1])
-        r_vals.append(val[2])
-        t_vals.append(val[3])
+        r_vals.append(val[1])
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=figsize)
-    fig.suptitle('Bases scores:')
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    fig.suptitle('Bases scores:', fontsize=fontsize)
     ax1.bar(keys, pca_vals, color=k_color)
-    ax1.set_title('PCA loss')
-    ax1.set_xticklabels(keys, rotation=90)
-    ax2.bar(keys, lap_vals, color=k_color)
-    ax2.set_title('LE loss')
-    ax2.set_xticklabels(keys, rotation=90)
-    ax3.bar(keys, r_vals, color=k_color)
-    ax3.set_title('Geodesic Spearman R')
-    ax3.set_xticklabels(keys, rotation=90)
-    ax4.bar(keys, t_vals, color=k_color)
-    ax4.set_title('Geodesic Kendall T')
-    ax4.set_xticklabels(keys, rotation=90)
+    ax1.set_title('PCA loss', fontsize=fontsize)
+    ax1.set_xticklabels(keys, fontsize=fontsize)
+    ax2.bar(keys, r_vals, color=k_color)
+    ax2.set_title('Geodesic Spearman R', fontsize=fontsize)
+    ax2.set_xticklabels(keys, fontsize=fontsize)
     fig.tight_layout()
-
     if return_plot:
         return plt.show()
     else:
         return fig
 
-def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8)):
+
+def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8), fontsize=20):
     keys = graphs_scores.keys()
     values = graphs_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -262,20 +252,11 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8)):
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
 
-    r_vals = list()
-    t_vals = list()
-    for val in values:
-        r_vals.append(val[0])
-        t_vals.append(val[1])
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    fig.suptitle('Graphs scores:')
-    ax1.bar(keys, r_vals, color=k_color)
-    ax1.set_title('Geodesic Spearman R')
-    ax1.set_xticklabels(keys, rotation=90)
-    ax2.bar(keys, t_vals, color=k_color)
-    ax2.set_title('Geodesic Kendall T')
-    ax2.set_xticklabels(keys, rotation=90)
+    fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
+    fig.suptitle('Graphs scores:', fontsize=fontsize)
+    ax1.bar(keys, values, color=k_color)
+    ax1.set_title('Geodesic Spearman R', fontsize=fontsize)
+    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=45)
     fig.tight_layout()
 
     if return_plot:
@@ -284,7 +265,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8)):
         return fig
 
 
-def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8)):
+def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8), fontsize=20):
     keys = layouts_scores.keys()
     values = layouts_scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -292,29 +273,19 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8)):
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
     pca_vals = list()
-    lap_vals = list()
     r_vals = list()
-    t_vals = list()
     for val in values:
         pca_vals.append(val[0])
-        lap_vals.append(val[1])
-        r_vals.append(val[2])
-        t_vals.append(val[3])
+        r_vals.append(val[1])
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=figsize)
-    fig.suptitle('Layouts scores:')
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    fig.suptitle('Layouts scores:', fontsize=fontsize)
     ax1.bar(keys, pca_vals, color=k_color)
-    ax1.set_title('PCA loss')
-    ax1.set_xticklabels(keys, rotation=90)
-    ax2.bar(keys, lap_vals, color=k_color)
-    ax2.set_title('LE loss')
-    ax2.set_xticklabels(keys, rotation=90)
-    ax3.bar(keys, r_vals, color=k_color)
-    ax3.set_title('Geodesic Spearman R')
-    ax3.set_xticklabels(keys, rotation=90)
-    ax4.bar(keys, t_vals, color=k_color)
-    ax4.set_title('Geodesic Kendall T')
-    ax4.set_xticklabels(keys, rotation=90)
+    ax1.set_title('PCA loss', fontsize=fontsize)
+    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
+    ax2.bar(keys, r_vals, color=k_color)
+    ax2.set_title('Geodesic Spearman R', fontsize=fontsize)
+    ax2.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
     fig.tight_layout()
     if return_plot:
         return plt.show()

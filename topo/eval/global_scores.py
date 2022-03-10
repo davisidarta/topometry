@@ -36,7 +36,7 @@ def global_score_pca(X, Y):
     gs_pca = global_loss_(X, Y_pca)
     gs_emb = global_loss_(X, Y)
     GSP = np.exp(-(gs_emb - gs_pca) / gs_pca)
-    if GSP < 1.0:
+    if GSP > 1.0:
         GSP = 1.0
     return GSP
 

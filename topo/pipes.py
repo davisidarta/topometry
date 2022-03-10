@@ -1,20 +1,22 @@
 import matplotlib
 from scipy.sparse import issparse, csr_matrix
-
+from sklearn.utils import resample
 from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
 from topo.layouts.map import fuzzy_embedding
+from topo.base.ann import kNN
 
 matplotlib.use('Agg')  # plotting backend compatible with screen
 from topo.topograph import TopOGraph
-from topo.eval.global_scores import global_score_pca, global_score_laplacian
-from topo.eval.local_scores import knn_spearman_r, knn_kendall_tau
+from topo.eval.global_scores import global_score_pca
+from topo.eval.local_scores import knn_spearman_r
 
-def global_scores(data, emb, k=10, data_is_graph=False, metric='cosine', n_jobs=12):
+
+def global_score(data, emb):
     global_scores_pca = global_score_pca(data, emb)
-    global_scores_lap = global_score_laplacian(data, emb, k=k, n_jobs=n_jobs, data_is_graph=data_is_graph)
-    return global_scores_pca, global_scores_lap
+    return global_scores_pca
 
-def local_scores(data, emb, k=10, metric='cosine', n_jobs=12, data_is_graph=False, emb_is_graph=False):
+
+def local_score(data, emb, k=10, metric='cosine', n_jobs=12, data_is_graph=False, emb_is_graph=False):
     try:
         import hnswlib
         _have_hnswlib = True
@@ -85,13 +87,61 @@ def local_scores(data, emb, k=10, metric='cosine', n_jobs=12, data_is_graph=Fals
         data_graph = data
 
     local_scores_r = knn_spearman_r(data_graph, emb_graph)
-    local_scores_tau = knn_kendall_tau(data_graph, emb_graph)
-    return local_scores_r, local_scores_tau
+    return local_scores_r
 
-def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
-                bases=['diffusion', 'fuzzy', 'continuous'],
-                graphs=['diff', 'cknn', 'fuzzy'],
-                layouts=['tSNE', 'MAP','MDE','PaCMAP','TriMAP', 'NCVis']):
+
+def eval_models_layouts(TopOGraph, X, subsample=None, k=None, n_jobs=None, metric=None,
+                        bases=['diffusion', 'fuzzy', 'continuous'],
+                        graphs=['diff', 'cknn', 'fuzzy'],
+                        layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']):
+    """
+    Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
+    Compares results with PCA and PCA-derived layouts (i.e. t-SNE, UMAP etc).
+
+    Parameters
+    --------------
+
+    TopOGraph : target TopOGraph object (can be empty).
+
+    X : data matrix. Expects either numpy.ndarray or scipy.sparse.csr_matrix.
+
+    subsample : optional (int, default None).
+        If specified, subsamples the TopOGraph object and/or data matrix X to a number of samples
+        before computing results and scores. Useful if dealing with large datasets (>50,000 samples).
+
+    k : optional (int, default None).
+        Number of k-neighbors to use for evaluating results. Defaults to TopOGraph.base_knn.
+
+    n_jobs : optional (int, default None).
+        Number of threads to use in computations. Defaults to TopOGraph.n_jobs (default 1).
+
+    metric : optional (str, default None).
+        Distance metric to use. Defaults to TopOGraph.base_metric (default 'cosine').
+
+
+    bases : str (optional, default ['diffusion', 'continuous','fuzzy']).
+        Which bases to compute. Defaults to all. To run only one or two bases, set it to
+        ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
+
+    graphs : str (optional, default ['diff', 'cknn','fuzzy']).
+        Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
+        ['fuzzy', 'diff'] or ['cknn'], for exemple.
+
+    layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']).
+        Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
+        TriMAP and NCVis. To run only one or two layouts, set it to
+        ['tSNE', 'MAP'] or ['PaCMAP'], for example.
+
+    Returns
+    -------
+
+    Populates the TopOGraph object and returns a list of lists (results):
+
+    - results[0] contains orthogonal bases scores.
+    - results[1] contains topological graph scores.
+    - results[2] contains layout scores.
+
+    """
     if k is None:
         k = TopOGraph.base_knn
     if n_jobs is None:
@@ -147,35 +197,20 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
     else:
         eval_NCVis = False
     db_pca = None
-    db_lap = None
     db_r = None
-    db_t = None
     db_diff_r = None
-    db_diff_t = None
     db_cknn_r = None
-    db_cknn_t = None
     db_fuzzy_r = None
-    db_fuzzy_t = None
     cb_pca = None
-    cb_lap = None
     cb_r = None
-    cb_t = None
     cb_diff_r = None
-    cb_diff_t = None
     cb_cknn_r = None
-    cb_cknn_t = None
     cb_fuzzy_r = None
-    cb_fuzzy_t = None
     fb_pca = None
-    fb_lap = None
     fb_r = None
-    fb_t = None
     fb_diff_r = None
-    fb_diff_t = None
     fb_cknn_r = None
-    fb_cknn_t = None
     fb_fuzzy_r = None
-    fb_fuzzy_t = None
     db_diff_scores = None
     db_cknn_scores = None
     db_fuzzy_scores = None
@@ -187,268 +222,407 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
     fb_fuzzy_scores = None
 
 
+
+    if subsample is not None:
+        if TopOGraph.verbosity >= 1:
+            print('Subsampling...will recompute topological graphs...')
+
+        X = resample(X, n_samples=subsample)
+        TopOGraph.base_knn_graph = kNN(X, n_neighbors=k,
+                           metric=metric,
+                           n_jobs=n_jobs,
+                           backend=TopOGraph.backend,
+                           M=TopOGraph.M,
+                           p=TopOGraph.p,
+                           efC=TopOGraph.efC,
+                           efS=TopOGraph.efS,
+                           return_instance=False,
+                           verbose=False)
+
+        if TopOGraph.MSDiffMap is not None:
+            TopOGraph.MSDiffMap = resample(TopOGraph.MSDiffMap, n_samples=subsample)
+            if TopOGraph.db_tSNE is not None:
+                TopOGraph.db_tSNE = resample(TopOGraph.db_tSNE, n_samples=subsample)
+            if TopOGraph.db_NCVis is not None:
+                TopOGraph.db_NCVis = resample(TopOGraph.db_NCVis, n_samples=subsample)
+            if TopOGraph.db_PaCMAP is not None:
+                TopOGraph.db_PaCMAP = resample(TopOGraph.db_PaCMAP, n_samples=subsample)
+            if TopOGraph.db_TriMAP is not None:
+                TopOGraph.db_TriMAP = resample(TopOGraph.db_TriMAP, n_samples=subsample)
+            if TopOGraph.db_diff_graph is not None:
+                TopOGraph.db_diff_graph = None      # There's no way to resample a square distance matrix
+                if TopOGraph.db_diff_MAP is not None:
+                    TopOGraph.db_diff_MAP = resample(TopOGraph.db_diff_MAP, n_samples=subsample)
+                if TopOGraph.db_diff_MDE is not None:
+                    TopOGraph.db_diff_MDE = resample(TopOGraph.db_diff_MDE, n_samples=subsample)
+            if TopOGraph.db_fuzzy_graph is not None:
+                TopOGraph.db_fuzzy_graph = None     # There's no way to resample a square distance matrix
+                if TopOGraph.db_fuzzy_MAP is not None:
+                    TopOGraph.db_fuzzy_MAP = resample(TopOGraph.db_fuzzy_MAP, n_samples=subsample)
+                if TopOGraph.db_fuzzy_MDE is not None:
+                    TopOGraph.db_fuzzy_MDE = resample(TopOGraph.db_fuzzy_MDE, n_samples=subsample)
+            if TopOGraph.db_cknn_graph is not None:
+                TopOGraph.db_cknn_graph = None      # There's no way to resample a square distance matrix
+                if TopOGraph.db_cknn_MAP is not None:
+                    TopOGraph.db_cknn_MAP = resample(TopOGraph.db_cknn_MAP, n_samples=subsample)
+                if TopOGraph.db_cknn_MDE is not None:
+                    TopOGraph.db_cknn_MDE = resample(TopOGraph.db_cknn_MDE, n_samples=subsample)
+
+        if TopOGraph.CLapMap is not None:
+            TopOGraph.CLapMap = resample(TopOGraph.CLapMap, n_samples=subsample)
+            if TopOGraph.cb_tSNE is not None:
+                TopOGraph.cb_tSNE = resample(TopOGraph.cb_tSNE, n_samples=subsample)
+            if TopOGraph.cb_NCVis is not None:
+                TopOGraph.cb_NCVis = resample(TopOGraph.cb_NCVis, n_samples=subsample)
+            if TopOGraph.cb_PaCMAP is not None:
+                TopOGraph.cb_PaCMAP = resample(TopOGraph.cb_PaCMAP, n_samples=subsample)
+            if TopOGraph.cb_TriMAP is not None:
+                TopOGraph.cb_TriMAP = resample(TopOGraph.cb_TriMAP, n_samples=subsample)
+            if TopOGraph.cb_diff_graph is not None:
+                TopOGraph.cb_diff_graph = None      # There's no way to resample a square distance matrix
+                if TopOGraph.cb_diff_MAP is not None:
+                    TopOGraph.cb_diff_MAP = resample(TopOGraph.cb_diff_MAP, n_samples=subsample)
+                if TopOGraph.cb_diff_MDE is not None:
+                    TopOGraph.cb_diff_MDE = resample(TopOGraph.cb_diff_MDE, n_samples=subsample)
+            if TopOGraph.cb_fuzzy_graph is not None:
+                TopOGraph.cb_fuzzy_graph = None     # There's no way to resample a square distance matrix
+                if TopOGraph.cb_fuzzy_MAP is not None:
+                    TopOGraph.cb_fuzzy_MAP = resample(TopOGraph.cb_fuzzy_MAP, n_samples=subsample)
+                if TopOGraph.cb_fuzzy_MDE is not None:
+                    TopOGraph.cb_fuzzy_MDE = resample(TopOGraph.cb_fuzzy_MDE, n_samples=subsample)
+            if TopOGraph.cb_cknn_graph is not None:
+                TopOGraph.cb_cknn_graph = None      # There's no way to resample a square distance matrix
+                if TopOGraph.cb_cknn_MAP is not None:
+                    TopOGraph.cb_cknn_MAP = resample(TopOGraph.cb_cknn_MAP, n_samples=subsample)
+                if TopOGraph.cb_cknn_MDE is not None:
+                    TopOGraph.cb_cknn_MDE = resample(TopOGraph.cb_cknn_MDE, n_samples=subsample)
+
+        if TopOGraph.FuzzyLapMap is not None:
+            TopOGraph.FuzzyLapMap = resample(TopOGraph.FuzzyLapMap, n_samples=subsample)
+            if TopOGraph.fb_tSNE is not None:
+                TopOGraph.fb_tSNE = resample(TopOGraph.fb_tSNE, n_samples=subsample)
+            if TopOGraph.fb_NCVis is not None:
+                TopOGraph.fb_NCVis = resample(TopOGraph.fb_NCVis, n_samples=subsample)
+            if TopOGraph.fb_PaCMAP is not None:
+                TopOGraph.fb_PaCMAP = resample(TopOGraph.fb_PaCMAP, n_samples=subsample)
+            if TopOGraph.fb_TriMAP is not None:
+                TopOGraph.fb_TriMAP = resample(TopOGraph.fb_TriMAP, n_samples=subsample)
+            if TopOGraph.fb_diff_graph is not None:
+                TopOGraph.fb_diff_graph = None      # There's no way to resample a square distance matrix
+                if TopOGraph.fb_diff_MAP is not None:
+                    TopOGraph.fb_diff_MAP = resample(TopOGraph.fb_diff_MAP, n_samples=subsample)
+                if TopOGraph.fb_diff_MDE is not None:
+                    TopOGraph.fb_diff_MDE = resample(TopOGraph.fb_diff_MDE, n_samples=subsample)
+            if TopOGraph.fb_fuzzy_graph is not None:
+                TopOGraph.fb_fuzzy_graph = None     # There's no way to resample a square distance matrix
+                if TopOGraph.fb_fuzzy_MAP is not None:
+                    TopOGraph.fb_fuzzy_MAP = resample(TopOGraph.fb_fuzzy_MAP, n_samples=subsample)
+                if TopOGraph.fb_fuzzy_MDE is not None:
+                    TopOGraph.fb_fuzzy_MDE = resample(TopOGraph.fb_fuzzy_MDE, n_samples=subsample)
+            if TopOGraph.fb_cknn_graph is not None:
+                TopOGraph.fb_cknn_graph = None # There's no way to resample a square distance matrix
+                if TopOGraph.fb_cknn_MAP is not None:
+                    TopOGraph.fb_cknn_MAP = resample(TopOGraph.fb_cknn_MAP, n_samples=subsample)
+                if TopOGraph.fb_cknn_MDE is not None:
+                    TopOGraph.fb_cknn_MDE = resample(TopOGraph.fb_cknn_MDE, n_samples=subsample)
+
+    else:
+        if TopOGraph.base_knn_graph is None:
+            TopOGraph.base_knn_graph = kNN(X, n_neighbors=k,
+                                           metric=metric,
+                                           n_jobs=n_jobs,
+                                           backend=TopOGraph.backend,
+                                           M=TopOGraph.M,
+                                           p=TopOGraph.p,
+                                           efC=TopOGraph.efC,
+                                           efS=TopOGraph.efS,
+                                           return_instance=False,
+                                           verbose=False)
+
     TopOGraph.run_layouts(X=X,
-                bases=bases,
-                graphs=graphs,
-                layouts=layouts)
+                          bases=bases,
+                          graphs=graphs,
+                          layouts=layouts)
+
+
 
     if TopOGraph.verbosity > 0:
         print('Computing scores...')
     if eval_db:
-        db_pca, db_lap = global_scores(X, TopOGraph.MSDiffMap, k=k, metric=metric, n_jobs=n_jobs)
-        db_r, db_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.MSDiffMap,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-        db_scores = db_pca, db_lap, db_r, db_t
+        if TopOGraph.verbosity > 0:
+            print('Computing diffusion-related scores...')
+        DB_knn_graph = kNN(TopOGraph.MSDiffMap, n_neighbors=k,
+                           metric=metric,
+                           n_jobs=n_jobs,
+                           backend=TopOGraph.backend,
+                           M=TopOGraph.M,
+                           p=TopOGraph.p,
+                           efC=TopOGraph.efC,
+                           efS=TopOGraph.efS,
+                           return_instance=False,
+                           verbose=False)
+
+        db_pca = global_score(X, TopOGraph.MSDiffMap)
+        db_r = local_score(TopOGraph.base_knn_graph, DB_knn_graph,
+                           k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True, emb_is_graph=True)
+        db_scores = db_pca, db_r
+
+
+
         if eval_TriMAP:
-            data_db_TriMAP_pca, data_db_TriMAP_lap = global_scores(X, TopOGraph.db_TriMAP, k=k, metric=metric, n_jobs=n_jobs)
-            db_TriMAP_r, db_TriMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_TriMAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_db_TriMAP_scores = data_db_TriMAP_pca, data_db_TriMAP_lap, db_TriMAP_r, db_TriMAP_t
+            data_db_TriMAP_pca = global_score(X, TopOGraph.db_TriMAP)
+            db_TriMAP_r = local_score(DB_knn_graph, TopOGraph.db_TriMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_db_TriMAP_scores = data_db_TriMAP_pca, db_TriMAP_r
         if eval_PaCMAP:
-            data_db_PaCMAP_pca, data_db_PaCMAP_lap = global_scores(X, TopOGraph.db_PaCMAP, k=k, metric=metric, n_jobs=n_jobs)
-            db_PaCMAP_r, db_PaCMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_PaCMAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_db_PaCMAP_scores = data_db_PaCMAP_pca, data_db_PaCMAP_lap, db_PaCMAP_r, db_PaCMAP_t
+            data_db_PaCMAP_pca = global_score(X, TopOGraph.db_PaCMAP)
+            db_PaCMAP_r = local_score(DB_knn_graph, TopOGraph.db_PaCMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_db_PaCMAP_scores = data_db_PaCMAP_pca, db_PaCMAP_r
         if eval_NCVis:
-            data_db_NCVis_pca, data_db_NCVis_lap = global_scores(X, TopOGraph.db_NCVis, k=k, metric=metric, n_jobs=n_jobs)
-            db_NCVis_r, db_NCVis_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_NCVis,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_db_NCVis_scores = data_db_NCVis_pca, data_db_NCVis_lap, db_NCVis_r, db_NCVis_t
+            data_db_NCVis_pca = global_score(X, TopOGraph.db_NCVis)
+            db_NCVis_r = local_score(DB_knn_graph, TopOGraph.db_NCVis,
+                                     k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_db_NCVis_scores = data_db_NCVis_pca, db_NCVis_r
         if eval_tSNE:
-            data_db_tSNE_pca, data_db_tSNE_pca = global_scores(X, TopOGraph.db_tSNE, k=k, metric=metric, n_jobs=n_jobs)
-            db_tSNE_r, db_tSNE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_tSNE,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_db_tSNE_scores = data_db_tSNE_pca, data_db_tSNE_pca, db_tSNE_r, db_tSNE_t
+            data_db_tSNE_pca = global_score(X, TopOGraph.db_tSNE)
+            db_tSNE_r = local_score(DB_knn_graph, TopOGraph.db_tSNE,
+                                    k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_db_tSNE_scores = data_db_tSNE_pca, db_tSNE_r
 
         if eval_diff:
-            db_diff_r, db_diff_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_diff_graph, emb_is_graph=True,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            db_diff_scores = db_diff_r, db_diff_t
+            db_diff_r = local_score(DB_knn_graph, TopOGraph.db_diff_graph, emb_is_graph=True,
+                                    k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            db_diff_scores = db_diff_r
             if eval_MAP:
-                data_db_diff_MAP_pca, data_db_diff_MAP_pca = global_scores(X, TopOGraph.db_diff_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_diff_MAP_r, db_diff_MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_diff_MAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_diff_MAP_scores = data_db_diff_MAP_pca, data_db_diff_MAP_pca, db_diff_MAP_r, db_diff_MAP_t
+                data_db_diff_MAP_pca = global_score(X, TopOGraph.db_diff_MAP)
+                db_diff_MAP_r = local_score(TopOGraph.db_diff_graph, TopOGraph.db_diff_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_diff_MAP_scores = data_db_diff_MAP_pca, db_diff_MAP_r
             if eval_MDE:
-                data_db_diff_MDE_pca, data_db_diff_MDE_lap = global_scores(X, TopOGraph.db_diff_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_diff_MDE_r, db_diff_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_diff_MDE,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_diff_MDE_scores = data_db_diff_MDE_pca, data_db_diff_MDE_lap, db_diff_MDE_r, db_diff_MDE_t
+                data_db_diff_MDE_pca = global_score(X, TopOGraph.db_diff_MDE)
+                db_diff_MDE_r = local_score(TopOGraph.db_diff_graph, TopOGraph.db_diff_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_diff_MDE_scores = data_db_diff_MDE_pca, db_diff_MDE_r
 
         if eval_cknn:
-            db_cknn_r, db_cknn_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_cknn_graph, emb_is_graph=True,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            db_cknn_scores = db_cknn_r, db_cknn_t
+            db_cknn_r = local_score(DB_knn_graph, TopOGraph.db_cknn_graph, emb_is_graph=True,
+                                    k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            db_cknn_scores = db_cknn_r
 
             if eval_MAP:
-                data_db_cknn_MAP_pca, data_db_cknn_MAP_lap = global_scores(X, TopOGraph.db_cknn_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_cknn_MAP_r, db__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_cknn_MAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_cknn_MAP_scores = data_db_cknn_MAP_pca, data_db_cknn_MAP_lap, db_cknn_MAP_r, db__MAP_t
+                data_db_cknn_MAP_pca = global_score(X, TopOGraph.db_cknn_MAP)
+                db_cknn_MAP_r = local_score(TopOGraph.db_cknn_graph, TopOGraph.db_cknn_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_cknn_MAP_scores = data_db_cknn_MAP_pca, db_cknn_MAP_r
             if eval_MDE:
-                data_db_cknn_MDE_pca, data_db_cknn_MDE_lap = global_scores(X, TopOGraph.db_cknn_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_cknn_MDE_r, db_cknn_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_cknn_MDE,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_cknn_MDE_scores = data_db_cknn_MDE_pca, data_db_cknn_MDE_lap, db_cknn_MDE_r, db_cknn_MDE_t
+                data_db_cknn_MDE_pca = global_score(X, TopOGraph.db_cknn_MDE)
+                db_cknn_MDE_r = local_score(TopOGraph.db_cknn_graph, TopOGraph.db_cknn_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_cknn_MDE_scores = data_db_cknn_MDE_pca, db_cknn_MDE_r
 
         if eval_fuzzy:
-            db_fuzzy_r, db_fuzzy_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_fuzzy_graph, emb_is_graph=True,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            db_fuzzy_scores = db_fuzzy_r, db_fuzzy_t
+            db_fuzzy_r = local_score(DB_knn_graph, TopOGraph.db_fuzzy_graph, emb_is_graph=True,
+                                     k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            db_fuzzy_scores = db_fuzzy_r
             if eval_MAP:
-                data_db_fuzzy_MAP_pca, data_db_fuzzy_MAP_lap = global_scores(X, TopOGraph.db_fuzzy_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_fuzzy_MAP_r, db__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_fuzzy_MAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_fuzzy_MAP_scores = data_db_fuzzy_MAP_pca, data_db_fuzzy_MAP_lap, db_fuzzy_MAP_r, db__MAP_t
+                data_db_fuzzy_MAP_pca = global_score(X, TopOGraph.db_fuzzy_MAP)
+                db_fuzzy_MAP_r = local_score(TopOGraph.db_fuzzy_graph, TopOGraph.db_fuzzy_MAP,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_fuzzy_MAP_scores = data_db_fuzzy_MAP_pca, db_fuzzy_MAP_r
             if eval_MDE:
-                data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap = global_scores(X, TopOGraph.db_fuzzy_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                db_fuzzy_MDE_r, db_fuzzy_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.db_fuzzy_MDE,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_db_fuzzy_MDE_scores = data_db_fuzzy_MDE_pca, data_db_fuzzy_MDE_lap, db_fuzzy_MDE_r, db_fuzzy_MDE_t
+                data_db_fuzzy_MDE_pca = global_score(X, TopOGraph.db_fuzzy_MDE)
+                db_fuzzy_MDE_r = local_score(TopOGraph.db_fuzzy_graph, TopOGraph.db_fuzzy_MDE,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_db_fuzzy_MDE_scores = data_db_fuzzy_MDE_pca, db_fuzzy_MDE_r
 
     if eval_cb:
-        cb_pca, cb_lap = global_scores(X, TopOGraph.CLapMap, k=k, metric=metric, n_jobs=n_jobs)
-        cb_r, cb_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.CLapMap,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+        if TopOGraph.verbosity > 0:
+            print('Computing continuous-related scores...')
 
-        cb_scores = cb_pca, cb_lap, cb_r, cb_t
+        CB_knn_graph = kNN(TopOGraph.CLapMap, n_neighbors=k,
+                           metric=metric,
+                           n_jobs=n_jobs,
+                           backend=TopOGraph.backend,
+                           M=TopOGraph.M,
+                           p=TopOGraph.p,
+                           efC=TopOGraph.efC,
+                           efS=TopOGraph.efS,
+                           return_instance=False,
+                           verbose=False)
+        cb_pca = global_score(X, TopOGraph.CLapMap)
+        cb_r = local_score(TopOGraph.base_knn_graph, CB_knn_graph,
+                           k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True, emb_is_graph=True)
+
+        cb_scores = cb_pca, cb_r
+
+
+
         if eval_TriMAP:
-            data_cb_TriMAP_pca, data_cb_TriMAP_lap = global_scores(X, TopOGraph.cb_TriMAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            cb_TriMAP_r, cb_TriMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_TriMAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_cb_TriMAP_scores = data_cb_TriMAP_pca, data_cb_TriMAP_lap, cb_TriMAP_r, cb_TriMAP_t
+            data_cb_TriMAP_pca = global_score(X, TopOGraph.cb_TriMAP)
+            cb_TriMAP_r = local_score(CB_knn_graph, TopOGraph.cb_TriMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_cb_TriMAP_scores = data_cb_TriMAP_pca, cb_TriMAP_r
 
         if eval_PaCMAP:
-            data_cb_PaCMAP_pca, data_cb_PaCMAP_lap = global_scores(X, TopOGraph.cb_PaCMAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            cb_PaCMAP_r, cb_PaCMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_PaCMAP,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_cb_PaCMAP_scores = data_cb_PaCMAP_pca, data_cb_PaCMAP_lap, cb_PaCMAP_r, cb_PaCMAP_t
+            data_cb_PaCMAP_pca = global_score(X, TopOGraph.cb_PaCMAP)
+            cb_PaCMAP_r = local_score(CB_knn_graph, TopOGraph.cb_PaCMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_cb_PaCMAP_scores = data_cb_PaCMAP_pca, cb_PaCMAP_r
 
         if eval_NCVis:
-            data_cb_NCVis_pca, data_cb_NCVis_lap = global_scores(X, TopOGraph.cb_NCVis,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            cb_NCVis_r, cb_NCVis_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_NCVis,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_cb_NCVis_scores = data_cb_NCVis_pca, data_cb_NCVis_lap, cb_NCVis_r, cb_NCVis_t
+            data_cb_NCVis_pca = global_score(X, TopOGraph.cb_NCVis)
+            cb_NCVis_r = local_score(CB_knn_graph, TopOGraph.cb_NCVis,
+                                     k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_cb_NCVis_scores = data_cb_NCVis_pca, cb_NCVis_r
 
         if eval_tSNE:
-            data_cb_tSNE_pca, data_db_tSNE_pca = global_scores(X, TopOGraph.cb_tSNE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            cb_tSNE_r, cb_tSNE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_tSNE,
-                                  k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_cb_tSNE_scores = data_cb_tSNE_pca, data_cb_tSNE_pca, cb_tSNE_r, cb_tSNE_t
+            data_cb_tSNE_pca = global_score(X, TopOGraph.cb_tSNE)
+            cb_tSNE_r = local_score(CB_knn_graph, TopOGraph.cb_tSNE,
+                                    k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_cb_tSNE_scores = data_cb_tSNE_pca, cb_tSNE_r
 
         if eval_diff:
-            cb_diff_r, cb_diff_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_diff_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            cb_diff_r = local_score(CB_knn_graph, TopOGraph.cb_diff_graph,
+                                    emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
 
-            cb_diff_scores = cb_diff_r, cb_diff_t
+            cb_diff_scores = cb_diff_r
 
             if eval_MAP:
-                data_cb_diff_MAP_pca, data_cb_diff_MAP_pca = global_scores(X, TopOGraph.cb_diff_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_diff_MAP_r, cb_diff_MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_diff_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_diff_MAP_scores = data_cb_diff_MAP_pca, data_cb_diff_MAP_pca, cb_diff_MAP_r, cb_diff_MAP_t
+                data_cb_diff_MAP_pca = global_score(X, TopOGraph.cb_diff_MAP)
+                cb_diff_MAP_r = local_score(TopOGraph.cb_diff_graph, TopOGraph.cb_diff_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_diff_MAP_scores = data_cb_diff_MAP_pca, cb_diff_MAP_r
             if eval_MDE:
-                data_cb_diff_MDE_pca, data_cb_diff_MDE_lap = global_scores(X, TopOGraph.cb_diff_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_diff_MDE_r, cb_diff_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_diff_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_diff_MDE_scores = data_cb_diff_MDE_pca, data_cb_diff_MDE_lap, cb_diff_MDE_r, cb_diff_MDE_t
+                data_cb_diff_MDE_pca = global_score(X, TopOGraph.cb_diff_MDE)
+                cb_diff_MDE_r = local_score(TopOGraph.cb_diff_graph, TopOGraph.cb_diff_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_diff_MDE_scores = data_cb_diff_MDE_pca, cb_diff_MDE_r
 
         if eval_cknn:
-            cb_cknn_r, cb_cknn_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_cknn_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            cb_cknn_scores = cb_cknn_r, cb_cknn_t
+            cb_cknn_r = local_score(CB_knn_graph, TopOGraph.cb_cknn_graph,
+                                    emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            cb_cknn_scores = cb_cknn_r
 
             if eval_MAP:
-                data_cb_cknn_MAP_pca, data_cb_cknn_MAP_lap = global_scores(X, TopOGraph.cb_cknn_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_cknn_MAP_r, cb__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_cknn_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_cknn_MAP_scores = data_cb_cknn_MAP_pca, data_cb_cknn_MAP_lap, cb_cknn_MAP_r, cb__MAP_t
+                data_cb_cknn_MAP_pca = global_score(X, TopOGraph.cb_cknn_MAP)
+                cb_cknn_MAP_r = local_score(TopOGraph.cb_cknn_graph, TopOGraph.cb_cknn_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_cknn_MAP_scores = data_cb_cknn_MAP_pca, cb_cknn_MAP_r
             if eval_MDE:
-                data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap = global_scores(X, TopOGraph.cb_cknn_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_cknn_MDE_r, cb_cknn_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_cknn_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_cknn_MDE_scores = data_cb_cknn_MDE_pca, data_cb_cknn_MDE_lap, cb_cknn_MDE_r, cb_cknn_MDE_t
+                data_cb_cknn_MDE_pca = global_score(X, TopOGraph.cb_cknn_MDE)
+                cb_cknn_MDE_r = local_score(TopOGraph.cb_cknn_graph, TopOGraph.cb_cknn_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_cknn_MDE_scores = data_cb_cknn_MDE_pca, cb_cknn_MDE_r
 
         if eval_fuzzy:
-            cb_fuzzy_r, cb_fuzzy_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_fuzzy_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            cb_fuzzy_scores = cb_fuzzy_r, cb_fuzzy_t
+            cb_fuzzy_r = local_score(CB_knn_graph, TopOGraph.cb_fuzzy_graph,
+                                     emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            cb_fuzzy_scores = cb_fuzzy_r
 
             if eval_MAP:
-                data_cb_fuzzy_MAP_pca, data_cb_fuzzy_MAP_lap = global_scores(X, TopOGraph.cb_fuzzy_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_fuzzy_MAP_r, cb__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_fuzzy_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_fuzzy_MAP_scores = data_cb_fuzzy_MAP_pca, data_cb_fuzzy_MAP_lap, cb_fuzzy_MAP_r, cb__MAP_t
+                data_cb_fuzzy_MAP_pca = global_score(X, TopOGraph.cb_fuzzy_MAP)
+                cb_fuzzy_MAP_r = local_score(TopOGraph.cb_fuzzy_graph, TopOGraph.cb_fuzzy_MAP,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_fuzzy_MAP_scores = data_cb_fuzzy_MAP_pca, cb_fuzzy_MAP_r
             if eval_MDE:
-                data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap = global_scores(X, TopOGraph.cb_fuzzy_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                cb_fuzzy_MDE_r, cb_fuzzy_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.cb_fuzzy_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_cb_fuzzy_MDE_scores = data_cb_fuzzy_MDE_pca, data_cb_fuzzy_MDE_lap, cb_fuzzy_MDE_r, cb_fuzzy_MDE_t
+                data_cb_fuzzy_MDE_pca = global_score(X, TopOGraph.cb_fuzzy_MDE)
+                cb_fuzzy_MDE_r = local_score(TopOGraph.cb_fuzzy_graph, TopOGraph.cb_fuzzy_MDE,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_cb_fuzzy_MDE_scores = data_cb_fuzzy_MDE_pca, cb_fuzzy_MDE_r
 
     if eval_fb:
-        fb_pca, fb_lap = global_scores(X, TopOGraph.FuzzyLapMap, k=k, metric=metric, n_jobs=n_jobs)
-        fb_r, fb_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.FuzzyLapMap,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+        if TopOGraph.verbosity > 0:
+            print('Computing fuzzy-related scores...')
+        FB_knn_graph = kNN(TopOGraph.FuzzyLapMap, n_neighbors=k,
+                           metric=metric,
+                           n_jobs=n_jobs,
+                           backend=TopOGraph.backend,
+                           M=TopOGraph.M,
+                           p=TopOGraph.p,
+                           efC=TopOGraph.efC,
+                           efS=TopOGraph.efS,
+                           return_instance=False,
+                           verbose=False)
+        fb_pca = global_score(X, TopOGraph.FuzzyLapMap)
+        fb_r = local_score(TopOGraph.base_knn_graph, FB_knn_graph,
+                           k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True, emb_is_graph=True)
 
-        fb_scores = fb_pca, fb_lap, fb_r, fb_t
+        fb_scores = fb_pca, fb_r
+
+
 
         if eval_TriMAP:
-            data_fb_TriMAP_pca, data_fb_TriMAP_lap = global_scores(X, TopOGraph.fb_TriMAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            fb_TriMAP_r, fb_TriMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_TriMAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_fb_TriMAP_scores = data_fb_TriMAP_pca, data_fb_TriMAP_lap, fb_TriMAP_r, fb_TriMAP_t
+            data_fb_TriMAP_pca = global_score(X, TopOGraph.fb_TriMAP)
+            fb_TriMAP_r = local_score(FB_knn_graph, TopOGraph.fb_TriMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_fb_TriMAP_scores = data_fb_TriMAP_pca, fb_TriMAP_r
 
         if eval_PaCMAP:
-            data_fb_PaCMAP_pca, data_fb_PaCMAP_lap = global_scores(X, TopOGraph.fb_PaCMAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            fb_PaCMAP_r, fb_PaCMAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_PaCMAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_fb_PaCMAP_scores = data_fb_PaCMAP_pca, data_fb_PaCMAP_lap, fb_PaCMAP_r, fb_PaCMAP_t
+            data_fb_PaCMAP_pca = global_score(X, TopOGraph.fb_PaCMAP)
+            fb_PaCMAP_r = local_score(FB_knn_graph, TopOGraph.fb_PaCMAP,
+                                      k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_fb_PaCMAP_scores = data_fb_PaCMAP_pca, fb_PaCMAP_r
 
         if eval_NCVis:
-            data_fb_NCVis_pca, data_fb_NCVis_lap = global_scores(X, TopOGraph.fb_NCVis,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            fb_NCVis_r, fb_NCVis_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_NCVis,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_fb_NCVis_scores = data_fb_NCVis_pca, data_fb_NCVis_lap, fb_NCVis_r, fb_NCVis_t
+            data_fb_NCVis_pca = global_score(X, TopOGraph.fb_NCVis)
+            fb_NCVis_r = local_score(FB_knn_graph, TopOGraph.fb_NCVis,
+                                     k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_fb_NCVis_scores = data_fb_NCVis_pca, fb_NCVis_r
 
         if eval_tSNE:
-            data_fb_tSNE_pca, data_db_tSNE_pca = global_scores(X, TopOGraph.fb_tSNE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-            fb_tSNE_r, fb_tSNE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_tSNE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            data_fb_tSNE_scores = data_fb_tSNE_pca, data_fb_tSNE_pca, fb_tSNE_r, fb_tSNE_t
+            data_fb_tSNE_pca = global_score(X, TopOGraph.fb_tSNE)
+            fb_tSNE_r = local_score(FB_knn_graph, TopOGraph.fb_tSNE,
+                                    k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            data_fb_tSNE_scores = data_fb_tSNE_pca, fb_tSNE_r
 
         if eval_diff:
-            fb_diff_r, fb_diff_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_diff_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            fb_diff_scores = fb_diff_r, fb_diff_t
+            fb_diff_r = local_score(FB_knn_graph, TopOGraph.fb_diff_graph,
+                                    emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            fb_diff_scores = fb_diff_r
 
             if eval_MAP:
-                data_fb_diff_MAP_pca, data_fb_diff_MAP_pca = global_scores(X, TopOGraph.fb_diff_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_diff_MAP_r, fb_diff_MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_diff_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_diff_MAP_scores = data_fb_diff_MAP_pca, data_fb_diff_MAP_pca, fb_diff_MAP_r, fb_diff_MAP_t
+                data_fb_diff_MAP_pca = global_score(X, TopOGraph.fb_diff_MAP)
+                fb_diff_MAP_r = local_score(TopOGraph.fb_diff_graph, TopOGraph.fb_diff_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_diff_MAP_scores = data_fb_diff_MAP_pca, fb_diff_MAP_r
             if eval_MDE:
-                data_fb_diff_MDE_pca, data_fb_diff_MDE_lap = global_scores(X, TopOGraph.fb_diff_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_diff_MDE_r, fb_diff_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_diff_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_diff_MDE_scores = data_fb_diff_MDE_pca, data_fb_diff_MDE_lap, fb_diff_MDE_r, fb_diff_MDE_t
+                data_fb_diff_MDE_pca = global_score(X, TopOGraph.fb_diff_MDE)
+                fb_diff_MDE_r = local_score(TopOGraph.fb_diff_graph, TopOGraph.fb_diff_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_diff_MDE_scores = data_fb_diff_MDE_pca, fb_diff_MDE_r
 
         if eval_cknn:
-            fb_cknn_r, fb_cknn_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_cknn_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            fb_cknn_scores = fb_cknn_r, fb_cknn_t
+            fb_cknn_r = local_score(FB_knn_graph, TopOGraph.fb_cknn_graph,
+                                    emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            fb_cknn_scores = fb_cknn_r
 
             if eval_MAP:
-                data_fb_cknn_MAP_pca, data_fb_cknn_MAP_lap = global_scores(X, TopOGraph.fb_cknn_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_cknn_MAP_r, fb__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_cknn_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_cknn_MAP_scores = data_fb_cknn_MAP_pca, data_fb_cknn_MAP_lap, fb_cknn_MAP_r, fb__MAP_t
+                data_fb_cknn_MAP_pca = global_score(X, TopOGraph.fb_cknn_MAP)
+                fb_cknn_MAP_r = local_score(TopOGraph.fb_cknn_graph, TopOGraph.fb_cknn_MAP,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_cknn_MAP_scores = data_fb_cknn_MAP_pca, fb_cknn_MAP_r
             if eval_MDE:
-                data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap = global_scores(X, TopOGraph.fb_cknn_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_cknn_MDE_r, fb_cknn_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_cknn_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_cknn_MDE_scores = data_fb_cknn_MDE_pca, data_fb_cknn_MDE_lap, fb_cknn_MDE_r, fb_cknn_MDE_t
+                data_fb_cknn_MDE_pca = global_score(X, TopOGraph.fb_cknn_MDE)
+                fb_cknn_MDE_r = local_score(TopOGraph.fb_cknn_graph, TopOGraph.fb_cknn_MDE,
+                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_cknn_MDE_scores = data_fb_cknn_MDE_pca, fb_cknn_MDE_r
 
         if eval_fuzzy:
-            fb_fuzzy_r, fb_fuzzy_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_fuzzy_graph,
-                                emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-            fb_fuzzy_scores = fb_fuzzy_r, fb_fuzzy_t
+            fb_fuzzy_r = local_score(FB_knn_graph, TopOGraph.fb_fuzzy_graph,
+                                     emb_is_graph=True, k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+            fb_fuzzy_scores = fb_fuzzy_r
 
             if eval_MAP:
-                data_fb_fuzzy_MAP_pca, data_fb_fuzzy_MAP_lap = global_scores(X, TopOGraph.fb_fuzzy_MAP,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_fuzzy_MAP_r, fb__MAP_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_fuzzy_MAP,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_fuzzy_MAP_scores = data_fb_fuzzy_MAP_pca, data_fb_fuzzy_MAP_lap, fb_fuzzy_MAP_r, fb__MAP_t
+                data_fb_fuzzy_MAP_pca = global_score(X, TopOGraph.fb_fuzzy_MAP)
+                fb_fuzzy_MAP_r = local_score(TopOGraph.fb_fuzzy_graph, TopOGraph.fb_fuzzy_MAP,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_fuzzy_MAP_scores = data_fb_fuzzy_MAP_pca, fb_fuzzy_MAP_r
             if eval_MDE:
-                data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap = global_scores(X, TopOGraph.fb_fuzzy_MDE,
-                                                                           k=k, metric=metric, n_jobs=n_jobs)
-                fb_fuzzy_MDE_r, fb_fuzzy_MDE_t = local_scores(TopOGraph.base_knn_graph, TopOGraph.fb_fuzzy_MDE,
-                                                            k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
-                data_fb_fuzzy_MDE_scores = data_fb_fuzzy_MDE_pca, data_fb_fuzzy_MDE_lap, fb_fuzzy_MDE_r, fb_fuzzy_MDE_t
+                data_fb_fuzzy_MDE_pca = global_score(X, TopOGraph.fb_fuzzy_MDE)
+                fb_fuzzy_MDE_r = local_score(TopOGraph.fb_fuzzy_graph, TopOGraph.fb_fuzzy_MDE,
+                                             k=k, metric=metric, n_jobs=n_jobs, data_is_graph=True)
+                data_fb_fuzzy_MDE_scores = data_fb_fuzzy_MDE_pca, fb_fuzzy_MDE_r
 
     from sklearn.decomposition import PCA
     if TopOGraph.verbosity >= 1:
@@ -461,68 +635,86 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
         if not isinstance(X, np.ndarray):
             import pandas as pd
             if isinstance(X, pd.DataFrame):
-                data = np.array(X.values.T)
+                data = np.asarray(X.values.T)
             else:
                 return print('Uknown data format.')
+        else:
+            data = X
 
     pca_emb = PCA(n_components=TopOGraph.n_eigs).fit_transform(data)
-    pca_pca, pca_lap = global_scores(X, pca_emb, k=k, metric=metric, n_jobs=n_jobs)
-    pca_r, pca_t = local_scores(X, pca_emb)
+    pca_pca = global_score(X, pca_emb)
+    pca_r = local_score(X, pca_emb, k=k, metric=metric, n_jobs=n_jobs)
 
-    embedding_scores = {'PCA' : (pca_pca, pca_lap, pca_r, pca_t)}
+    embedding_scores = {'PCA': (pca_pca, pca_r)}
     graph_scores = {}
     layout_scores = {}
 
     if eval_MAP:
         if TopOGraph.verbosity >= 1:
-            print('Computing UMAP...')
+            print('Computing default UMAP...')
         # Compare to PCA + (U)MAP and just (U)MAP
-        pca_fuzzy_results = fuzzy_simplicial_set_ann(pca_emb, n_neighbors=TopOGraph.base_knn,
-                                                     backend=TopOGraph.backend, metric=TopOGraph.base_metric,
-                                                     n_jobs=TopOGraph.n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
-                                                     verbose=TopOGraph.bases_graph_verbose)
+        try:
+            import umap
+            umap_operator = umap.UMAP(metric=metric, n_neighbors=k,
+                                      n_jobs=n_jobs, min_dist=0.4)
+            umap_emb = umap_operator.fit_transform(data)
+        except:
+            print("UMAP is not installed. Will use MAP as comparison.")
+            fuzzy_results = fuzzy_simplicial_set_ann(X, n_neighbors=k,
+                                                         backend=TopOGraph.backend, metric=metric,
+                                                         n_jobs=n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
+                                                         verbose=TopOGraph.bases_graph_verbose)
 
-        umap_on_pca_emb, aux = fuzzy_embedding(graph=pca_fuzzy_results[0],
-                                          verbose=TopOGraph.layout_verbose)
+            umap_emb, aux = fuzzy_embedding(graph=fuzzy_results[0],
+                                                   verbose=TopOGraph.layout_verbose, min_dist=0.4)
 
-        umap_on_pca_pca, umap_on_pca_lap = global_scores(X, umap_on_pca_emb, k=k, metric=metric, n_jobs=n_jobs)
-        umap_on_pca_r, umap_on_pca_t = local_scores(TopOGraph.base_knn_graph, umap_on_pca_emb, data_is_graph=True, k=k)
-        umap_on_pca_scores = umap_on_pca_pca, umap_on_pca_lap, umap_on_pca_r, umap_on_pca_t
+        umap_on_pca_pca = global_score(X, umap_emb)
+        umap_on_pca_r = local_score(X, umap_emb, k=k, metric=metric, n_jobs=n_jobs)
+        umap_on_pca_scores = umap_on_pca_pca, umap_on_pca_r
 
         layout_scores['UMAP'] = np.absolute(umap_on_pca_scores)
-
 
     if eval_tSNE:
         if TopOGraph.verbosity >= 1:
             print('Computing default tSNE...')
-        from MulticoreTSNE import MulticoreTSNE as TSNE
-        tsne_emb = TSNE(verbose=TopOGraph.layout_verbose, n_jobs=TopOGraph.n_jobs,
-                        init=pca_emb[:, 0:2], metric=TopOGraph.graph_metric).fit_transform(pca_emb)
-        tsne_on_pca_pca, tsne_on_pca_lap = global_scores(X, tsne_emb, k=k, metric=metric, n_jobs=n_jobs)
-        tsne_on_pca_r, tsne_on_pca_t = local_scores(TopOGraph.base_knn_graph, tsne_emb, data_is_graph=True, k=k)
-        tsne_on_pca_scores = tsne_on_pca_pca, tsne_on_pca_lap, tsne_on_pca_r, tsne_on_pca_t
+        try:
+            from MulticoreTSNE import MulticoreTSNE as TSNE
+            tsne_emb = TSNE(verbose=TopOGraph.layout_verbose, n_jobs=n_jobs,
+                            init=pca_emb[:, 0:2], metric=metric).fit_transform(pca_emb)
+
+        except:
+            print("MulticoreTSNE is not installed. Will use scikit-learn TSNE implementation.")
+            from sklearn.manifold import TSNE
+            tsne_emb = TSNE(verbose=TopOGraph.verbosity, n_jobs=n_jobs,
+                            init=pca_emb[:, 0:2], metric=metric).fit_transform(pca_emb)
+
+        tsne_on_pca_pca = global_score(X, tsne_emb)
+        tsne_on_pca_r = local_score(X, tsne_emb, k=k, metric=metric, n_jobs=n_jobs)
+        tsne_on_pca_scores = tsne_on_pca_pca, tsne_on_pca_r
         layout_scores['tSNE'] = np.absolute(tsne_on_pca_scores)
 
     if eval_PaCMAP:
         if TopOGraph.verbosity >= 1:
             print('Computing default PaCMAP...')
         from topo.layouts.pairwise import PaCMAP
-        pca_pacmap_emb = PaCMAP(data=pca_emb, init=pca_emb[:, 0:2], verbose=TopOGraph.layout_verbose)
-        pacmap_on_pca_pca, pacmap_on_pca_lap = global_scores(X, pca_pacmap_emb, k=k, metric=metric, n_jobs=n_jobs)
-        pacmap_on_pca_r, pacmap_on_pca_t = local_scores(TopOGraph.base_knn_graph, pca_pacmap_emb, data_is_graph=True,
-                                                        k=k)
-        pacmap_on_pca_scores = pacmap_on_pca_pca, pacmap_on_pca_lap, pacmap_on_pca_r, pacmap_on_pca_t
+        pca_pacmap_emb = PaCMAP(data=pca_emb, init=pca_emb[:, 0:2], n_neighbors=k, verbose=TopOGraph.layout_verbose)
+        pacmap_on_pca_pca = global_score(X, pca_pacmap_emb)
+        pacmap_on_pca_r = local_score(X, pca_pacmap_emb,
+                                      k=k, metric=metric, n_jobs=n_jobs)
+        pacmap_on_pca_scores = pacmap_on_pca_pca, pacmap_on_pca_r
         layout_scores['PaCMAP'] = np.absolute(pacmap_on_pca_scores)
 
     if eval_TriMAP:
         if TopOGraph.verbosity >= 1:
             print('Computing default TriMAP...')
         from topo.layouts.trimap import TriMAP
-        pca_trimap_emb = TriMAP(X=pca_emb, init=pca_emb[:, 0:2], verbose=TopOGraph.layout_verbose)
-        trimap_on_pca_pca, trimap_on_pca_lap = global_scores(X, pca_trimap_emb, k=k, metric=metric, n_jobs=n_jobs)
-        trimap_on_pca_r, trimap_on_pca_t = local_scores(TopOGraph.base_knn_graph, pca_trimap_emb, data_is_graph=True,
-                                                        k=k)
-        trimap_on_pca_scores = trimap_on_pca_pca, trimap_on_pca_lap, trimap_on_pca_r, trimap_on_pca_t
+
+
+        pca_trimap_emb = TriMAP(X=pca_emb, verbose=TopOGraph.layout_verbose, n_outliers=k)
+        trimap_on_pca_pca = global_score(X, pca_trimap_emb)
+        trimap_on_pca_r = local_score(X, pca_trimap_emb,
+                                      k=k, metric=metric, n_jobs=n_jobs)
+        trimap_on_pca_scores = trimap_on_pca_pca, trimap_on_pca_r
         layout_scores['TriMAP'] = np.absolute(trimap_on_pca_scores)
 
     if eval_MDE:
@@ -533,9 +725,9 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
         pca_mde_emb = pymde.preserve_neighbors(torch.tensor(pca_emb),
                                                n_neighbors=TopOGraph.base_knn, verbose=False).embed()
         pca_mde_emb = pca_mde_emb.numpy()
-        mde_on_pca_pca, mde_on_pca_lap = global_scores(X, pca_mde_emb, k=k, metric=metric, n_jobs=n_jobs)
-        mde_on_pca_r, mde_on_pca_t = local_scores(TopOGraph.base_knn_graph, pca_mde_emb, data_is_graph=True, k=k)
-        mde_on_pca_scores = mde_on_pca_pca, mde_on_pca_lap, mde_on_pca_r, mde_on_pca_t
+        mde_on_pca_pca = global_score(X, pca_mde_emb)
+        mde_on_pca_r = local_score(X, pca_mde_emb, k=k, metric=metric, n_jobs=n_jobs)
+        mde_on_pca_scores = mde_on_pca_pca, mde_on_pca_r
         layout_scores['MDE'] = np.absolute(mde_on_pca_scores)
 
     # if eval_NCVis:
@@ -577,7 +769,6 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
                 layout_scores['db_fuzzy_MAP'] = np.absolute(data_db_fuzzy_MAP_scores)
             if eval_MDE:
                 layout_scores['db_fuzzy_MDE'] = np.absolute(data_db_fuzzy_MDE_scores)
-
 
     if eval_cb:
         embedding_scores['CB'] = np.absolute(cb_scores)
@@ -638,5 +829,3 @@ def eval_models_layouts(TopOGraph, X, k=None, n_jobs=None, metric=None,
                 layout_scores['fb_fuzzy_MDE'] = np.absolute(data_fb_fuzzy_MDE_scores)
 
     return embedding_scores, graph_scores, layout_scores
-
-

@@ -14,23 +14,6 @@ from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.multiscale import decay_plot
 
 try:
-    from typing import Literal
-except ImportError:
-    try:
-        from typing_extensions import Literal
-    except ImportError:
-
-        class LiteralMeta(type):
-            def __getitem__(cls, values):
-                if not isinstance(values, tuple):
-                    values = (values,)
-                return type('Literal_', (Literal,), dict(__args__=values))
-
-
-        class Literal(metaclass=LiteralMeta):
-            pass
-
-try:
     import hnswlib
     _have_hnswlib = True
 except ImportError:
@@ -96,8 +79,6 @@ class TopOGraph(TransformerMixin):
          is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
          TopOMetry and will automatically convert the input array to csr_matrix for performance.
 
-
-
     base_metric : str (optional, default 'cosine')
         Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
         'cosine'. Users are encouraged to explore different metrics, such as 'euclidean' and 'inner_product'.
@@ -127,8 +108,6 @@ class TopOGraph(TransformerMixin):
         -'jaccard' (*)
 
         -'jansen-shan' (*)
-
-
 
     graph_metric : str (optional, default 'cosine').
          Similar to `base_metric`, but used for building the topological graph.
@@ -334,6 +313,7 @@ class TopOGraph(TransformerMixin):
         self.cb_NCVis = None
         self.fb_NCVis = None
         self.runtimes = {}
+        self.eigenspectrum = None
 
     def __repr__(self):
         if (self.n is not None) and (self.m is not None):
@@ -688,7 +668,7 @@ class TopOGraph(TransformerMixin):
 
         return self
 
-    def scree_plot(self, basis=None, use_eigs='knee', verbose=False):
+    def eigenspectrum(self, basis=None, use_eigs='knee', verbose=False):
         """
         Visualize the scree plot of information entropy.
 
@@ -709,7 +689,7 @@ class TopOGraph(TransformerMixin):
 
         Returns
         -------
-        A nice plot.
+        A nice scree plot .
 
         """
         if basis is not None:
@@ -728,6 +708,10 @@ class TopOGraph(TransformerMixin):
                 return print(
                     'Error: No computed basis available!')
             return decay_plot(evals=use_evals, curve=curve, verbose=verbose)
+
+
+    def scree_plot(self): # for backwards compability
+            self.eigenspectrum = self.scree_plot
 
 
     def transform(self, basis=None):
@@ -1936,7 +1920,7 @@ class TopOGraph(TransformerMixin):
              n_iter_early_exag=250,
              n_iter_without_progress=30,
              min_grad_norm=1e-07,
-             init='random',
+             init=None,
              random_state=None,
              angle=0.5,
              cheat_metric=True):
@@ -1967,7 +1951,8 @@ class TopOGraph(TransformerMixin):
             _have_mc_tsne = False
             return print('No MulticoreTSNE installation found. Exiting.')
         if self.SpecLayout is not None:
-            init = self.SpecLayout
+            if init is None:
+                init = self.SpecLayout
         if data is None:
             if self.basis == 'diffusion':
                 if self.MSDiffMap is None:
@@ -2396,24 +2381,28 @@ class TopOGraph(TransformerMixin):
         Parameters
         ----------
         X : np.ndarray or scipy.sparse.csr_matrix
-         Data matrix.
+             Data matrix.
+
         n_components : int (optional, default 2).
-         Number of components for visualization.
-        bases : str (optional, default ['diffusion', 'continuous','fuzzy'])
-         Which bases to compute. Defaults to all. To run only one or two bases, set it to
-         ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
-        graphs : str (optional, default ['diff', 'cknn','fuzzy'])
-         Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
-         ['fuzzy', 'diff'] or ['cknn'], for exemple.
-        layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis'])
-         Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
-         TriMAP and NCVis. To run only one or two layouts, set it to
-         ['tSNE', 'MAP'] or ['PaCMAP'], for exemple.
+             Number of components for visualization.
+
+        bases : str (optional, default ['diffusion', 'continuous','fuzzy']).
+             Which bases to compute. Defaults to all. To run only one or two bases, set it to
+             ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
+
+        graphs : str (optional, default ['diff', 'cknn','fuzzy']).
+             Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
+             ['fuzzy', 'diff'] or ['cknn'], for exemple.
+
+        layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']).
+             Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
+             TriMAP and NCVis. To run only one or two layouts, set it to
+             ['tSNE', 'MAP'] or ['PaCMAP'], for example.
 
         Returns
         -------
 
-        Populates the TopOMetry object slots
+        Populates the TopOMetry object slots.
 
         """
         if str('diffusion') in bases:
@@ -2592,7 +2581,7 @@ class TopOGraph(TransformerMixin):
                         self.fb_diff_MDE = self.MDE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
-                if self.fb_diff_graph is None:
+                if self.fb_cknn_graph is None:
                     self.fb_cknn_graph = self.transform()
                     self.SpecLayout = self.spectral_layout(graph=self.fb_cknn_graph, n_components=n_components)
                 if run_MAP:
@@ -2603,7 +2592,7 @@ class TopOGraph(TransformerMixin):
                         self.fb_cknn_MDE = self.MDE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
-                if self.fb_diff_graph is None:
+                if self.fb_fuzzy_graph is None:
                     self.fb_fuzzy_graph = self.transform()
                     self.SpecLayout = self.spectral_layout(graph=self.fb_fuzzy_graph, n_components=n_components)
                 if run_MAP:
