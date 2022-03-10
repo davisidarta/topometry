@@ -24,7 +24,7 @@ for mod_name in MOCK_MODULES:
 
 import topo as package
 
-pkg_name = 'topometry'
+pkg_name = package.__name__
 pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
