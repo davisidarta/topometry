@@ -15,8 +15,7 @@ from os import path
 import sys
 import mock
 
-MOCK_MODULES = ['numpy', 'scipy', 'matplotlib', 'matplotlib', 'numba', 'scikit-learn', 'kneed',
-                'pandas', 'torch', 'pandas']
+MOCK_MODULES = [ 'numba']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
