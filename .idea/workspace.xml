@@ -24,87 +24,6 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Pre-print release">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/_utils/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/_utils/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_images/TopOGraph_models.png" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_images/TopOGraph_models.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/ann/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/dists/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/sparse/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/global_scores/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/local_scores/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/graph_utils/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/map/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/mde/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/ncvis/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/pairwise/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/trimap/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/pipes/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/plot/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/_spectral/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/spectral/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/umap_layouts/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/topograph/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/cknn/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/diffusion/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/multiscale/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/umap_utils/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/utils/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/version/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/bootstrap.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/bootstrap.min.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/font-awesome.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/font-awesome.min.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/hover-min.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/old.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/css/syntax.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/FontAwesome.otf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.eot" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.ttf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.woff" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.woff2" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.eot" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.ttf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.woff" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.woff2" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/bootstrap.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/bootstrap.min.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/geopattern.min.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.min.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.slim.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.slim.min.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/script.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/underscore-min.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/js/underscore.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/ann.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/api.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/img/TopOGraph_models.png" beforeDir="false" afterPath="$PROJECT_DIR$/docs/img/TopOGraph_models.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/topo/base/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/base/__init__.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -205,7 +124,7 @@
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
       <workItem from="1646775497747" duration="23658000" />
-      <workItem from="1646879239950" duration="8093000" />
+      <workItem from="1646879239950" duration="8797000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -263,7 +182,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646887991131</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Pre-print release">
+      <created>1646890512830</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1646890512830</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
