@@ -206,6 +206,6 @@ tp.pl.gaussian_potential(db_dmap_gauss, labels=labels)
     
 
 
-#### That was it for this tutorial!
+That was it for this tutorial!
 
 Let me know if you have any questions. Feel free to [open an issue](https://github.com/davisidarta/topometry/issues) or to contact me via davisidarta@fcm.unicamp.br.

@@ -31,3 +31,7 @@ data geometry and its high-dimensional topology.
 
     topograph
 
+.. toctree::
+    :maxdepth: 3
+
+
