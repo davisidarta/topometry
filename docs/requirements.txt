@@ -6,3 +6,4 @@ mkdocstrings >= 0.14.0
 sphinx
 myst-parser
 sphinx-rtd-theme
+sphinx-autoapi

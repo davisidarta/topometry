@@ -22,180 +22,9 @@
     <select />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="- Further cleaning and fixing previous commit">
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/_utils/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/ann/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/dists/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/base/sparse/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/eval/global_scores/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/eval/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/eval/local_scores/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/graph_utils/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/map/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/mde/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/ncvis/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/pairwise/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/layouts/trimap/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/pipes/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/plot/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/spectral/_spectral/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/spectral/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/spectral/spectral/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/spectral/umap_layouts/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/topograph/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/tpgraph/cknn/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/tpgraph/diffusion/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/tpgraph/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/tpgraph/multiscale/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/utils/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/utils/umap_utils/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/utils/utils/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/topo/version/index.doctree" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/_utils/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/ann/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/dists/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/base/sparse/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/global_scores/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/eval/local_scores/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/graph_utils/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/map/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/mde/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/ncvis/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/pairwise/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/layouts/trimap/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/pipes/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/plot/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/_spectral/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/spectral/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/spectral/umap_layouts/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/topograph/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/cknn/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/diffusion/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/tpgraph/multiscale/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/umap_utils/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/utils/utils/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/topo/version/index.rst.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/bootstrap.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/bootstrap.min.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/font-awesome.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/font-awesome.min.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/hover-min.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/old.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/css/syntax.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/FontAwesome.otf" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.eot" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.ttf" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.woff" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/fontawesome-webfont.woff2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.eot" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.ttf" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.woff" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/fonts/glyphicons-halflings-regular.woff2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/graphviz.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/bootstrap.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/bootstrap.min.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/geopattern.min.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.min.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.slim.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/jquery.slim.min.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/script.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/underscore-min.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/_static/js/underscore.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/ann.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/api.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/ann/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/dists/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/sparse/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/global_scores/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/local_scores/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/graph_utils/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/map/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/mde/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/ncvis/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/pairwise/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/trimap/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/pipes/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/plot/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/_spectral/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/spectral/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/umap_layouts/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/topograph/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/cknn/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/diffusion/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/multiscale/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/umap_utils/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/utils/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/version/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/_build/html/py-modindex.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/topograph.rst" afterDir="false" />
+    <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Pre-print release">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/API.rst" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/MNIST_TopOMetry_Tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MNIST_TopOMetry_Tutorial.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/docs/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/Non_euclidean_tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/Non_euclidean_tutorial.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/20Newsgroups_Tutorial.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/20Newsgroups_Tutorial.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/API.doctree" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/MNIST_TopOMetry_Tutorial.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/MNIST_TopOMetry_Tutorial.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/Non_euclidean_tutorial.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/Non_euclidean_tutorial.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/.buildinfo" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/.buildinfo" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/API.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/20Newsgroups_Tutorial.md.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/20Newsgroups_Tutorial.md.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/API.rst.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/MNIST_TopOMetry_Tutorial.md.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/MNIST_TopOMetry_Tutorial.md.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/Non_euclidean_tutorial.md.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/Non_euclidean_tutorial.md.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/_static/pygments.css" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_static/pygments.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/installation.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/installation.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/quickstart.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/quickstart.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/requirements.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/requirements.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/search.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/search.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/_build/html/welcome.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/welcome.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/conf.py" beforeDir="false" afterPath="$PROJECT_DIR$/docs/conf.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/setup.cfg" beforeDir="false" afterPath="$PROJECT_DIR$/setup.cfg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/base/ann.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/base/ann.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/eval/global_scores.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/eval/global_scores.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/eval/local_scores.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/eval/local_scores.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/layouts/pairwise.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/layouts/pairwise.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/layouts/trimap.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/layouts/trimap.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/pipes.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/pipes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/plot.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/plot.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/version.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/version.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -294,7 +123,7 @@
       <workItem from="1646546344414" duration="1200000" />
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
-      <workItem from="1646775497747" duration="21365000" />
+      <workItem from="1646775497747" duration="22182000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -303,7 +132,14 @@
       <option name="project" value="LOCAL" />
       <updated>1636343241588</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Pre-print release">
+      <created>1646873208918</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1646873208918</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -322,7 +158,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="- Further cleaning and fixing previous commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="- Further cleaning and fixing previous commit" />
+    <MESSAGE value="Pre-print release" />
+    <option name="LAST_COMMIT_MESSAGE" value="Pre-print release" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
