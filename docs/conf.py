@@ -29,7 +29,7 @@ pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
 
-autoapi_dirs = ['../../topometry']
+autoapi_dirs = ['../../../topometry']
 
 # -- Project information -----------------------------------------------------
 
