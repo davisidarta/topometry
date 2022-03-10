@@ -24,7 +24,7 @@ for mod_name in MOCK_MODULES:
 
 import topo as package
 
-pkg_name = package.__name__
+pkg_name = 'topometry'
 pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
@@ -109,7 +109,7 @@ autodoc_default_options = {
     'members': 'var1, var2',
     'member-order': 'bysource',
     'special-members': '__init__',
-    'undoc-members': True,
+    'undoc-members': False,
     'exclude-members': '__weakref__'
 }
 
@@ -123,8 +123,6 @@ autodoc_typehints = 'none'
 
 autoapi_type = 'python'
 autoapi_generate_api_docs = True
-
-autodoc_default_options=["members"]
 
 # autosectionlabel options
 # autosectionlabel throws warnings if section names are duplicated.
