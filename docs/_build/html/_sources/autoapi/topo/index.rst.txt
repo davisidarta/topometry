@@ -599,7 +599,7 @@ Attributes
 .. py:function:: read_pkl(wd=None, filename='topograph.pkl')
 
 
-.. py:function:: annotate_doc_types(mod, root)
+.. py:function:: annotate_doc_types(mod: types.ModuleType, root: str)
 
 
 .. py:data:: __version__

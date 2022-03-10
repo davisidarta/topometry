@@ -97,11 +97,6 @@ Module Contents
 
    
 
-.. py:data:: autosummary_generate
-   :annotation: = True
-
-   
-
 .. py:data:: templates_path
    :annotation: = ['_templates']
 
@@ -139,31 +134,6 @@ Module Contents
 
 .. py:data:: source_suffix
    
-
-   
-
-.. py:data:: autodoc_default_options
-   
-
-   
-
-.. py:data:: autodoc_docstring_signature
-   :annotation: = True
-
-   
-
-.. py:data:: autodoc_inherit_docstrings
-   :annotation: = False
-
-   
-
-.. py:data:: autodoc_preserve_defaults
-   :annotation: = True
-
-   
-
-.. py:data:: autodoc_typehints
-   :annotation: = none
 
    
 
