@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.tpgraph &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://davisidarta.github.io/topometry/autoapi/topo/tpgraph/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../topograph.html">TopOGraph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.tpgraph</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/tpgraph/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.tpgraph">
+<span id="topo-tpgraph"></span><h1><a class="reference internal" href="#module-topo.tpgraph" title="topo.tpgraph"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.tpgraph</span></code></a><a class="headerlink" href="#module-topo.tpgraph" title="Permalink to this headline"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="cknn/index.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.tpgraph.cknn</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffusion/index.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.tpgraph.diffusion</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="multiscale/index.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.tpgraph.multiscale</span></code></a></li>
+</ul>
+</div>
+</section>
+<section id="package-contents">
+<h2>Package Contents<a class="headerlink" href="#package-contents" title="Permalink to this headline"></a></h2>
+<section id="classes">
+<h3>Classes<a class="headerlink" href="#classes" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.CkNearestNeighbors" title="topo.tpgraph.CkNearestNeighbors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CkNearestNeighbors</span></code></a></p></td>
+<td><p>This object provides the all logic of CkNN.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.Diffusor" title="topo.tpgraph.Diffusor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Diffusor</span></code></a></p></td>
+<td><p>Sklearn-compatible estimator for using fast anisotropic diffusion with an adaptive neighborhood search algorithm. The</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.euclidean" title="topo.tpgraph.euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">euclidean</span></code></a>(x, y)</p></td>
+<td><p>Standard euclidean distance.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.standardised_euclidean" title="topo.tpgraph.standardised_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">standardised_euclidean</span></code></a>(x, y, sigma=_mock_ones)</p></td>
+<td><p>Euclidean distance standardised against a vector of standard</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.cosine" title="topo.tpgraph.cosine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cosine</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.correlation" title="topo.tpgraph.correlation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">correlation</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.bray_curtis" title="topo.tpgraph.bray_curtis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bray_curtis</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.canberra" title="topo.tpgraph.canberra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canberra</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.chebyshev" title="topo.tpgraph.chebyshev"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chebyshev</span></code></a>(x, y)</p></td>
+<td><p>Chebyshev or l-infinity distance.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.manhattan" title="topo.tpgraph.manhattan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manhattan</span></code></a>(x, y)</p></td>
+<td><p>Manhattan, taxicab, or l1 distance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.mahalanobis" title="topo.tpgraph.mahalanobis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mahalanobis</span></code></a>(x, y, vinv=_mock_identity)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.minkowski" title="topo.tpgraph.minkowski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">minkowski</span></code></a>(x, y, p=2)</p></td>
+<td><p>Minkowski distance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.dice" title="topo.tpgraph.dice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dice</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.hamming" title="topo.tpgraph.hamming"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hamming</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.jaccard" title="topo.tpgraph.jaccard"><code class="xref py py-obj docutils literal notranslate"><span class="pre">jaccard</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.kulsinski" title="topo.tpgraph.kulsinski"><code class="xref py py-obj docutils literal notranslate"><span class="pre">kulsinski</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.rogers_tanimoto" title="topo.tpgraph.rogers_tanimoto"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rogers_tanimoto</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.russellrao" title="topo.tpgraph.russellrao"><code class="xref py py-obj docutils literal notranslate"><span class="pre">russellrao</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.sokal_michener" title="topo.tpgraph.sokal_michener"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sokal_michener</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.sokal_sneath" title="topo.tpgraph.sokal_sneath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sokal_sneath</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.yule" title="topo.tpgraph.yule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">yule</span></code></a>(x, y)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph.cknn_graph" title="topo.tpgraph.cknn_graph"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cknn_graph</span></code></a>(X, n_neighbors, delta=1.0, metric='euclidean', t='inf', include_self=False, is_sparse=True, return_instance=False)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph.kNN" title="topo.tpgraph.kNN"><code class="xref py py-obj docutils literal notranslate"><span class="pre">kNN</span></code></a>(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=15, p=11 / 16, efC=50, efS=50, return_instance=False, verbose=False)</p></td>
+<td><p>General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="multiscale/index.html#module-topo.tpgraph.multiscale" title="topo.tpgraph.multiscale"><code class="xref py py-obj docutils literal notranslate"><span class="pre">multiscale</span></code></a>(res, n_eigs='max', verbose=True)</p></td>
+<td><p>Learn multiscale maps from the diffusion basis.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="attributes">
+<h3>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.tpgraph._have_hnswlib" title="topo.tpgraph._have_hnswlib"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_have_hnswlib</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.tpgraph._have_nmslib" title="topo.tpgraph._have_nmslib"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_have_nmslib</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.euclidean">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.euclidean" title="Permalink to this definition"></a></dt>
+<dd><p>Standard euclidean distance.
+..math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sqrt</span><span class="p">{</span>\<span class="n">sum_i</span> <span class="p">(</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span><span class="p">}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.standardised_euclidean">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">standardised_euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_ones</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.standardised_euclidean" title="Permalink to this definition"></a></dt>
+<dd><dl>
+<dt>Euclidean distance standardised against a vector of standard</dt><dd><p>deviations per coordinate.
+..math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sqrt</span><span class="p">{</span>\<span class="n">sum_i</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+<p>rac{(x_i - y_i)**2}{v_i}}</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.cosine">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">cosine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.cosine" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.correlation">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">correlation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.correlation" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.bray_curtis">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">bray_curtis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.bray_curtis" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.canberra">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">canberra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.canberra" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.chebyshev">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">chebyshev</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.chebyshev" title="Permalink to this definition"></a></dt>
+<dd><p>Chebyshev or l-infinity distance.
+..math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">max_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.manhattan">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">manhattan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.manhattan" title="Permalink to this definition"></a></dt>
+<dd><p>Manhattan, taxicab, or l1 distance.
+..math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">D</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> \<span class="n">sum_i</span> <span class="o">|</span><span class="n">x_i</span> <span class="o">-</span> <span class="n">y_i</span><span class="o">|</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.mahalanobis">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">mahalanobis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vinv</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">_mock_identity</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.mahalanobis" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.minkowski">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">minkowski</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.minkowski" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Minkowski distance.</dt><dd><dl class="simple">
+<dt>..math::</dt><dd><p>D(x, y) = left(sum_i <a href="#id1"><span class="problematic" id="id2">|</span></a>x_i - y_i|^p</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>ight)^{
+rac{1}{p}}</p>
+<blockquote>
+<div><p>This is a general distance. For p=1 it is equivalent to
+manhattan distance, for p=2 it is Euclidean distance, and
+for p=infinity it is Chebyshev distance. In general it is better
+to use the more specialised functions for those distances.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.dice">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">dice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.dice" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.hamming">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">hamming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.hamming" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.jaccard">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">jaccard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.jaccard" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.kulsinski">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">kulsinski</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.kulsinski" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.rogers_tanimoto">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">rogers_tanimoto</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.rogers_tanimoto" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.russellrao">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">russellrao</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.russellrao" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.sokal_michener">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">sokal_michener</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.sokal_michener" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.sokal_sneath">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">sokal_sneath</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.sokal_sneath" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.yule">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">yule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.yule" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.cknn_graph">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">cknn_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'inf'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_self</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_sparse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_instance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.cknn_graph" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="topo.tpgraph.CkNearestNeighbors">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">CkNearestNeighbors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'inf'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_self</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_sparse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.CkNearestNeighbors" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This object provides the all logic of CkNN.
+:param n_neighbors: int, optional, default=5</p>
+<blockquote>
+<div><p>Number of neighbors to estimate the density around the point.
+It appeared as a parameter <cite>k</cite> in the paper.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>delta</strong> – float, optional, default=1.0
+A parameter to decide the radius for each points. The combination
+radius increases in proportion to this parameter.</p></li>
+<li><p><strong>metric</strong> – str, optional, default=’euclidean’
+The metric of each points. This parameter depends on the parameter
+<cite>metric</cite> of scipy.spatial.distance.pdist.</p></li>
+<li><p><strong>t</strong> – <p>‘inf’ or float or int, optional, default=’inf’
+The decay parameter of heat kernel. The weights are calculated as
+follow:</p>
+<blockquote>
+<div><p>W_{ij} = exp(-(||x_{i}-x_{j}||^2)/t)</p>
+</div></blockquote>
+<p>For more infomation, read the paper ‘Laplacian Eigenmaps for
+Dimensionality Reduction and Data Representation’, Belkin, et. al.</p>
+</p></li>
+<li><p><strong>include_self</strong> – bool, optional, default=True
+All diagonal elements are 1.0 if this parameter is True.</p></li>
+<li><p><strong>is_sparse</strong> – bool, optional, default=True
+The method <cite>cknneighbors_graph</cite> returns csr_matrix object if this
+parameter is True else returns ndarray object.</p></li>
+<li><p><strong>return_adjacency</strong> – bool, optional, default=False
+Whether to return the adjacency matrix instead of the estimated similarity.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.CkNearestNeighbors.__repr__">
+<span class="sig-name descname"><span class="pre">__repr__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.CkNearestNeighbors.__repr__" title="Permalink to this definition"></a></dt>
+<dd><p>Return repr(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.CkNearestNeighbors.cknneighbors_graph">
+<span class="sig-name descname"><span class="pre">cknneighbors_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.CkNearestNeighbors.cknneighbors_graph" title="Permalink to this definition"></a></dt>
+<dd><p>A method to calculate the CkNN graph
+:param X: ndarray</p>
+<blockquote>
+<div><p>The data matrix.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>return: csr_matrix (if self.is_sparse is True)</dt><dd><p>or ndarray(if self.is_sparse is False)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.kNN">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">kNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'euclidean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'nmslib'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">11</span> <span class="pre">/</span> <span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_instance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.kNN" title="Permalink to this definition"></a></dt>
+<dd><p>General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>np.ndarray</em><em> or </em><em>scipy.sparse.csr_matrix.</em>) – Input data.</p></li>
+<li><p><strong>n_neighbors</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em>) – number of nearest-neighbors to look for. In practice,
+this should be considered the average neighborhood size and thus vary depending
+on your number of features, samples and data intrinsic dimensionality. Reasonable values
+range from 5 to 100. Smaller values tend to lead to increased graph structure
+resolution, but users should beware that a too low value may render granulated and vaguely
+defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+values can slightly increase computational time.</p></li>
+<li><p><strong>metric</strong> (<em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'cosine'</em><em>)</em><em></em>) – Accepted NMSLIB metrics. Defaults to ‘cosine’. Accepted metrics include:
+-‘sqeuclidean’
+-‘euclidean’
+-‘l1’
+-‘lp’ - requires setting the parameter <cite>p</cite> - equivalent to minkowski distance
+-‘cosine’
+-‘angular’
+-‘negdotprod’
+-‘levenshtein’
+-‘hamming’
+-‘jaccard’
+-‘jansen-shan’</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 1</em><em>)</em><em></em>) – number of threads to be used in computation. Defaults to 1. The algorithm is highly
+scalable to multi-threading.</p></li>
+<li><p><strong>M</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em><em></em>) – defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+(Hierarchical Navigable Small World Graph). However, the actual default maximum number
+of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+is 5-100. For more information on HSNW, please check <a class="reference external" href="https://arxiv.org/abs/1603.09320">https://arxiv.org/abs/1603.09320</a>.
+HSNW is implemented in python via NMSlib. Please check more about NMSlib at <a class="reference external" href="https://github.com/nmslib/nmslib">https://github.com/nmslib/nmslib</a>.</p></li>
+<li><p><strong>efC</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em><em></em>) – A ‘hnsw’ parameter. Increasing this value improves the quality of a constructed graph
+and leads to higher accuracy of search. However this also leads to longer indexing times.
+A reasonable range for this parameter is 50-2000.</p></li>
+<li><p><strong>efS</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em><em></em>) – A ‘hnsw’ parameter. Similarly to efC, increasing this value improves recall at the
+expense of longer retrieval time. A reasonable range for this parameter is 100-2000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="topo.tpgraph._have_hnswlib">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">_have_hnswlib</span></span><em class="property"><span class="w"> </span><span class="pre">=</span> <span class="pre">True</span></em><a class="headerlink" href="#topo.tpgraph._have_hnswlib" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="topo.tpgraph._have_nmslib">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">_have_nmslib</span></span><em class="property"><span class="w"> </span><span class="pre">=</span> <span class="pre">True</span></em><a class="headerlink" href="#topo.tpgraph._have_nmslib" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">Diffusor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_eigs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_eigs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'max'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_use</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'simple'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eigen_expansion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_spectrum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'nmslib'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transitions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Sklearn-compatible estimator for using fast anisotropic diffusion with an adaptive neighborhood search algorithm. The
+Diffusion Maps algorithm was initially proposed by Coifman et al in 2005, and was augmented by the work of many.
+This implementation aggregates recent advances in diffusion harmonics, and innovates only by implementing an
+adaptively decaying kernel (the rate of decay is dependent on neighborhood density)
+and an adaptive neighborhood estimation approach.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_eigs</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 50</em><em>)</em>) – Number of diffusion components to compute. This number can be iterated to get different views
+from data at distinct spectral resolution.</p></li>
+<li><p><strong>use_eigs</strong> (<em>int</em><em> or </em><em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'knee'</em><em>)</em>) – Number of eigenvectors to use. If ‘max’, expands to the maximum number of positive eigenvalues
+(reach of numerical precision), else to the maximum amount of computed components.
+If ‘knee’, uses Kneedle to find an optimal cutoff point, and expands it by <code class="docutils literal notranslate"><span class="pre">expansion</span></code>.
+If ‘comp_gap’, tries to find a discrete eigengap from the computation process.</p></li>
+</ul>
+</dd>
+</dl>
+<dl>
+<dt>n_neighbors<span class="classifier">int (optional, default 10)</span></dt><dd><p>Number of k-nearest-neighbors to compute. The adaptive kernel will normalize distances by each cell
+distance of its median neighbor. Nonetheless, this hyperparameter remains as an user input regarding
+the minimal sample neighborhood resolution that drives the computation of the diffusion metrics. For
+practical purposes, the minimum amount of samples one would expect to constitute a neighborhood of its
+own. Increasing <cite>k</cite> can generate more globally-comprehensive metrics and maps, to a certain extend,
+however at the expense of fine-grained resolution. More generally, consider this a calculus
+discretization threshold.</p>
+</dd>
+<dt>backend<span class="classifier">str (optional, default ‘hnwslib’)</span></dt><dd><p>Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
+are ‘hnwslib’ (default) and ‘nmslib’. For exact nearest-neighbors, use ‘sklearn’.</p>
+</dd>
+<dt>metric<span class="classifier">str (optional, default ‘cosine’)</span></dt><dd><p>Distance metric for building an approximate kNN graph. Defaults to
+‘cosine’. Users are encouraged to explore different metrics, such as ‘euclidean’ and ‘inner_product’.
+The ‘hamming’ and ‘jaccard’ distances are also available for string vectors.</p>
+<blockquote>
+<div><p>Accepted metrics include NMSLib*, HNSWlib** and sklearn metrics. Some examples are:</p>
+</div></blockquote>
+<p>-‘sqeuclidean’ (<em>, *</em>)</p>
+<p>-‘euclidean’ (<em>, *</em>)</p>
+<p>-‘l1’ (*)</p>
+<p>-‘lp’ - requires setting the parameter <code class="docutils literal notranslate"><span class="pre">p</span></code> (*) - similar to Minkowski</p>
+<p>-‘cosine’ (<em>, *</em>)</p>
+<p>-‘inner_product’ (**)</p>
+<p>-‘angular’ (*)</p>
+<p>-‘negdotprod’ (*)</p>
+<p>-‘levenshtein’ (*)</p>
+<p>-‘hamming’ (*)</p>
+<p>-‘jaccard’ (*)</p>
+<p>-‘jansen-shan’ (*)</p>
+</dd>
+<dt>p<span class="classifier">int or float (optional, default 11/16 )</span></dt><dd><p>P for the Lp metric, when <code class="docutils literal notranslate"><span class="pre">metric='lp'</span></code>.  Can be fractional. The default 11/16 approximates
+an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
+See <a class="reference external" href="https://en.wikipedia.org/wiki/Lp_space">https://en.wikipedia.org/wiki/Lp_space</a> for some context.</p>
+</dd>
+<dt>transitions<span class="classifier">bool (optional, default False)</span></dt><dd><dl class="simple">
+<dt>Whether to estimate the diffusion transitions graph. If <cite>True</cite>, maps a basis encoding neighborhood</dt><dd><p>transitions probability during eigendecomposition. If ‘False’ (default), maps the diffusion kernel.</p>
+</dd>
+</dl>
+</dd>
+<dt>alpha<span class="classifier">int or float (optional, default 1)</span></dt><dd><dl class="simple">
+<dt>Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.</dt><dd><p>Defaults to 1, which is suitable for normalized data.</p>
+</dd>
+</dl>
+</dd>
+<dt>kernel_use<span class="classifier">str (optional, default ‘decay_adaptive’)</span></dt><dd><p>Which type of kernel to use. There are four implemented, considering the adaptive decay and the
+neighborhood expansion, written as ‘simple’, ‘decay’, ‘simple_adaptive’ and ‘decay_adaptive’. The first, ‘simple’
+, is a locally-adaptive kernel similar to that proposed by Nadler et al.(<a class="reference external" href="https://doi.org/10.1016/j.acha.2005.07.004">https://doi.org/10.1016/j.acha.2005.07.004</a>)
+and implemented in Setty et al. (<a class="reference external" href="https://doi.org/10.1038/s41587-019-0068-4">https://doi.org/10.1038/s41587-019-0068-4</a>). The ‘decay’ option applies an
+adaptive decay rate, but no neighborhood expansion. Those, followed by ‘_adaptive’, apply the neighborhood expansion process.</p>
+<blockquote>
+<div><p>The default and recommended is ‘decay_adaptive’.</p>
+</div></blockquote>
+<p>The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.</p>
+</dd>
+<dt>transitions<span class="classifier">bool (optional, default False)</span></dt><dd><p>Whether to decompose the transition graph when transforming.</p>
+</dd>
+<dt>norm<span class="classifier">bool (optional, default True)</span></dt><dd><p>Whether to normalize the kernel transition probabilities to approximate the LPO.</p>
+</dd>
+<dt>eigen_expansion<span class="classifier">bool (optional, default False)</span></dt><dd><p>Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).</p>
+</dd>
+<dt>n_jobs<span class="classifier">int (optional, default 4)</span></dt><dd><p>Number of threads to use in calculations. Defaults to 4 for safety, but performance
+scales dramatically when using more threads.</p>
+</dd>
+<dt>plot_spectrum<span class="classifier">bool (optional, default False)</span></dt><dd><p>Whether to plot the spectrum decay analysis.</p>
+</dd>
+<dt>verbose<span class="classifier">bool (optional, default False)</span></dt><dd><p>Controls verbosity.</p>
+</dd>
+<dt>cache<span class="classifier">bool (optional, default True)</span></dt><dd><p>Whether to cache nearest-neighbors (before fit) and to store diffusion matrices after mapping (before transform).</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>import numpy as np
+from sklearn.datasets import load_digits
+from scipy.sparse import csr_matrix
+from topo.tpgraph.diffusion import Diffusor</p>
+<p>digits = load_digits()
+data = csr_matrix(digits)</p>
+<p>diff = Diffusor().fit(data)</p>
+<p>msdiffmap = diff.transform(data)</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.__repr__">
+<span class="sig-name descname"><span class="pre">__repr__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.__repr__" title="Permalink to this definition"></a></dt>
+<dd><p>Return repr(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.fit" title="Permalink to this definition"></a></dt>
+<dd><p>Fits an adaptive anisotropic diffusion kernel to the data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> – input data. Takes in numpy arrays and scipy csr sparse matrices.</p></li>
+<li><p><strong>of</strong> (<em>Use with sparse data for top performance. You can adjust a series</em>) – </p></li>
+<li><p><strong>depending</strong> (<em>parameters that can make the process faster and more informational</em>) – </p></li>
+<li><p><strong>dataset.</strong> (<em>on your</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>Diffusor object with kernel Diffusor.K and the transition potencial Diffusor.T .</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.transform">
+<span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.transform" title="Permalink to this definition"></a></dt>
+<dd><blockquote>
+<div><p>Fits the renormalized Laplacian approximating the Laplace Beltrami-Operator
+in a discrete eigendecomposition. Then multiscales the resulting components.
+Parameters
+———-
+X :</p>
+<blockquote>
+<div><p>input data. Takes in numpy arrays and scipy csr sparse matrices.</p>
+</div></blockquote>
+<p>Use with sparse data for top performance. You can adjust a series of
+parameters that can make the process faster and more informational depending
+on your dataset.</p>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">Diffusor.res['MultiscaleComponents']]</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.ind_dist_grad">
+<span class="sig-name descname"><span class="pre">ind_dist_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.ind_dist_grad" title="Permalink to this definition"></a></dt>
+<dd><p>Utility function to get indices, distances and gradients from a multiscale diffusion map.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data</strong> – Input data matrix (numpy array, pandas df, csr_matrix).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>A tuple containing neighborhood indices, distances, gradient and a knn graph.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.res_dict">
+<span class="sig-name descname"><span class="pre">res_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.res_dict" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>Dictionary containing normalized and multiscaled Diffusion Components</em></p></li>
+<li><p><em>(Diffusor.res[‘StructureComponents’]), their eigenvalues[‘EigenValues’] and</em></p></li>
+<li><p><em>non - multiscaled components([‘EigenVectors’]).</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.rescale">
+<span class="sig-name descname"><span class="pre">rescale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_eigs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.rescale" title="Permalink to this definition"></a></dt>
+<dd><p>Re-scale the multiscale procedure to a new number of components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>self</strong> (<em>Diffusor object.</em>) – </p></li>
+<li><p><strong>n_eigs</strong> (<em>int. Number of diffusion components to multiscale.</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>np.ndarray containing the new multiscaled basis.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.tpgraph.Diffusor.spectrum_plot">
+<span class="sig-name descname"><span class="pre">spectrum_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bla</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.Diffusor.spectrum_plot" title="Permalink to this definition"></a></dt>
+<dd><p>Plot the decay spectra.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>self</strong> (<em>Diffusor object.</em>) – </p></li>
+<li><p><strong>bla</strong> (<em>Here only for autodoc's sake.</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>A nice plot of the diffusion spectra.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.tpgraph.multiscale">
+<span class="sig-prename descclassname"><span class="pre">topo.tpgraph.</span></span><span class="sig-name descname"><span class="pre">multiscale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_eigs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'max'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.tpgraph.multiscale" title="Permalink to this definition"></a></dt>
+<dd><p>Learn multiscale maps from the diffusion basis.
+:param verbose:
+:param res: Results from the dbMAP framework. Expects dictionary containing numerical</p>
+<blockquote>
+<div><p>‘EigenVectors’ and ‘EigenValues’.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_eigs</strong> (<em>int</em><em> or </em><em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'max'</em><em>)</em>) – Number of eigenvectors to use. If ‘max’, expands to the maximum number of positive eigenvalues
+(reach of numerical precision), else to the maximum amount of computed components.
+If ‘knee’, uses Kneedle to find an optimal cutoff point, and expands it by <code class="docutils literal notranslate"><span class="pre">expansion</span></code>.
+If ‘comp_gap’, tries to find a discrete eigengap from the computation process.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>) – Controls verbosity.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>np.ndarray containing the multiscale diffusion components.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

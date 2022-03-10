@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Approximate Nearest-Neighbors &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="canonical" href="https://davisidarta.github.io/topometry/ann.html" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Example 1: MNIST digits" href="MNIST_TopOMetry_Tutorial.html" />
+    <link rel="prev" title="TopOGraph" href="api.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> TopOMetry
+            <img src="_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick-start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">TopOGraph</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Approximate Nearest-Neighbors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MNIST_TopOMetry_Tutorial.html">Example 1: MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="20Newsgroups_Tutorial.html">Example 2: using TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Non_euclidean_tutorial.html">Example 3: embedding to non-euclidean spaces with MAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="autoapi/index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Approximate Nearest-Neighbors</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/ann.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="approximate-nearest-neighbors">
+<h1>Approximate Nearest-Neighbors<a class="headerlink" href="#approximate-nearest-neighbors" title="Permalink to this headline"></a></h1>
+<section id="general-function-topo-ann-knn">
+<h2>General function: <cite>topo.ann.kNN</cite><a class="headerlink" href="#general-function-topo-ann-knn" title="Permalink to this headline"></a></h2>
+<span class="target" id="module-topo.ann.kNN"></span><p>General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib or scikit-learn.</p>
+<dl class="field-list simple">
+<dt class="field-odd">param X</dt>
+<dd class="field-odd"><p>Input data.</p>
+</dd>
+<dt class="field-even">type X</dt>
+<dd class="field-even"><p>np.ndarray or scipy.sparse.csr_matrix.</p>
+</dd>
+<dt class="field-odd">param n_neighbors</dt>
+<dd class="field-odd"><p>number of nearest-neighbors to look for. In practice,
+this should be considered the average neighborhood size and thus vary depending
+on your number of features, samples and data intrinsic dimensionality. Reasonable values
+range from 5 to 100. Smaller values tend to lead to increased graph structure
+resolution, but users should beware that a too low value may render granulated and vaguely
+defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+values can slightly increase computational time.</p>
+</dd>
+<dt class="field-even">type n_neighbors</dt>
+<dd class="field-even"><p>int (optional, default 30)</p>
+</dd>
+<dt class="field-odd">param metric</dt>
+<dd class="field-odd"><p>Accepted NMSLIB metrics. Defaults to ‘cosine’. Accepted metrics include:
+-‘sqeuclidean’
+-‘euclidean’
+-‘l1’
+-‘lp’ - requires setting the parameter <cite>p</cite> - equivalent to minkowski distance
+-‘cosine’
+-‘angular’
+-‘negdotprod’
+-‘levenshtein’
+-‘hamming’
+-‘jaccard’
+-‘jansen-shan’</p>
+</dd>
+<dt class="field-even">type metric</dt>
+<dd class="field-even"><p>str (optional, default ‘cosine’).</p>
+</dd>
+<dt class="field-odd">param n_jobs</dt>
+<dd class="field-odd"><p>number of threads to be used in computation. Defaults to 1. The algorithm is highly
+scalable to multi-threading.</p>
+</dd>
+<dt class="field-even">type n_jobs</dt>
+<dd class="field-even"><p>int (optional, default 1).</p>
+</dd>
+<dt class="field-odd">param M</dt>
+<dd class="field-odd"><p>defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+(Hierarchical Navigable Small World Graph). However, the actual default maximum number
+of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+is 5-100. For more information on HSNW, please check <a class="reference external" href="https://arxiv.org/abs/1603.09320">https://arxiv.org/abs/1603.09320</a>.
+HSNW is implemented in python via NMSlib. Please check more about NMSlib at <a class="reference external" href="https://github.com/nmslib/nmslib">https://github.com/nmslib/nmslib</a>.</p>
+</dd>
+<dt class="field-even">type M</dt>
+<dd class="field-even"><p>int (optional, default 30).</p>
+</dd>
+<dt class="field-odd">param efC</dt>
+<dd class="field-odd"><p>A ‘hnsw’ parameter. Increasing this value improves the quality of a constructed graph
+and leads to higher accuracy of search. However this also leads to longer indexing times.
+A reasonable range for this parameter is 50-2000.</p>
+</dd>
+<dt class="field-even">type efC</dt>
+<dd class="field-even"><p>int (optional, default 100).</p>
+</dd>
+<dt class="field-odd">param efS</dt>
+<dd class="field-odd"><p>A ‘hnsw’ parameter. Similarly to efC, increasing this value improves recall at the
+expense of longer retrieval time. A reasonable range for this parameter is 100-2000.</p>
+</dd>
+<dt class="field-even">type efS</dt>
+<dd class="field-even"><p>int (optional, default 100).</p>
+</dd>
+<dt class="field-odd">returns</dt>
+<dd class="field-odd"><p><em>A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.</em></p>
+</dd>
+</dl>
+</section>
+<section id="with-nmslib-topo-ann-nmslibtransformer">
+<h2>With NMSLib: <cite>topo.ann.NMSlibTransformer</cite><a class="headerlink" href="#with-nmslib-topo-ann-nmslibtransformer" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">topo.ann.</span></span><span class="sig-name descname"><span class="pre">NMSlibTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hnsw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer" title="Permalink to this definition"></a></dt>
+<dd><p>Wrapper for using nmslib as sklearn’s KNeighborsTransformer. This implements
+an escalable approximate k-nearest-neighbors graph on spaces defined by nmslib.
+Read more about nmslib and its various available metrics at
+<a class="reference external" href="https://github.com/nmslib/nmslib">https://github.com/nmslib/nmslib</a>.
+Calling ‘nn &lt;- NMSlibTransformer()’ initializes the class with</p>
+<blockquote>
+<div><p>neighbour search parameters.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_neighbors</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em>) – number of nearest-neighbors to look for. In practice,
+this should be considered the average neighborhood size and thus vary depending
+on your number of features, samples and data intrinsic dimensionality. Reasonable values
+range from 5 to 100. Smaller values tend to lead to increased graph structure
+resolution, but users should beware that a too low value may render granulated and vaguely
+defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+values can slightly increase computational time.</p></li>
+<li><p><strong>metric</strong> (<em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'cosine'</em><em>)</em><em></em>) – Accepted NMSLIB metrics. Defaults to ‘cosine’. Accepted metrics include:
+-‘sqeuclidean’
+-‘euclidean’
+-‘l1’
+-‘lp’ - requires setting the parameter <cite>p</cite> - equivalent to minkowski distance
+-‘cosine’
+-‘angular’
+-‘negdotprod’
+-‘levenshtein’
+-‘hamming’
+-‘jaccard’
+-‘jansen-shan’</p></li>
+<li><p><strong>method</strong> (<em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'hsnw'</em><em>)</em><em></em>) – <dl class="simple">
+<dt>approximate-neighbor search method. Available methods include:</dt><dd><p>-‘hnsw’ : a Hierarchical Navigable Small World Graph.
+-‘sw-graph’ : a Small World Graph.
+-‘vp-tree’ : a Vantage-Point tree with a pruning rule adaptable to non-metric distances.
+-‘napp’ : a Neighborhood APProximation index.
+-‘simple_invindx’ : a vanilla, uncompressed, inverted index, which has no parameters.
+-‘brute_force’ : a brute-force search, which has no parameters.</p>
+</dd>
+</dl>
+<p>’hnsw’ is usually the fastest method, followed by ‘sw-graph’ and ‘vp-tree’.</p>
+</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 1</em><em>)</em><em></em>) – number of threads to be used in computation. Defaults to 1. The algorithm is highly
+scalable to multi-threading.</p></li>
+<li><p><strong>M</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em><em></em>) – defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+(Hierarchical Navigable Small World Graph). However, the actual default maximum number
+of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+is 5-100. For more information on HSNW, please check <a class="reference external" href="https://arxiv.org/abs/1603.09320">https://arxiv.org/abs/1603.09320</a>.
+HSNW is implemented in python via NMSlib. Please check more about NMSlib at <a class="reference external" href="https://github.com/nmslib/nmslib">https://github.com/nmslib/nmslib</a>.</p></li>
+<li><p><strong>efC</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em><em></em>) – A ‘hnsw’ parameter. Increasing this value improves the quality of a constructed graph
+and leads to higher accuracy of search. However this also leads to longer indexing times.
+A reasonable range for this parameter is 50-2000.</p></li>
+<li><p><strong>efS</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em><em></em>) – A ‘hnsw’ parameter. Similarly to efC, increasing this value improves recall at the
+expense of longer retrieval time. A reasonable range for this parameter is 100-2000.</p></li>
+<li><p><strong>dense</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em><em></em>) – Whether to force the algorithm to use dense data, such as np.ndarrays and pandas DataFrames.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>Class for really fast approximate-nearest-neighbors search.</em></p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>import numpy as np
+from sklearn.datasets import load_digits
+from scipy.sparse import csr_matrix
+from topo.base.ann import NMSlibTransformer
+#
+# Load the MNIST digits data, convert to sparse for speed
+digits = load_digits()
+data = csr_matrix(digits)
+#
+# Start class with parameters
+nn = NMSlibTransformer()
+nn = nn.fit(data)
+#
+# Obtain kNN graph
+knn = nn.transform(data)
+#
+# Obtain kNN indices, distances and distance gradient
+ind, dist, grad = nn.ind_dist_grad(data)
+#
+# Test for recall efficiency during approximate nearest neighbors search
+test = nn.test_efficiency(data)</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hnsw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.__init__" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.fit" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.transform">
+<span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.transform" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.ind_dist_grad">
+<span class="sig-name descname"><span class="pre">ind_dist_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.ind_dist_grad" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.test_efficiency">
+<span class="sig-name descname"><span class="pre">test_efficiency</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_use</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.test_efficiency" title="Permalink to this definition"></a></dt>
+<dd><p>Test if NMSlibTransformer and KNeighborsTransformer give same results</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.update_search">
+<span class="sig-name descname"><span class="pre">update_search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.update_search" title="Permalink to this definition"></a></dt>
+<dd><p>Updates number of neighbors for kNN distance computation.
+:param n_neighbors:
+:type n_neighbors: New number of neighbors to look for.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.fit_transform">
+<span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.fit_transform" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.NMSlibTransformer.getdoc">
+<span class="sig-name descname"><span class="pre">getdoc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.NMSlibTransformer.getdoc" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="with-hnswlib-topo-ann-hnswlibtransformer">
+<h2>With HNSWlib: <cite>topo.ann.HNSWlibTransformer</cite><a class="headerlink" href="#with-hnswlib-topo-ann-hnswlibtransformer" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">topo.ann.</span></span><span class="sig-name descname"><span class="pre">HNSWlibTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer" title="Permalink to this definition"></a></dt>
+<dd><p>Wrapper for using HNSWlib as sklearn’s KNeighborsTransformer. This implements
+an escalable approximate k-nearest-neighbors graph on spaces defined by hnwslib.
+Read more about hnwslib  at
+<a class="reference external" href="https://github.com/nmslib/hnswlib">https://github.com/nmslib/hnswlib</a>
+Calling ‘nn &lt;- HNSWlibTransformer()’ initializes the class with</p>
+<blockquote>
+<div><p>neighbour search parameters.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_neighbors</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em>) – number of nearest-neighbors to look for. In practice,
+this should be considered the average neighborhood size and thus vary depending
+on your number of features, samples and data intrinsic dimensionality. Reasonable values
+range from 5 to 100. Smaller values tend to lead to increased graph structure
+resolution, but users should beware that a too low value may render granulated and vaguely
+defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+values can slightly increase computational time.</p></li>
+<li><p><strong>metric</strong> (<em>str</em><em> (</em><em>optional</em><em>, </em><em>default 'cosine'</em><em>)</em>) – accepted NMSLIB metrics. Defaults to ‘cosine’. Accepted metrics include:
+-‘sqeuclidean’ and ‘euclidean’
+-‘inner_product’
+-‘cosine’
+For additional metrics, use the NMSLib backend.</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 1</em><em>)</em>) – number of threads to be used in computation. Defaults to 1. The algorithm is highly
+scalable to multi-threading.</p></li>
+<li><p><strong>M</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 30</em><em>)</em>) – defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+(Hierarchical Navigable Small World Graph). However, the actual default maximum number
+of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+is 5-100. For more information on HSNW, please check <a class="reference external" href="https://arxiv.org/abs/1603.09320">https://arxiv.org/abs/1603.09320</a>.</p></li>
+<li><p><strong>efC</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em>) – A ‘hnsw’ parameter. Increasing this value improves the quality of a constructed graph
+and leads to higher accuracy of search. However this also leads to longer indexing times.
+A reasonable range for this parameter is 50-2000.</p></li>
+<li><p><strong>efS</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 100</em><em>)</em>) – A ‘hnsw’ parameter. Similarly to efC, increasing this value improves recall at the
+expense of longer retrieval time. A reasonable range for this parameter is 100-2000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><em>Class for really fast approximate-nearest-neighbors search.</em></p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">efS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.__init__" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.fit" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.transform">
+<span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.transform" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.ind_dist_grad">
+<span class="sig-name descname"><span class="pre">ind_dist_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.ind_dist_grad" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.test_efficiency">
+<span class="sig-name descname"><span class="pre">test_efficiency</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">percent_use</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.test_efficiency" title="Permalink to this definition"></a></dt>
+<dd><p>Test if HNSWlibTransformer and KNeighborsTransformer give same results</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.update_search">
+<span class="sig-name descname"><span class="pre">update_search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.update_search" title="Permalink to this definition"></a></dt>
+<dd><p>Updates number of neighbors for kNN distance computation.
+:param n_neighbors:
+:type n_neighbors: New number of neighbors to look for.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.fit_transform">
+<span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.fit_transform" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="topo.ann.HNSWlibTransformer.getdoc">
+<span class="sig-name descname"><span class="pre">getdoc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#topo.ann.HNSWlibTransformer.getdoc" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="api.html" class="btn btn-neutral float-left" title="TopOGraph" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="MNIST_TopOMetry_Tutorial.html" class="btn btn-neutral float-right" title="Example 1: MNIST digits" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

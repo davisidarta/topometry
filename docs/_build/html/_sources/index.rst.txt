@@ -8,14 +8,27 @@ the Laplace-Beltrami Operator, a natural way to describe
 data geometry and its high-dimensional topology.
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 2
     :glob:
     :titlesonly:
+    :caption: Intro:
 
     welcome
     installation
     quickstart
-    API
+
+.. toctree::
+    :maxdepth: 2
+    :titlesonly:
+    :caption: Tutorials:
+
     MNIST_TopOMetry_Tutorial
     20Newsgroups_Tutorial
     Non_euclidean_tutorial
+
+.. toctree::
+    :maxdepth: 4
+    :caption: API Menu:
+
+    topograph
+

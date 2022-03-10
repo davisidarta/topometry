@@ -21,25 +21,41 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'TopOMetry'
 copyright = '2021, Davi Sidarta-Oliveira'
 author = 'Davi Sidarta-Oliveira'
+copyright = f'2021, {author}'
 
+github_user = 'davisidarta'
+github_repo = 'topometry'
+github_version = 'master'
 
 # -- General configuration ---------------------------------------------------
+
+github_url = f'https://github.com/{github_user}/{github_repo}/'
+gh_page_url = f'https://{github_user}.github.io/{github_repo}/'
+
+html_baseurl = gh_page_url
+html_context = {
+    'display_github': True,
+    'github_user': github_user,
+    'github_repo': github_repo,
+    'github_version': github_version,
+    "conf_py_path": "/docs/source/",  # Path in the checkout to the docs root
+}
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-import sphinx_rtd_theme
 
 extensions = [
     'myst_parser',
     'sphinx_rtd_theme',
-    'sphinx.ext.autodoc',
+    # 'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
+    'autoapi.extension',
 ]
-autodoc_mock_imports = ['pandas', 'numba', 'matplotlib',
-                        'torch', 'kneed', 'nmslib', 'hnswlib', 'pymde',
-                        'pacmap', 'trimap', 'ncvis', 'multicoretsne']
+# autodoc_mock_imports = ['pandas', 'numba', 'matplotlib',
+#                         'torch', 'kneed', 'nmslib', 'hnswlib', 'pymde',
+#                         'pacmap', 'trimap', 'ncvis', 'multicoretsne']
 
 autosummary_generate = True
 
@@ -70,4 +86,44 @@ source_suffix = {
     '.txt': 'restructuredtext',
     '.md': 'markdown',
 }
+
+autodoc_default_options = {
+    'members': 'var1, var2',
+    'member-order': 'bysource',
+    'special-members': '__init__',
+    'undoc-members': True,
+    'exclude-members': '__weakref__'
+}
+
+# -- General default extension configuration ------------------------------
+
+
+# autodoc options
+autodoc_docstring_signature = True
+autodoc_inherit_docstrings = False
+autodoc_preserve_defaults = True
+autodoc_typehints = 'none'
+
+autoapi_type = 'python'
+autoapi_generate_api_docs = True
+autoapi_dirs = ['../../topometry/topo']
+
+autodoc_default_options=["members"]
+
+# autosectionlabel options
+# autosectionlabel throws warnings if section names are duplicated.
+# The following tells autosectionlabel to not throw a warning for
+# duplicated section names that are in different documents.
+autosectionlabel_prefix_document = False
+
+# katex options
+katex_prerender = True
+
+# napoleon options
+napoleon_use_ivar = True
+napoleon_use_rtype = False
+
+# todo options
+# If true, `todo` and `todoList` produce output, else they produce nothing.
+# todo_include_todos = True
 

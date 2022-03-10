@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.pipes &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://davisidarta.github.io/topometry/autoapi/topo/pipes/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../topograph.html">TopOGraph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.pipes</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/pipes/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.pipes">
+<span id="topo-pipes"></span><h1><a class="reference internal" href="#module-topo.pipes" title="topo.pipes"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.pipes</span></code></a><a class="headerlink" href="#module-topo.pipes" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.pipes.global_score" title="topo.pipes.global_score"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_score</span></code></a>(data, emb)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.pipes.local_score" title="topo.pipes.local_score"><code class="xref py py-obj docutils literal notranslate"><span class="pre">local_score</span></code></a>(data, emb, k=10, metric='cosine', n_jobs=12, data_is_graph=False, emb_is_graph=False)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.pipes.eval_models_layouts" title="topo.pipes.eval_models_layouts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eval_models_layouts</span></code></a>(TopOGraph, X, subsample=None, k=None, n_jobs=None, metric=None, bases=['diffusion', 'fuzzy', 'continuous'], graphs=['diff', 'cknn', 'fuzzy'], layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis'])</p></td>
+<td><p>Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.pipes.global_score">
+<span class="sig-prename descclassname"><span class="pre">topo.pipes.</span></span><span class="sig-name descname"><span class="pre">global_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emb</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.pipes.global_score" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.pipes.local_score">
+<span class="sig-prename descclassname"><span class="pre">topo.pipes.</span></span><span class="sig-name descname"><span class="pre">local_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cosine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_is_graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emb_is_graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.pipes.local_score" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.pipes.eval_models_layouts">
+<span class="sig-prename descclassname"><span class="pre">topo.pipes.</span></span><span class="sig-name descname"><span class="pre">eval_models_layouts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">TopOGraph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bases</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['diffusion',</span> <span class="pre">'fuzzy',</span> <span class="pre">'continuous']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graphs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['diff',</span> <span class="pre">'cknn',</span> <span class="pre">'fuzzy']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layouts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['tSNE',</span> <span class="pre">'MAP',</span> <span class="pre">'MDE',</span> <span class="pre">'PaCMAP',</span> <span class="pre">'TriMAP',</span> <span class="pre">'NCVis']</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.pipes.eval_models_layouts" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
+Compares results with PCA and PCA-derived layouts (i.e. t-SNE, UMAP etc).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>TopOGraph</strong> (<em>target TopOGraph object</em><em> (</em><em>can be empty</em><em>)</em><em></em>) – </p></li>
+<li><p><strong>X</strong> (<em>data matrix. Expects either numpy.ndarray</em><em> or </em><em>scipy.sparse.csr_matrix.</em>) – </p></li>
+<li><p><strong>subsample</strong> (<em>optional</em><em> (</em><em>int</em><em>, </em><em>default None</em><em>)</em><em></em>) – If specified, subsamples the TopOGraph object and/or data matrix X to a number of samples
+before computing results and scores. Useful if dealing with large datasets (&gt;50,000 samples).</p></li>
+<li><p><strong>k</strong> (<em>optional</em><em> (</em><em>int</em><em>, </em><em>default None</em><em>)</em><em></em>) – Number of k-neighbors to use for evaluating results. Defaults to TopOGraph.base_knn.</p></li>
+<li><p><strong>n_jobs</strong> (<em>optional</em><em> (</em><em>int</em><em>, </em><em>default None</em><em>)</em><em></em>) – Number of threads to use in computations. Defaults to TopOGraph.n_jobs (default 1).</p></li>
+<li><p><strong>metric</strong> (<em>optional</em><em> (</em><em>str</em><em>, </em><em>default None</em><em>)</em><em></em>) – Distance metric to use. Defaults to TopOGraph.base_metric (default ‘cosine’).</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>bases<span class="classifier">str (optional, default [‘diffusion’, ‘continuous’,’fuzzy’]).</span></dt><dd><p>Which bases to compute. Defaults to all. To run only one or two bases, set it to
+[‘fuzzy’, ‘diffusion’] or [‘continuous’], for exemple.</p>
+</dd>
+<dt>graphs<span class="classifier">str (optional, default [‘diff’, ‘cknn’,’fuzzy’]).</span></dt><dd><p>Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
+[‘fuzzy’, ‘diff’] or [‘cknn’], for exemple.</p>
+</dd>
+<dt>layouts<span class="classifier">str (optional, default all [‘tSNE’, ‘MAP’, ‘MDE’, ‘PaCMAP’, ‘TriMAP’, ‘NCVis’]).</span></dt><dd><p>Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
+TriMAP and NCVis. To run only one or two layouts, set it to
+[‘tSNE’, ‘MAP’] or [‘PaCMAP’], for example.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>Populates the TopOGraph object and returns a list of lists (results)</em></p></li>
+<li><p><em>- results[0] contains orthogonal bases scores.</em></p></li>
+<li><p><em>- results[1] contains topological graph scores.</em></p></li>
+<li><p><em>- results[2] contains layout scores.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

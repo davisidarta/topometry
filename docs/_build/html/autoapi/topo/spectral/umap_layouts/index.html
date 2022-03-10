@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.spectral.umap_layouts &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://davisidarta.github.io/topometry/autoapi/topo/spectral/umap_layouts/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../welcome.html">Welcome to TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../topograph.html">TopOGraph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.spectral.umap_layouts</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/spectral/umap_layouts/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.spectral.umap_layouts">
+<span id="topo-spectral-umap-layouts"></span><h1><a class="reference internal" href="#module-topo.spectral.umap_layouts" title="topo.spectral.umap_layouts"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.spectral.umap_layouts</span></code></a><a class="headerlink" href="#module-topo.spectral.umap_layouts" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.clip" title="topo.spectral.umap_layouts.clip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clip</span></code></a>(val)</p></td>
+<td><p>Standard clamping of a value into a fixed range (in this case -4.0 to</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.rdist" title="topo.spectral.umap_layouts.rdist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rdist</span></code></a>(x, y)</p></td>
+<td><p>Reduced Euclidean distance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts._optimize_layout_euclidean_single_epoch" title="topo.spectral.umap_layouts._optimize_layout_euclidean_single_epoch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_optimize_layout_euclidean_single_epoch</span></code></a>(head_embedding, tail_embedding, head, tail, n_vertices, epochs_per_sample, a, b, rng_state, gamma, dim, move_other, alpha, epochs_per_negative_sample, epoch_of_next_negative_sample, epoch_of_next_sample, n, densmap_flag, dens_phi_sum, dens_re_sum, dens_re_cov, dens_re_std, dens_re_mean, dens_lambda, dens_R, dens_mu, dens_mu_tot)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts._optimize_layout_euclidean_densmap_epoch_init" title="topo.spectral.umap_layouts._optimize_layout_euclidean_densmap_epoch_init"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_optimize_layout_euclidean_densmap_epoch_init</span></code></a>(head_embedding, tail_embedding, head, tail, a, b, re_sum, phi_sum)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.optimize_layout_euclidean" title="topo.spectral.umap_layouts.optimize_layout_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">optimize_layout_euclidean</span></code></a>(head_embedding, tail_embedding, head, tail, n_epochs, n_vertices, epochs_per_sample, a, b, rng_state, gamma=1.0, initial_alpha=1.0, negative_sample_rate=5.0, parallel=False, verbose=False, densmap=False, densmap_kwds={})</p></td>
+<td><p>Improve an embedding using stochastic gradient descent to minimize the</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.optimize_layout_generic" title="topo.spectral.umap_layouts.optimize_layout_generic"><code class="xref py py-obj docutils literal notranslate"><span class="pre">optimize_layout_generic</span></code></a>(head_embedding, tail_embedding, head, tail, n_epochs, n_vertices, epochs_per_sample, a, b, rng_state, gamma=1.0, initial_alpha=1.0, negative_sample_rate=5.0, output_metric=dist.euclidean, output_metric_kwds=(), verbose=False)</p></td>
+<td><p>Improve an embedding using stochastic gradient descent to minimize the</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.optimize_layout_inverse" title="topo.spectral.umap_layouts.optimize_layout_inverse"><code class="xref py py-obj docutils literal notranslate"><span class="pre">optimize_layout_inverse</span></code></a>(head_embedding, tail_embedding, head, tail, weight, sigmas, rhos, n_epochs, n_vertices, epochs_per_sample, a, b, rng_state, gamma=1.0, initial_alpha=1.0, negative_sample_rate=5.0, output_metric=dist.euclidean, output_metric_kwds=(), verbose=False)</p></td>
+<td><p>Improve an embedding using stochastic gradient descent to minimize the</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts._optimize_layout_aligned_euclidean_single_epoch" title="topo.spectral.umap_layouts._optimize_layout_aligned_euclidean_single_epoch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_optimize_layout_aligned_euclidean_single_epoch</span></code></a>(head_embeddings, tail_embeddings, heads, tails, epochs_per_sample, a, b, regularisation_weights, relations, rng_state, gamma, lambda_, dim, move_other, alpha, epochs_per_negative_sample, epoch_of_next_negative_sample, epoch_of_next_sample, n)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.spectral.umap_layouts.optimize_layout_aligned_euclidean" title="topo.spectral.umap_layouts.optimize_layout_aligned_euclidean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">optimize_layout_aligned_euclidean</span></code></a>(head_embeddings, tail_embeddings, heads, tails, n_epochs, epochs_per_sample, regularisation_weights, relations, rng_state, a=1.576943460405378, b=0.8950608781227859, gamma=1.0, lambda_=0.005, initial_alpha=1.0, negative_sample_rate=5.0, parallel=True, verbose=False)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.clip">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">clip</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.clip" title="Permalink to this definition"></a></dt>
+<dd><p>Standard clamping of a value into a fixed range (in this case -4.0 to
+4.0)
+:param val: The value to be clamped.
+:type val: float</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>The clamped value, now fixed to be in the range -4.0 to 4.0.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.rdist">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">rdist</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.rdist" title="Permalink to this definition"></a></dt>
+<dd><p>Reduced Euclidean distance.
+:param x:
+:type x: array of shape (embedding_dim,)
+:param y:
+:type y: array of shape (embedding_dim,)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>The squared euclidean distance between x and y</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts._optimize_layout_euclidean_single_epoch">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">_optimize_layout_euclidean_single_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_vertices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">move_other</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_negative_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_of_next_negative_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_of_next_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">densmap_flag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_phi_sum</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_re_sum</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_re_cov</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_re_std</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_re_mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_lambda</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_R</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens_mu_tot</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts._optimize_layout_euclidean_single_epoch" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts._optimize_layout_euclidean_densmap_epoch_init">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">_optimize_layout_euclidean_densmap_epoch_init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">re_sum</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi_sum</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts._optimize_layout_euclidean_densmap_epoch_init" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.optimize_layout_euclidean">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">optimize_layout_euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_vertices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negative_sample_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">densmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">densmap_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.optimize_layout_euclidean" title="Permalink to this definition"></a></dt>
+<dd><p>Improve an embedding using stochastic gradient descent to minimize the
+fuzzy set cross entropy between the 1-skeletons of the high dimensional
+and low dimensional fuzzy simplicial sets. In practice this is done by
+sampling edges based on their membership strength (with the (1-p) terms
+coming from negative sampling similar to word2vec).
+:param head_embedding: The initial embedding to be improved by SGD.
+:type head_embedding: array of shape (n_samples, n_components)
+:param tail_embedding: The reference embedding of embedded points. If not embedding new</p>
+<blockquote>
+<div><p>previously unseen points with respect to an existing embedding this
+is simply the head_embedding (again); otherwise it provides the
+existing embedding to embed with respect to.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>head</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the heads of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>tail</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the tails of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – The number of training epochs to use in optimization.</p></li>
+<li><p><strong>n_vertices</strong> (<em>int</em>) – The number of vertices (0-simplices) in the dataset.</p></li>
+<li><p><strong>epochs_per_samples</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – A float value of the number of epochs per 1-simplex. 1-simplices with
+weaker membership strength will have more epochs between being sampled.</p></li>
+<li><p><strong>a</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>b</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>rng_state</strong> (<em>array of int64</em><em>, </em><em>shape</em><em> (</em><em>3</em><em>,</em><em>)</em>) – The internal state of the rng</p></li>
+<li><p><strong>gamma</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Weight to apply to negative samples.</p></li>
+<li><p><strong>initial_alpha</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Initial learning rate for the SGD.</p></li>
+<li><p><strong>negative_sample_rate</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 5</em><em>)</em>) – Number of negative samples to use per positive sample.</p></li>
+<li><p><strong>parallel</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em>) – Whether to run the computation using numba parallel.
+Running in parallel is non-deterministic, and is not used
+if a random seed has been set, to ensure reproducibility.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em>) – Whether to report information on the current progress of the algorithm.</p></li>
+<li><p><strong>densmap</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em>) – Whether to use the density-augmented densMAP objective</p></li>
+<li><p><strong>densmap_kwds</strong> (<em>dict</em><em> (</em><em>optional</em><em>, </em><em>default {}</em><em>)</em>) – Auxiliary data for densMAP</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>embedding</strong> (<em>array of shape (n_samples, n_components)</em>) – The optimized embedding.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.optimize_layout_generic">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">optimize_layout_generic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_vertices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negative_sample_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">dist.euclidean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_metric_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.optimize_layout_generic" title="Permalink to this definition"></a></dt>
+<dd><p>Improve an embedding using stochastic gradient descent to minimize the
+fuzzy set cross entropy between the 1-skeletons of the high dimensional
+and low dimensional fuzzy simplicial sets. In practice this is done by
+sampling edges based on their membership strength (with the (1-p) terms
+coming from negative sampling similar to word2vec).
+:param head_embedding: The initial embedding to be improved by SGD.
+:type head_embedding: array of shape (n_samples, n_components)
+:param tail_embedding: The reference embedding of embedded points. If not embedding new</p>
+<blockquote>
+<div><p>previously unseen points with respect to an existing embedding this
+is simply the head_embedding (again); otherwise it provides the
+existing embedding to embed with respect to.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>head</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the heads of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>tail</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the tails of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>weight</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The membership weights of the 1-simplices.</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – The number of training epochs to use in optimization.</p></li>
+<li><p><strong>n_vertices</strong> (<em>int</em>) – The number of vertices (0-simplices) in the dataset.</p></li>
+<li><p><strong>epochs_per_sample</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – A float value of the number of epochs per 1-simplex. 1-simplices with
+weaker membership strength will have more epochs between being sampled.</p></li>
+<li><p><strong>a</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>b</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>rng_state</strong> (<em>array of int64</em><em>, </em><em>shape</em><em> (</em><em>3</em><em>,</em><em>)</em>) – The internal state of the rng</p></li>
+<li><p><strong>gamma</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Weight to apply to negative samples.</p></li>
+<li><p><strong>initial_alpha</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Initial learning rate for the SGD.</p></li>
+<li><p><strong>negative_sample_rate</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 5</em><em>)</em>) – Number of negative samples to use per positive sample.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em>) – Whether to report information on the current progress of the algorithm.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>embedding</strong> (<em>array of shape (n_samples, n_components)</em>) – The optimized embedding.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.optimize_layout_inverse">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">optimize_layout_inverse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigmas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rhos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_vertices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negative_sample_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">dist.euclidean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_metric_kwds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.optimize_layout_inverse" title="Permalink to this definition"></a></dt>
+<dd><p>Improve an embedding using stochastic gradient descent to minimize the
+fuzzy set cross entropy between the 1-skeletons of the high dimensional
+and low dimensional fuzzy simplicial sets. In practice this is done by
+sampling edges based on their membership strength (with the (1-p) terms
+coming from negative sampling similar to word2vec).
+:param head_embedding: The initial embedding to be improved by SGD.
+:type head_embedding: array of shape (n_samples, n_components)
+:param tail_embedding: The reference embedding of embedded points. If not embedding new</p>
+<blockquote>
+<div><p>previously unseen points with respect to an existing embedding this
+is simply the head_embedding (again); otherwise it provides the
+existing embedding to embed with respect to.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>head</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the heads of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>tail</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The indices of the tails of 1-simplices with non-zero membership.</p></li>
+<li><p><strong>weight</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – The membership weights of the 1-simplices.</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – The number of training epochs to use in optimization.</p></li>
+<li><p><strong>n_vertices</strong> (<em>int</em>) – The number of vertices (0-simplices) in the dataset.</p></li>
+<li><p><strong>epochs_per_sample</strong> (<em>array of shape</em><em> (</em><em>n_1_simplices</em><em>)</em>) – A float value of the number of epochs per 1-simplex. 1-simplices with
+weaker membership strength will have more epochs between being sampled.</p></li>
+<li><p><strong>a</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>b</strong> (<em>float</em>) – Parameter of differentiable approximation of right adjoint functor</p></li>
+<li><p><strong>rng_state</strong> (<em>array of int64</em><em>, </em><em>shape</em><em> (</em><em>3</em><em>,</em><em>)</em>) – The internal state of the rng</p></li>
+<li><p><strong>gamma</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Weight to apply to negative samples.</p></li>
+<li><p><strong>initial_alpha</strong> (<em>float</em><em> (</em><em>optional</em><em>, </em><em>default 1.0</em><em>)</em>) – Initial learning rate for the SGD.</p></li>
+<li><p><strong>negative_sample_rate</strong> (<em>int</em><em> (</em><em>optional</em><em>, </em><em>default 5</em><em>)</em>) – Number of negative samples to use per positive sample.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em><em> (</em><em>optional</em><em>, </em><em>default False</em><em>)</em>) – Whether to report information on the current progress of the algorithm.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>embedding</strong> (<em>array of shape (n_samples, n_components)</em>) – The optimized embedding.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts._optimize_layout_aligned_euclidean_single_epoch">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">_optimize_layout_aligned_euclidean_single_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tails</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regularisation_weights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">move_other</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_negative_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_of_next_negative_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_of_next_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts._optimize_layout_aligned_euclidean_single_epoch" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.spectral.umap_layouts.optimize_layout_aligned_euclidean">
+<span class="sig-prename descclassname"><span class="pre">topo.spectral.umap_layouts.</span></span><span class="sig-name descname"><span class="pre">optimize_layout_aligned_euclidean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">head_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tails</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regularisation_weights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.576943460405378</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8950608781227859</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negative_sample_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.spectral.umap_layouts.optimize_layout_aligned_euclidean" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

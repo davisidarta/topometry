@@ -1,4 +1,4 @@
-# Example 3: embedding to non-euclidean spaces with MAP
+# Embedding to non-euclidean spaces with MAP
 
 MAP (Manifold Approximation and Projection) is a lighter version of [UMAP]() with fewer assumptions. It simply performs the graph layout by optimizing the cross-entropy between a similarity graph and an initialized lower-dimensional embedding. The graph construction is conveniently done by TopOMetry with a loose manifold hypothesis only, and a spectral initialization is used.
 
