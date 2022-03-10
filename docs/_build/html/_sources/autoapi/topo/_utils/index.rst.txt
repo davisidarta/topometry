@@ -22,7 +22,7 @@ Functions
 
 
 
-.. py:function:: write_pkl(TopOGraph, wd=None, filename='topograph.pkl')
+.. py:function:: write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True)
 
 
 .. py:function:: read_pkl(wd=None, filename='topograph.pkl')
