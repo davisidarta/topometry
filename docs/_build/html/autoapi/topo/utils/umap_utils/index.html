@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.utils.umap_utils &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://topometry.readthedocs.io/autoapi/topo/utils/umap_utils/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="../../../../about.html" />
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../about.html">About TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../topograph.html">TopOGraph</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.utils.umap_utils</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/utils/umap_utils/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.utils.umap_utils">
+<span id="topo-utils-umap-utils"></span><h1><a class="reference internal" href="#module-topo.utils.umap_utils" title="topo.utils.umap_utils"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.utils.umap_utils</span></code></a><a class="headerlink" href="#module-topo.utils.umap_utils" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.eval_gaussian" title="topo.utils.umap_utils.eval_gaussian"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eval_gaussian</span></code></a>(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32))</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.eval_density_at_point" title="topo.utils.umap_utils.eval_density_at_point"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eval_density_at_point</span></code></a>(x, embedding)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.create_density_plot" title="topo.utils.umap_utils.create_density_plot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_density_plot</span></code></a>(X, Y, embedding)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.torus_euclidean_grad" title="topo.utils.umap_utils.torus_euclidean_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">torus_euclidean_grad</span></code></a>(x, y, torus_dimensions=(2 * np.pi, 2 * np.pi))</p></td>
+<td><p>Standard euclidean distance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.fast_knn_indices" title="topo.utils.umap_utils.fast_knn_indices"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fast_knn_indices</span></code></a>(X, n_neighbors)</p></td>
+<td><p>A fast computation of knn indices.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.tau_rand_int" title="topo.utils.umap_utils.tau_rand_int"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tau_rand_int</span></code></a>(state)</p></td>
+<td><p>A fast (pseudo)-random number generator.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.tau_rand" title="topo.utils.umap_utils.tau_rand"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tau_rand</span></code></a>(state)</p></td>
+<td><p>A fast (pseudo)-random number generator for floats in the range [0,1]</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.norm" title="topo.utils.umap_utils.norm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">norm</span></code></a>(vec)</p></td>
+<td><p>Compute the (standard l2) norm of a vector.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.submatrix" title="topo.utils.umap_utils.submatrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">submatrix</span></code></a>(dmat, indices_col, n_neighbors)</p></td>
+<td><p>Return a submatrix given an orginal matrix and the indices to keep.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.ts" title="topo.utils.umap_utils.ts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ts</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.utils.umap_utils.csr_unique" title="topo.utils.umap_utils.csr_unique"><code class="xref py py-obj docutils literal notranslate"><span class="pre">csr_unique</span></code></a>(matrix, return_index=True, return_inverse=True, return_counts=True)</p></td>
+<td><p>Find the unique elements of a sparse csr matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.utils.umap_utils.disconnected_vertices" title="topo.utils.umap_utils.disconnected_vertices"><code class="xref py py-obj docutils literal notranslate"><span class="pre">disconnected_vertices</span></code></a>(model)</p></td>
+<td><p>Returns a boolean vector indicating which vertices are disconnected from the umap graph.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.eval_gaussian">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">eval_gaussian</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.array([0,</span> <span class="pre">0])</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cov</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.eye(2,</span> <span class="pre">dtype=np.float32)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.eval_gaussian" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.eval_density_at_point">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">eval_density_at_point</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.eval_density_at_point" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.create_density_plot">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">create_density_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.create_density_plot" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.torus_euclidean_grad">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">torus_euclidean_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torus_dimensions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(2</span> <span class="pre">*</span> <span class="pre">np.pi,</span> <span class="pre">2</span> <span class="pre">*</span> <span class="pre">np.pi)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.torus_euclidean_grad" title="Permalink to this definition"></a></dt>
+<dd><p>Standard euclidean distance.</p>
+<dl class="simple">
+<dt>..math::</dt><dd><p>D(x, y) = sqrt{sum_i (x_i - y_i)^2}</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.fast_knn_indices">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">fast_knn_indices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.fast_knn_indices" title="Permalink to this definition"></a></dt>
+<dd><p>A fast computation of knn indices.
+:param X: The input data to compute the k-neighbor indices of.
+:type X: array of shape (n_samples, n_features)
+:param n_neighbors: The number of nearest neighbors to compute for each sample in <code class="docutils literal notranslate"><span class="pre">X</span></code>.
+:type n_neighbors: int</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><strong>knn_indices</strong> (<em>array of shape (n_samples, n_neighbors)</em>) – The indices on the <code class="docutils literal notranslate"><span class="pre">n_neighbors</span></code> closest points in the dataset.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.tau_rand_int">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">tau_rand_int</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.tau_rand_int" title="Permalink to this definition"></a></dt>
+<dd><p>A fast (pseudo)-random number generator.
+:param state: The internal state of the rng
+:type state: array of int64, shape (3,)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>A (pseudo)-random int32 value</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.tau_rand">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">tau_rand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.tau_rand" title="Permalink to this definition"></a></dt>
+<dd><p>A fast (pseudo)-random number generator for floats in the range [0,1]
+:param state: The internal state of the rng
+:type state: array of int64, shape (3,)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>A (pseudo)-random float32 in the interval [0, 1]</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.norm">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vec</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.norm" title="Permalink to this definition"></a></dt>
+<dd><p>Compute the (standard l2) norm of a vector.
+:param vec:
+:type vec: array of shape (dim,)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>The l2 norm of vec.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.submatrix">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">submatrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dmat</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices_col</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_neighbors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.submatrix" title="Permalink to this definition"></a></dt>
+<dd><p>Return a submatrix given an orginal matrix and the indices to keep.
+:param dmat: Original matrix.
+:type dmat: array, shape (n_samples, n_samples)
+:param indices_col: Indices to keep. Each row consists of the indices of the columns.
+:type indices_col: array, shape (n_samples, n_neighbors)
+:param n_neighbors: Number of neighbors.
+:type n_neighbors: int</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><strong>submat</strong> (<em>array, shape (n_samples, n_neighbors)</em>) – The corresponding submatrix.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.ts">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">ts</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.ts" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.csr_unique">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">csr_unique</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matrix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_inverse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_counts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.csr_unique" title="Permalink to this definition"></a></dt>
+<dd><p>Find the unique elements of a sparse csr matrix.
+We don’t explicitly construct the unique matrix leaving that to the user
+who may not want to duplicate a massive array in memory.
+Returns the indices of the input array that give the unique values.
+Returns the indices of the unique array that reconstructs the input array.
+Returns the number of times each unique row appears in the input matrix.
+matrix: a csr matrix
+return_index = bool, optional</p>
+<blockquote>
+<div><p>If true, return the row indices of ‘matrix’</p>
+</div></blockquote>
+<dl class="simple">
+<dt>return_inverse: bool, optional</dt><dd><dl class="simple">
+<dt>If true, return the the indices of the unique array that can be</dt><dd><p>used to reconstruct ‘matrix’.</p>
+</dd>
+</dl>
+</dd>
+<dt>return_counts = bool, optional</dt><dd><p>If true, returns the number of times each unique item appears in ‘matrix’</p>
+</dd>
+</dl>
+<p>The unique matrix can computed via
+unique_matrix = matrix[index]
+and the original matrix reconstructed via
+unique_matrix[inverse]</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.utils.umap_utils.disconnected_vertices">
+<span class="sig-prename descclassname"><span class="pre">topo.utils.umap_utils.</span></span><span class="sig-name descname"><span class="pre">disconnected_vertices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.utils.umap_utils.disconnected_vertices" title="Permalink to this definition"></a></dt>
+<dd><p>Returns a boolean vector indicating which vertices are disconnected from the umap graph.
+These vertices will often be scattered across the space and make it difficult to focus on the main
+manifold.  They can either be filtered and have UMAP re-run or simply filtered from the interactive plotting tool
+via the subset_points parameter.
+Use ~disconnected_vertices(model) to only plot the connected points.
+:param model:
+:type model: a trained UMAP model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><em>A boolean vector indicating which points are disconnected</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

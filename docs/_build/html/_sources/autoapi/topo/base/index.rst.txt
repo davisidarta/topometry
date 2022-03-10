@@ -1,0 +1,170 @@
+:py:mod:`topo.base`
+===================
+
+.. py:module:: topo.base
+
+
+Submodules
+----------
+.. toctree::
+   :titlesonly:
+   :maxdepth: 1
+
+   ann/index.rst
+   dists/index.rst
+   sparse/index.rst
+
+
+Package Contents
+----------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   topo.base.NMSlibTransformer
+
+
+
+
+Attributes
+~~~~~~~~~~
+
+.. autoapisummary::
+
+   topo.base._have_numba
+
+
+.. py:class:: NMSlibTransformer(n_neighbors=15, metric='cosine', method='hnsw', n_jobs=10, p=None, M=15, efC=50, efS=50, dense=False, verbose=False)
+
+   Bases: :py:obj:`sklearn.base.TransformerMixin`, :py:obj:`sklearn.base.BaseEstimator`
+
+   Wrapper for using nmslib as sklearn's KNeighborsTransformer. This implements
+   an escalable approximate k-nearest-neighbors graph on spaces defined by nmslib.
+   Read more about nmslib and its various available metrics at
+   https://github.com/nmslib/nmslib.
+   Calling 'nn <- NMSlibTransformer()' initializes the class with
+    neighbour search parameters.
+
+   :param n_neighbors: number of nearest-neighbors to look for. In practice,
+                       this should be considered the average neighborhood size and thus vary depending
+                       on your number of features, samples and data intrinsic dimensionality. Reasonable values
+                       range from 5 to 100. Smaller values tend to lead to increased graph structure
+                       resolution, but users should beware that a too low value may render granulated and vaguely
+                       defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
+                       values can slightly increase computational time.
+   :type n_neighbors: int (optional, default 30)
+   :param metric: Accepted NMSLIB metrics. Defaults to 'cosine'. Accepted metrics include:
+                  -'sqeuclidean'
+                  -'euclidean'
+                  -'l1'
+                  -'lp' - requires setting the parameter `p` - equivalent to minkowski distance
+                  -'cosine'
+                  -'angular'
+                  -'negdotprod'
+                  -'levenshtein'
+                  -'hamming'
+                  -'jaccard'
+                  -'jansen-shan'
+   :type metric: str (optional, default 'cosine').
+   :param method:
+                  approximate-neighbor search method. Available methods include:
+                          -'hnsw' : a Hierarchical Navigable Small World Graph.
+                          -'sw-graph' : a Small World Graph.
+                          -'vp-tree' : a Vantage-Point tree with a pruning rule adaptable to non-metric distances.
+                          -'napp' : a Neighborhood APProximation index.
+                          -'simple_invindx' : a vanilla, uncompressed, inverted index, which has no parameters.
+                          -'brute_force' : a brute-force search, which has no parameters.
+                  'hnsw' is usually the fastest method, followed by 'sw-graph' and 'vp-tree'.
+   :type method: str (optional, default 'hsnw').
+   :param n_jobs: number of threads to be used in computation. Defaults to 1. The algorithm is highly
+                  scalable to multi-threading.
+   :type n_jobs: int (optional, default 1).
+   :param M: defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+             (Hierarchical Navigable Small World Graph). However, the actual default maximum number
+             of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+             is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
+             HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
+   :type M: int (optional, default 30).
+   :param efC: A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
+               and leads to higher accuracy of search. However this also leads to longer indexing times.
+               A reasonable range for this parameter is 50-2000.
+   :type efC: int (optional, default 100).
+   :param efS: A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
+               expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
+   :type efS: int (optional, default 100).
+   :param dense: Whether to force the algorithm to use dense data, such as np.ndarrays and pandas DataFrames.
+   :type dense: bool (optional, default False).
+
+   :returns: *Class for really fast approximate-nearest-neighbors search.*
+
+   .. rubric:: Example
+
+   import numpy as np
+   from sklearn.datasets import load_digits
+   from scipy.sparse import csr_matrix
+   from topo.base.ann import NMSlibTransformer
+   #
+   # Load the MNIST digits data, convert to sparse for speed
+   digits = load_digits()
+   data = csr_matrix(digits)
+   #
+   # Start class with parameters
+   nn = NMSlibTransformer()
+   nn = nn.fit(data)
+   #
+   # Obtain kNN graph
+   knn = nn.transform(data)
+   #
+   # Obtain kNN indices, distances and distance gradient
+   ind, dist, grad = nn.ind_dist_grad(data)
+   #
+   # Test for recall efficiency during approximate nearest neighbors search
+   test = nn.test_efficiency(data)
+
+   .. py:method:: fit(self, data)
+
+
+   .. py:method:: transform(self, data)
+
+
+   .. py:method:: ind_dist_grad(self, data, return_grad=True, return_graph=True)
+
+
+   .. py:method:: test_efficiency(self, data, data_use=0.1)
+
+      Test if NMSlibTransformer and KNeighborsTransformer give same results
+
+
+
+   .. py:method:: update_search(self, n_neighbors)
+
+      Updates number of neighbors for kNN distance computation.
+      :param n_neighbors:
+      :type n_neighbors: New number of neighbors to look for.
+
+
+   .. py:method:: fit_transform(self, X)
+
+      Fit to data, then transform it.
+
+      Fits transformer to `X` and `y` with optional parameters `fit_params`
+      and returns a transformed version of `X`.
+
+      :param X: Input samples.
+      :type X: array-like of shape (n_samples, n_features)
+      :param y: Target values (None for unsupervised transformations).
+      :type y: array-like of shape (n_samples,) or (n_samples, n_outputs),                 default=None
+      :param \*\*fit_params: Additional fit parameters.
+      :type \*\*fit_params: dict
+
+      :returns: **X_new** (*ndarray array of shape (n_samples, n_features_new)*) -- Transformed array.
+
+
+
+.. py:data:: _have_numba
+   :annotation: = True
+
+   
+

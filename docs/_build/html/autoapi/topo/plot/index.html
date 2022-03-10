@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>topo.plot &mdash; TopOMetry  documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/graphviz.css" type="text/css" />
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/>
+    <link rel="canonical" href="https://topometry.readthedocs.io/autoapi/topo/plot/index.html" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="../../../about.html" />
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> TopOMetry
+            <img src="../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Intro:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../about.html">About TopOMetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation and dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick-start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../MNIST_TopOMetry_Tutorial.html">Visualizing MNIST digits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../20Newsgroups_Tutorial.html">TopOMetry for document embedding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Non_euclidean_tutorial.html">Embedding to non-euclidean spaces with MAP</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Menu:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../topograph.html">TopOGraph</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">TopOMetry</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.plot</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/davisidarta/topometry/blob/master/docs/source/autoapi/topo/plot/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-topo.plot">
+<span id="topo-plot"></span><h1><a class="reference internal" href="#module-topo.plot" title="topo.plot"><code class="xref py py-mod docutils literal notranslate"><span class="pre">topo.plot</span></code></a><a class="headerlink" href="#module-topo.plot" title="Permalink to this headline"></a></h1>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline"></a></h2>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.scatter" title="topo.plot.scatter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scatter</span></code></a>(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p>Basic scatter plot function.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.scatter3d" title="topo.plot.scatter3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scatter3d</span></code></a>(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.hyperboloid" title="topo.plot.hyperboloid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hyperboloid</span></code></a>(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.two_to_3d_hyperboloid" title="topo.plot.two_to_3d_hyperboloid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">two_to_3d_hyperboloid</span></code></a>(emb)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.poincare" title="topo.plot.poincare"><code class="xref py py-obj docutils literal notranslate"><span class="pre">poincare</span></code></a>(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.sphere" title="topo.plot.sphere"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sphere</span></code></a>(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.sphere_projection" title="topo.plot.sphere_projection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sphere_projection</span></code></a>(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.toroid" title="topo.plot.toroid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">toroid</span></code></a>(emb, R=3, r=1, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.draw_simple_ellipse" title="topo.plot.draw_simple_ellipse"><code class="xref py py-obj docutils literal notranslate"><span class="pre">draw_simple_ellipse</span></code></a>(position, width, height, angle, ax=None, from_size=0.1, to_size=0.5, n_ellipses=3, alpha=0.1, color=None)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.gaussian_potential" title="topo.plot.gaussian_potential"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gaussian_potential</span></code></a>(emb, dims=[2, 3, 4], labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.eval_gaussian" title="topo.plot.eval_gaussian"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eval_gaussian</span></code></a>(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32))</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.eval_density_at_point" title="topo.plot.eval_density_at_point"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eval_density_at_point</span></code></a>(x, embedding)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.get_cmap" title="topo.plot.get_cmap"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cmap</span></code></a>(n, name='hsv')</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.create_density_plot" title="topo.plot.create_density_plot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_density_plot</span></code></a>(X, Y, embedding)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.plot_bases_scores" title="topo.plot.plot_bases_scores"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_bases_scores</span></code></a>(bases_scores, return_plot=True, figsize=(20, 8), fontsize=20)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.plot_graphs_scores" title="topo.plot.plot_graphs_scores"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_graphs_scores</span></code></a>(graphs_scores, return_plot=True, figsize=(20, 8), fontsize=20)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#topo.plot.plot_layouts_scores" title="topo.plot.plot_layouts_scores"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_layouts_scores</span></code></a>(layouts_scores, return_plot=True, figsize=(20, 8), fontsize=20)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#topo.plot.plot_all_layouts" title="topo.plot.plot_all_layouts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_all_layouts</span></code></a>(TopOGraph, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.scatter">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">scatter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.scatter" title="Permalink to this definition"></a></dt>
+<dd><p>Basic scatter plot function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>labels</strong> – </p></li>
+<li><p><strong>pt_size</strong> – </p></li>
+<li><p><strong>marker</strong> – </p></li>
+<li><p><strong>opacity</strong> – </p></li>
+<li><p><strong>cmap</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.scatter3d">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">scatter3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.scatter3d" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.hyperboloid">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">hyperboloid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.hyperboloid" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.two_to_3d_hyperboloid">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">two_to_3d_hyperboloid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.two_to_3d_hyperboloid" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.poincare">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">poincare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.poincare" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.sphere">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">sphere</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.sphere" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.sphere_projection">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">sphere_projection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.sphere_projection" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.toroid">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">toroid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">R</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.toroid" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.draw_simple_ellipse">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">draw_simple_ellipse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">from_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ellipses</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.draw_simple_ellipse" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.gaussian_potential">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">gaussian_potential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[2,</span> <span class="pre">3,</span> <span class="pre">4]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.gaussian_potential" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.eval_gaussian">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">eval_gaussian</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.array([0,</span> <span class="pre">0])</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cov</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.eye(2,</span> <span class="pre">dtype=np.float32)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.eval_gaussian" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.eval_density_at_point">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">eval_density_at_point</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.eval_density_at_point" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.get_cmap">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">get_cmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hsv'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.get_cmap" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.create_density_plot">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">create_density_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.create_density_plot" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.plot_bases_scores">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">plot_bases_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bases_scores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(20,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fontsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.plot_bases_scores" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.plot_graphs_scores">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">plot_graphs_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graphs_scores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(20,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fontsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.plot_graphs_scores" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.plot_layouts_scores">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">plot_layouts_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">layouts_scores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(20,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fontsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.plot_layouts_scores" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="topo.plot.plot_all_layouts">
+<span class="sig-prename descclassname"><span class="pre">topo.plot.</span></span><span class="sig-name descname"><span class="pre">plot_all_layouts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">TopOGraph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pt_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opacity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Spectral'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#topo.plot.plot_all_layouts" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Davi Sidarta-Oliveira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
