@@ -2072,7 +2072,7 @@ class TopOGraph(TransformerMixin):
         data : np.ndarray (optional, default None).
             The input data.
         n_components: int (optional, default 2).
-            
+
         n_jobs : number of jobs to use during computations
         n_iter : number of iterations to optmizie
         n_iter_early_exag : number of iterations in early exaggeration
@@ -2083,7 +2083,9 @@ class TopOGraph(TransformerMixin):
         Returns
         -------
 
-        """        from topo.layouts import NCVis as ncvis
+        """
+
+        from topo.layouts import NCVis as ncvis
         if data is None:
             if self.basis == 'diffusion':
                 if self.MSDiffMap is None:
