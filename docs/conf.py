@@ -15,8 +15,8 @@ from os import path
 import sys
 import mock
 
-# sys.path.insert(0, path.abspath('./'))
-# sys.path.insert(0, path.abspath('../../'))
+sys.path.insert(0, path.abspath('./'))
+sys.path.insert(0, path.abspath('../../'))
 
 MOCK_MODULES = ['numba']
 for mod_name in MOCK_MODULES:
@@ -63,7 +63,6 @@ html_context = {
 extensions = [
     'myst_parser',
     'sphinx_rtd_theme',
-    # 'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
