@@ -15,10 +15,16 @@ visualizations to obtain further insight from data. You can also use TopOMetry t
 by using its dimensionality reduced bases to compute k-nearest-neighbors instead of PCA, or its topological graphs as
 affinity matrices for other algorithms.
 
+The following diagram represent the different possible combinations of topological models and layouts options:
+
 ![TopOMetry in a glance](img/TopOGraph_models.png)
 
-Check the tutorials on [MNIST](MNIST_TopOMetry_Tutorial.md), [NLP](20Newsgroups_Tutorial.md)
-and [non-euclidean embedding with single-cell data](Non_euclidean_tutorial.md).
+If you haven't already, [install TopOMetry](installation.md) and [start using it](quickstart.md)!
 
+For users not familiar with single-cell analysis, check the tutorials with [MNIST](MNIST_TopOMetry_Tutorial.md) 
+and [document embedding](20Newsgroups_Tutorial.md). 
 
-TopOMetry was developed by [Davi Sidarta-Oliveira](https://twitter.com/davisidarta).
+For single-cell data
+analysis, check the tutorials on [evaluating different workflows](pbmc3k.md), 
+[learning T CD4 diversity (PBMC 68k)](pbmc68k.md)  and 
+[embedding single-cell data to non-Euclidean spaces](Non_euclidean_tutorial.md).

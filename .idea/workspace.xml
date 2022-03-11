@@ -24,7 +24,15 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Improving docs">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.readthedocs.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/.readthedocs.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/20Newsgroups_Tutorial.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/about.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/about.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/topograph.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/topograph.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/base/ann.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/base/ann.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/layouts/map.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/layouts/map.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,7 +88,7 @@
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File" value="Python" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/docs" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
@@ -137,7 +145,7 @@
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
       <workItem from="1646775497747" duration="23658000" />
-      <workItem from="1646879239950" duration="32760000" />
+      <workItem from="1646879239950" duration="42920000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -405,7 +413,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646964125322</updated>
     </task>
-    <option name="localTasksCounter" value="39" />
+    <task id="LOCAL-00039" summary="Improving docs">
+      <created>1646964275423</created>
+      <option name="number" value="00039" />
+      <option name="presentableId" value="LOCAL-00039" />
+      <option name="project" value="LOCAL" />
+      <updated>1646964275423</updated>
+    </task>
+    <option name="localTasksCounter" value="40" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
