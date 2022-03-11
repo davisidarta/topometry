@@ -15,12 +15,12 @@ from os import path
 import sys
 import mock
 
+# sys.path.insert(0, path.abspath('./'))
+sys.path.insert(0, path.abspath('../../'))
+
 MOCK_MODULES = ['numba']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
-
-# sys.path.insert(0, path.abspath('./'))
-sys.path.insert(0, path.abspath('../../'))
 
 import topo as package
 
@@ -29,7 +29,7 @@ pkg_file = package.__file__
 pkg_version = str(package.__version__)
 pkg_location = path.dirname(path.dirname(pkg_file))
 
-autoapi_dirs = ['../../topometry']
+autoapi_dirs = ['../../topo']
 
 # -- Project information -----------------------------------------------------
 
