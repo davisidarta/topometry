@@ -14,7 +14,7 @@ Documentation available at [Read The Docs](https://topometry.readthedocs.io/en/l
 
 TopOMetry is a high-level python library to explore data topology.
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
-to visualize them with different layout optimization algorithms. The main objective is to achieve approximations of
+to visualize them with different layout optimization algorithms. The main aim is to achieve sequential approximations of
 the [Laplace-Beltrami Operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator), a natural way to describe
 data geometry and its high-dimensional topology.
 
