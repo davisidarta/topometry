@@ -29,7 +29,7 @@ data geometry and its high-dimensional topology.
     :maxdepth: 2
     :caption: API Menu:
 
-    autoapi/topo/topograph
+    topograph
 
 .. toctree::
     :maxdepth: 3

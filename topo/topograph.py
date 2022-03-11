@@ -2058,7 +2058,32 @@ class TopOGraph(TransformerMixin):
               b=None,
               alpha_Q=1.,
               n_noise=None):
-        from topo.layouts import NCVis as ncvis
+        """
+
+        Noise-Contrastive Visualization (NCVis) - https://github.com/stat-ml/ncvis
+        
+        NCVis is an efficient solution for data visualization and dimensionality reduction. 
+        It uses HNSW to quickly construct the nearest neighbors graph and a parallel (batched) 
+        approach to build its embedding. Efficient random sampling is achieved via PCGRandom.
+        
+
+        Parameters
+        ----------
+        data : np.ndarray (optional, default None).
+            The input data.
+        n_components: int (optional, default 2).
+            
+        n_jobs : number of jobs to use during computations
+        n_iter : number of iterations to optmizie
+        n_iter_early_exag : number of iterations in early exaggeration
+        init : np.ndarray (optional, defaults to tg.SpecLayout)
+            Initialisation for the optimization problem.
+        random_state : optional, default None
+
+        Returns
+        -------
+
+        """        from topo.layouts import NCVis as ncvis
         if data is None:
             if self.basis == 'diffusion':
                 if self.MSDiffMap is None:
