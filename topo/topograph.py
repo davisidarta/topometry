@@ -73,11 +73,10 @@ class TopOGraph(TransformerMixin):
          are 'hnwslib'  and 'nmslib' (default). For exact nearest-neighbors, use 'sklearn'.
 
          * If using 'nmslib', a sparse
-         csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
-
+            csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
          * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
-         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
-         TopOMetry and will automatically convert the input array to csr_matrix for performance.
+            is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
+            TopOMetry and will automatically convert the input array to csr_matrix for performance.
 
     base_metric : str (optional, default 'cosine')
         Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
@@ -313,7 +312,6 @@ class TopOGraph(TransformerMixin):
         self.cb_NCVis = None
         self.fb_NCVis = None
         self.runtimes = {}
-        self.eigenspectrum = None
 
     def __repr__(self):
         if (self.n is not None) and (self.m is not None):
@@ -664,13 +662,14 @@ class TopOGraph(TransformerMixin):
                 ' Error: \'basis\' must be either \'diffusion\', \'continuous\' or \'fuzzy\'! Returning empty TopOGraph.')
 
         if self.plot_spectrum:
-            self.scree_plot()
+            self.eigenspectrum()
 
         return self
 
-    def eigenspectrum(self, basis=None, use_eigs='knee', verbose=False):
+    def eigenspectrum(self, basis=None, verbose=False):
         """
-        Visualize the scree plot of information entropy.
+        Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
+        Useful to indirectly estimate the intrinsic dimensionality of a dataset.
 
         Parameters
         ----------
@@ -678,18 +677,12 @@ class TopOGraph(TransformerMixin):
             If `None`, will use the default basis. Otherwise, uses the specified basis
             (must be 'diffusion', 'continuous' or 'fuzzy').
 
-        `use_eigs` : int or str (optional, default 'knee').
-            Number of eigenvectors to use. If 'max', expands to the maximum number of positive eigenvalues
-            (reach of numerical precision), else to the maximum amount of computed components.
-            If 'knee', uses Kneedle to find an optimal cutoff point, and expands it by ``expansion``.
-            If 'comp_gap', tries to find a discrete eigengap from the computation process.
-
         verbose : bool (optional, default False).
             Controls verbosity
 
         Returns
         -------
-        A nice scree plot .
+        A nice eigenspectrum decay plot ('scree plot').
 
         """
         if basis is not None:
@@ -707,12 +700,10 @@ class TopOGraph(TransformerMixin):
             else:
                 return print(
                     'Error: No computed basis available!')
-            return decay_plot(evals=use_evals, curve=curve, verbose=verbose)
+        return decay_plot(evals=use_evals, curve=curve, verbose=verbose)
 
-
-    def scree_plot(self): # for backwards compability
-            self.eigenspectrum = self.scree_plot
-
+    def scree_plot(self):
+        return(print('Depracated'))
 
     def transform(self, basis=None):
         """
@@ -1316,6 +1307,8 @@ class TopOGraph(TransformerMixin):
         <https://github.com/lmcinnes/umap>`). Here we're using it only for the projection (layout optimization)
         by minimizing the cross-entropy between a phenotypic map (i.e. data, TopOMetry non-uniform latent mappings) and 
         its graph topological representation.
+        
+        The main parameters controlling the embedding process are `min_dist`, `spread`, `initial_alpha` and `n_epochs`.
 
 
         Parameters
@@ -1328,7 +1321,17 @@ class TopOGraph(TransformerMixin):
             represented by a graph for which we require a sparse matrix for the
             (weighted) adjacency matrix. If `None` (default), a fuzzy simplicial set 
             is computed with default parameters.
+        
+        min_dist : float (optional, default 0.3)
+            The effective minimum distance between embedded points. Smaller values will result in a more
+            clustered/clumped embedding where nearby points on the manifold are drawn closer together,
+            while larger values will result on a more even dispersal of points. The value should be set
+            relative to the spread value, which determines the scale at which embedded points will be spread out.
             
+        spread : float (optional, default 1.0)
+            The effective scale of embedded points. In combination with min_dist this determines
+            how clustered/clumped the embedded points are.
+        
         n_components : int (optional, default 2).
             The dimensionality of the euclidean space into which to embed the data.
             
@@ -2065,7 +2068,10 @@ class TopOGraph(TransformerMixin):
         NCVis is an efficient solution for data visualization and dimensionality reduction. 
         It uses HNSW to quickly construct the nearest neighbors graph and a parallel (batched) 
         approach to build its embedding. Efficient random sampling is achieved via PCGRandom.
-        
+
+        Please note NCVis uses a custom initialization scheme, in which it first optimizes a random
+        initialization for a certain number of epochs. Other than that, it is very conceptually similar to UMAP,
+        with major computational advantages.
 
         Parameters
         ----------
@@ -2073,15 +2079,66 @@ class TopOGraph(TransformerMixin):
             The input data.
         n_components: int (optional, default 2).
 
-        n_jobs : number of jobs to use during computations
-        n_iter : number of iterations to optmizie
-        n_iter_early_exag : number of iterations in early exaggeration
-        init : np.ndarray (optional, defaults to tg.SpecLayout)
-            Initialisation for the optimization problem.
-        random_state : optional, default None
+        metric : str (optional, default 'cosine').
+            Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
+            -'sqeuclidean'
+            -'euclidean'
+            -'l1'
+            -'lp' - requires setting the parameter `p` - equivalent to minkowski distance
+            -'cosine'
+            -'angular'
+            -'negdotprod'
+            -'levenshtein'
+            -'hamming'
+            -'jaccard'
+            -'jansen-shan'
+
+        n_jobs : int (optional, default 1).
+            number of threads to be used in computation. Defaults to 1. The algorithm is highly
+            scalable to multi-threading.
+
+        M : int (optional, default 30).
+            defines the maximum number of neighbors in the zero and above-zero layers during HSNW
+            (Hierarchical Navigable Small World Graph). However, the actual default maximum number
+            of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
+            is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
+            HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
+
+        efC : int (optional, default 100).
+            A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
+            and leads to higher accuracy of search. However this also leads to longer indexing times.
+            A reasonable range for this parameter is 50-2000.
+
+        efS : int (optional, default 100).
+            A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
+            expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
+
+        random_seed: int (optional, default 42).
+            Seed for the NCVis algorithm.
+
+        n_epochs : int (optional, default 200).
+            Number of iterations to use during optimization.
+
+        n_init_epochs: int (optional, default 50).
+            Number of iterations to use during initialisation optimization.
+
+        min_dist : float (optional, default 0.4)
+            The effective minimum distance between embedded points. Smaller values will result in a more
+            clustered/clumped embedding where nearby points on the manifold are drawn closer together,
+            while larger values will result on a more even dispersal of points. The value should be set
+            relative to the spread value, which determines the scale at which embedded points will be spread out.
+
+        spread : float (optional, default 1.0)
+            The effective scale of embedded points. In combination with min_dist this determines
+            how clustered/clumped the embedded points are.
+
+        alpha : float (optional, default 1).
+            Learning rate for the SGD.
+
 
         Returns
         -------
+        NCVis embedding.
 
         """
 
@@ -2812,15 +2869,15 @@ class TopOGraph(TransformerMixin):
     #     return plt.show()
     # def plot_runtime_comparison(self):
 
-    def write_pkl(TopOGraph, wd=None, filename='topograph.pkl', remove_base_class=True):
+    def write_pkl(self, wd=None, filename='topograph.pkl', remove_base_class=True):
         try:
             import pickle
         except ImportError:
             return (print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`'))
 
-        if TopOGraph.base_nbrs_class is not None:
+        if self.base_nbrs_class is not None:
             if remove_base_class:
-                TopOGraph.base_nbrs_class = None
+                self.base_nbrs_class = None
             else:
                 return(print('TopOGraph cannot be pickled with the NMSlib base class.'))
 
@@ -2828,5 +2885,5 @@ class TopOGraph(TransformerMixin):
             import os
             wd = os.getcwd()
         with open(wd + filename, 'wb') as output:
-            pickle.dump(TopOGraph, output, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
         return print('TopOGraph saved at ' + wd + filename)

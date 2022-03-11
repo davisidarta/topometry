@@ -34,7 +34,7 @@ def kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=15, 
         values can slightly increase computational time.
 
     metric : str (optional, default 'cosine').
-        Accepted NMSLIB metrics. Defaults to 'cosine'. Accepted metrics include:
+        Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
         -'sqeuclidean'
         -'euclidean'
         -'l1'

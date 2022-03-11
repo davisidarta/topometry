@@ -100,10 +100,14 @@ def fuzzy_embedding(graph,
         The dimensionality of the euclidean space into which to embed the data.
     initial_alpha : float
         Initial learning rate for the SGD.
-    a : float
-        Parameter of differentiable approximation of right adjoint functor
-    b : float
-        Parameter of differentiable approximation of right adjoint functor
+    min_dist : float (optional, default 0.3)
+        The effective minimum distance between embedded points. Smaller values will result in a more
+        clustered/clumped embedding where nearby points on the manifold are drawn closer together,
+        while larger values will result on a more even dispersal of points. The value should be set
+        relative to the spread value, which determines the scale at which embedded points will be spread out.
+    spread : float (optional, default 1.0)
+        The effective scale of embedded points. In combination with min_dist this determines
+        how clustered/clumped the embedded points are.
     gamma : float
         Weight to apply to negative samples.
     negative_sample_rate : int (optional, default 5)
@@ -149,6 +153,10 @@ def fuzzy_embedding(graph,
         if a random seed has been set, to ensure reproducibility.
     verbose : bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+    a : float
+        Parameter of differentiable approximation of right adjoint functor
+    b : float
+        Parameter of differentiable approximation of right adjoint functor
     Returns
     -------
     embedding : array of shape (n_samples, n_components)

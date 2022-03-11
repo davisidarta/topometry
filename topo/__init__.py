@@ -14,7 +14,7 @@ from ._utils import read_pkl, annotate_doc_types
 from .version import __version__
 
 sys.modules.update({f'{__name__}.{m}': globals()[m] for m in ['ann', 'lt', 'TopOGraph', 'pl', 'spt', 'tpg', 'eval',
-                                                              'pipes', 'save_pkl', 'read_pkl']})
+                                                              'pipes', 'read_pkl']})
 
 annotate_doc_types(sys.modules[__name__], 'topo')
 del sys, annotate_doc_types
