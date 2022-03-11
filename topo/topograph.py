@@ -2062,13 +2062,10 @@ class TopOGraph(TransformerMixin):
               alpha_Q=1.,
               n_noise=None):
         """
-
         Noise-Contrastive Visualization (NCVis) - https://github.com/stat-ml/ncvis
-        
-        NCVis is an efficient solution for data visualization and dimensionality reduction. 
+        NCVis is an efficient solution for data visualization and dimensionality reduction.
         It uses HNSW to quickly construct the nearest neighbors graph and a parallel (batched) 
         approach to build its embedding. Efficient random sampling is achieved via PCGRandom.
-
         Please note NCVis uses a custom initialization scheme, in which it first optimizes a random
         initialization for a certain number of epochs. Other than that, it is very conceptually similar to UMAP,
         with major computational advantages.
@@ -2134,7 +2131,6 @@ class TopOGraph(TransformerMixin):
 
         alpha : float (optional, default 1).
             Learning rate for the SGD.
-
 
         Returns
         -------
