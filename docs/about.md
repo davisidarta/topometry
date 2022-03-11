@@ -19,7 +19,7 @@ The following diagram represent the different possible combinations of topologic
 
 ![TopOMetry in a glance](img/TopOGraph_models.png)
 
-If you haven't already, [install TopOMetry](installation.md) and [start using it](quickstart.md)!
+If you haven't already, [install](installation.md) *topometry* and start using it ([Quick-start](quickstart.md)).
 
 For users not familiar with single-cell analysis, check the tutorials with [MNIST](MNIST_TopOMetry_Tutorial.md) 
 and [document embedding](20Newsgroups_Tutorial.md). 
