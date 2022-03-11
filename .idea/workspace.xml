@@ -24,11 +24,64 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Improving docs">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.readthedocs.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/.readthedocs.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/conf/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/autoapi/conf/index.doctree" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/environment.pickle" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/doctrees/index.doctree" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/20Newsgroups_Tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/MNIST_TopOMetry_Tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/Non_euclidean_tutorial.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/conf/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/autoapi/conf/index.rst.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/_sources/index.rst.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/about.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/about.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/conf/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/conf/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/run_livereload/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/run_livereload/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/setup/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/setup/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/_utils/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/ann/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/ann/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/dists/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/dists/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/sparse/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/base/sparse/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/global_scores/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/global_scores/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/local_scores/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/eval/local_scores/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/graph_utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/graph_utils/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/map/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/map/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/mde/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/mde/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/ncvis/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/ncvis/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/pairwise/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/pairwise/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/trimap/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/layouts/trimap/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/pipes/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/pipes/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/plot/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/plot/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/_spectral/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/_spectral/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/spectral/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/spectral/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/umap_layouts/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/spectral/umap_layouts/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/topograph/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/topograph/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/cknn/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/cknn/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/diffusion/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/diffusion/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/multiscale/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/tpgraph/multiscale/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/umap_utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/umap_utils/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/utils/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/utils/utils/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/version/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/autoapi/topo/version/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/genindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/genindex.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/installation.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/installation.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/_build/html/objects.inv" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/objects.inv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/py-modindex.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/py-modindex.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/quickstart.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/quickstart.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/requirements.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/requirements.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/search.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/search.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/searchindex.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/_build/html/topograph.html" beforeDir="false" afterPath="$PROJECT_DIR$/docs/_build/html/topograph.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/conf.py" beforeDir="false" afterPath="$PROJECT_DIR$/docs/conf.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -141,7 +194,7 @@
       <workItem from="1646746500765" duration="599000" />
       <workItem from="1646759867776" duration="607000" />
       <workItem from="1646775497747" duration="23658000" />
-      <workItem from="1646879239950" duration="27924000" />
+      <workItem from="1646879239950" duration="30235000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -374,7 +427,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646955858565</updated>
     </task>
-    <option name="localTasksCounter" value="34" />
+    <task id="LOCAL-00034" summary="Improving docs">
+      <created>1646957829477</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1646957829477</updated>
+    </task>
+    <option name="localTasksCounter" value="35" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
