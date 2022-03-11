@@ -10,7 +10,7 @@ Welcome to TopOMetry documentation!
 
 .. raw:: html
 
-    <a href="https://twitter.com/davisidarta"><img src="https://img.shields.io/twitter/follow/davisidarta.svg?style=social&label=Follow" alt="Twitter"></a>
+    <a href="https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta" alt="Twitter"></a>
 
 TopOMetry (Topologically Optimized geoMetry) is a high-level python library to explore data topology.
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
