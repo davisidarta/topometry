@@ -10,11 +10,11 @@ def multiscale(res,
                  ):
     """
     Learn multiscale maps from the diffusion basis.
+
     Parameters
     ----------
-    verbose
     res: dict
-        Results from the dbMAP framework. Expects dictionary containing numerical
+        Results from the Diffusor().fit_transform() method. Expects dictionary containing numerical
         'EigenVectors' and 'EigenValues'.
 
     n_eigs: int or str (optional, default 'max')
@@ -25,6 +25,7 @@ def multiscale(res,
 
     verbose: bool
         Controls verbosity.
+
     Returns
     -------------
 

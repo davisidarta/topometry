@@ -90,13 +90,17 @@ sc.pl.umap(adata, color=['leiden', 'CD4', 'CD8A', 'LYZ', 'MS4A1', 'PPBP'], ncols
     
 
 
-## Topological workflow:
+## Topological workflow
+
+Now, we'll perform the topological workflow with TopOMetry, using CellTOMetry to help us manage the _AnnData_ object storing our analysis. We'll start an empty _TopOGraph_ object, and populate it and _AnnData_ with CellTOMetry.
+You can see it as mediator between TopOMetry and AnnData, transfering data between the two object.
+
+The main function in CellTOMetry is the `topological_workflow()`. It will use the expression matrix in the `adata.X` slot to extract orthogonal bases, new topological graphs and layouts for visualizations. It will also employ the Leiden community detection algorithm to cluster cells accordingly with the topological graphs.
+
 
 ### Setting a TopOGraph
 
-Now, we'll perform the topological workflow with TopOMetry, using CellTOMetry to help us manage the _AnnData_ object storing our analysis. We'll start an empty _TopOGraph_ object, and populate it and _AnnData_ with CellTOMetry.
-
-The main function in CellTOMetry is the `topological_workflow()`. It will use the expression matrix in the `adata.X` slot to extract orthogonal bases, new topological graphs and layouts for visualizations. It will also employ the Leiden community detection algorithm to cluster cells accordingly with the topological graphs.
+`topological_workflow()` calls the input 
 
 Current options are:
 - Bases: `'diffusion'`, `'continuous'` and `'fuzzy'`;
@@ -414,7 +418,7 @@ When it comes to preserving local structure, MDE performs best when using PCA as
 
 __NOTE__: The current evaluation models are **very** computationally intensive. Use as much threads as possible and be prepared to wait. Unfortunatelly, evaluating dimensional reduction results is a complex task, associated with its own biases and assumptions, and assuming only distance distribution relantionships are monotonic (Spearman's R) and that data is a topological manifold requires scaling up computational cost. However, we do note that these perform slightly faster and use less memory than [current approaches](https://github.com/KenLauLab/DR-structure-preservation).
 
-### Score a third-party model
+## Score a third-party model
 
 TopOMetry was designed to be flexible and open to a number of different algorithms. Thus, you may want to compare how a particular algorithm performs compared to your TopOMetry results. To learn how to that, we'll use [PHATE](), a popular dimensional reduction method used for obtaining layouts to visualize single-cell data.
 
