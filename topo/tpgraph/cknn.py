@@ -71,30 +71,37 @@ def cknn_graph(X, n_neighbors, delta=1.0, metric='euclidean', t='inf',
         return graph
 
 class CkNearestNeighbors(object):
-    """This object provides the all logic of CkNN.
-    Args:
-        n_neighbors: int, optional, default=5
-            Number of neighbors to estimate the density around the point.
-            It appeared as a parameter `k` in the paper.
-        delta: float, optional, default=1.0
-            A parameter to decide the radius for each points. The combination
-            radius increases in proportion to this parameter.
-        metric: str, optional, default='euclidean'
-            The metric of each points. This parameter depends on the parameter
-            `metric` of scipy.spatial.distance.pdist.
-        t: 'inf' or float or int, optional, default='inf'
-            The decay parameter of heat kernel. The weights are calculated as
-            follow:
+    """
+
+    This object provides the all logic of continuous k-Nearest Neighbors [(CkNN)](https://arxiv.org/pdf/1606.02353.pdf).
+    The implementation was adapted from Naoto Minami implementation (https://github.com/chlorochrule/cknn).
+
+
+    Parameters
+    ----------
+
+    n_neighbors: int, optional, default=5
+        Number of neighbors to estimate the density around the point.
+        It appeared as a parameter `k` in the paper.
+    delta: float, optional, default=1.0
+        A parameter to decide the radius for each points. The combination
+        radius increases in proportion to this parameter.
+    metric: str, optional, default='euclidean'
+        The metric of each points. This parameter depends on the parameter
+        `metric` of scipy.spatial.distance.pdist.
+    t: 'inf' or float or int, optional, default='inf'
+        The decay parameter of heat kernel. The weights are calculated as
+         follow:
                 W_{ij} = exp(-(||x_{i}-x_{j}||^2)/t)
-            For more infomation, read the paper 'Laplacian Eigenmaps for
-            Dimensionality Reduction and Data Representation', Belkin, et. al.
-        include_self: bool, optional, default=True
+        For more infomation, read the paper 'Laplacian Eigenmaps for
+        Dimensionality Reduction and Data Representation', Belkin, et. al.
+    include_self: bool, optional, default=True
             All diagonal elements are 1.0 if this parameter is True.
-        is_sparse: bool, optional, default=True
-            The method `cknneighbors_graph` returns csr_matrix object if this
-            parameter is True else returns ndarray object.
-        return_adjacency: bool, optional, default=False
-            Whether to return the adjacency matrix instead of the estimated similarity.
+    is_sparse: bool, optional, default=True
+        The method `cknneighbors_graph` returns csr_matrix object if this
+        parameter is True else returns ndarray object.
+    return_adjacency: bool, optional, default=False
+        Whether to return the adjacency matrix instead of the estimated similarity.
 
         """
 

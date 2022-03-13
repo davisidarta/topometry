@@ -1,6 +1,6 @@
 ## Installation and dependencies
 
-TopOMetry requires some pre-existing libraries to power its scalability and flexibility. TopOMetry is implemented in python and builds complex, high-level models
+[TopOMetry](https://github.com/davisidarta/topometry) requires some pre-existing libraries to power its scalability and flexibility. TopOMetry is implemented in python and builds complex, high-level models
 inherited from [scikit-learn](https://github.com/scikit-learn/scikit-learn)
 ``BaseEstimator``, making it flexible and easy to apply and/or combine with different workflows on virtually any domain.
 

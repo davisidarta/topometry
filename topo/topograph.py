@@ -711,8 +711,6 @@ class TopOGraph(TransformerMixin):
 
         Parameters
         ----------
-        self :
-            TopOGraph instance.
 
         basis : str, optional.
             Base to use when building the topological graph. Defaults to the active base ( `TopOGraph.basis`).

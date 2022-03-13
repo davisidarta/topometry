@@ -1,6 +1,7 @@
 # Learning T CD4 cell heterogeneity: 68k PBMCs
 
- In this notebook, I showcase how it can be used for the analysis of single-cell data, a challenging data modality which has been pushing representation learning to new frontiers. We'll be using a dataset containing around 68,000 individually RNA sequenced cells, consisting of peripherical blood mononuclear cells extracted from a healthy donor. This corresponds to the analysis performed for Figure 2 of the manuscript.
+ In this notebook, I showcase how TopOMetry can be useful in discovering new biological insights even when
+ analyzing single-cell data that has been extensively analyzed before by several groups.  We will use a dataset containing around 68,000 individually RNA sequenced cells, consisting of peripherical blood mononuclear cells extracted from a healthy donor. This corresponds to the analysis performed for Figure 2 of the manuscript.
 
 To assist us throghout this analysis, we'll be using [scanpy](https://scanpy.readthedocs.io/en/latest/index.html), a scalable toolkit for analyzing single-cell RNA sequencing data. In particular, we'll use the _AnnData_ framework for storing single-cell data and its plotting API for some plotting. _AnnData_ and _scanpy_ are key elements of the python environment for single-cell analysis, and I designed [CellTOMetry](https://github.com/davisidarta/celltometry) to wrap TopOMetry with it in a (hopefully) user-friendly way. Let's start! 
 
@@ -660,7 +661,7 @@ sc.pl.embedding(adata, basis='db_NCVis',
     
 ![png](pbmc68k_files/pbmc68k_70_2.png)
     
-
+## Dynamical MDE visualization
 
 We can also optimize an MDE embedding and visualize the resulting GIF:
 
@@ -680,6 +681,8 @@ tg.MDE_problem.play(savepath= wd + 'pbmc68k_db_diff_MDE_db_leiden.gif', fps=25,
                     marker_size=0.5, color_by=adata.obs['db_diff_leiden'],
                     figsize_inches=(12, 12), axis_limits=[-12, 12])
 ```
+![](pbmc68k_files/pbmc68k_db_diff_MDE_db_leiden-min.gif)
+
 
 And once again save results:
 
@@ -689,3 +692,4 @@ tg.write_pkl(wd=wd, filename=filename)
 ```
 
 That's it for this tutorial! I hope you enjoyed and that TopOMetry might be useful for you!
+

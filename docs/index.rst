@@ -10,14 +10,20 @@ Welcome to TopOMetry documentation!
 
 .. raw:: html
 
-    <a href="https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta" alt="Twitter"></a>
+    <a href="https://twitter.com/davisidarta"><img src="https://img.shields.io/twitter/follow/davisidarta.svg?style=social&label=Follow" alt="Twitter"></a>
 
-TopOMetry (Topologically Optimized geoMetry) is a high-level python library to explore data topology.
-It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
-to visualize them with different layout optimization algorithms. The idea is to do so by finding approximations of
-the Laplace-Beltrami Operator (LBO), a natural way to describe
-data geometry and its high-dimensional topology. Except for layout optimization, each independently approximates the
-LBO.
+TopOMetry (Topologically Optimized geoMetry) is a comprehensive dimensional reduction framework
+that dissects the steps of dimensional reduction approaches to learn latent topological representations.
+It allows learning topological metrics, latent topological orthogonal basis, and topological graphs from data.
+Visualization can then be performed with different layout optimization algorithms.
+
+TopOMetry focus is on approximating the Laplace-Beltrami Operator (LBO) at each step of dimensional reduction.
+The LBO is a natural way to describe data geometry and its high-dimensional topology.
+
+TopOMetry can yield strikingly new biological insights on single-cell data.
+
+TopOMetry classes are built using [scikit-learn](https://scikit-learn.org/stable/index.html) `BaseEstimator`,
+meaning they can be easily pipelined. Additionally, it was build in a modular fashion.
 
 .. toctree::
     :maxdepth: 2
