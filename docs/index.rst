@@ -20,10 +20,14 @@ Visualization can then be performed with different layout optimization algorithm
 TopOMetry focus is on approximating the Laplace-Beltrami Operator (LBO) at each step of dimensional reduction.
 The LBO is a natural way to describe data geometry and its high-dimensional topology.
 
-TopOMetry can yield strikingly new biological insights on single-cell data.
+TopOMetry can yield strikingly new biological insights on single-cell data, and I have developed CellTOMetry to work
+as an interface between topometry and the more general python computational environment for single-cell analysis.
+The orthogonal bases can be used in a way similar that PCA is used in most existing algorithms, and contributors
+are welcome to test how their method perform when using topological denoised information. Check the single-cell
+tutorials and TopOMetry's API for more information.
 
-TopOMetry classes are built using [scikit-learn](https://scikit-learn.org/stable/index.html) `BaseEstimator`,
-meaning they can be easily pipelined. Additionally, it was build in a modular fashion.
+TopOMetry classes are built in a modular fashion using scikit-learn `BaseEstimator`,
+meaning they can be easily pipelined.
 
 .. toctree::
     :maxdepth: 2

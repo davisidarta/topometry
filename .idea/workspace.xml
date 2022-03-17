@@ -25,12 +25,6 @@
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Release">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/installation.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/installation.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/pbmc3k.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/pbmc3k.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/pbmc68k.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/pbmc68k.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/topograph.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/topograph.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/tpgraph/cknn.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/tpgraph/cknn.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topo/tpgraph/multiscale.py" beforeDir="false" afterPath="$PROJECT_DIR$/topo/tpgraph/multiscale.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -145,7 +139,9 @@
       <workItem from="1646775497747" duration="23658000" />
       <workItem from="1646879239950" duration="44967000" />
       <workItem from="1646981986995" duration="2291000" />
-      <workItem from="1647035592066" duration="12343000" />
+      <workItem from="1647035592066" duration="12399000" />
+      <workItem from="1647163692841" duration="3228000" />
+      <workItem from="1647465697961" duration="2403000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
@@ -462,7 +458,14 @@
       <option name="project" value="LOCAL" />
       <updated>1646985409093</updated>
     </task>
-    <option name="localTasksCounter" value="46" />
+    <task id="LOCAL-00046" summary="Release">
+      <created>1647163628909</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1647163628909</updated>
+    </task>
+    <option name="localTasksCounter" value="47" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
