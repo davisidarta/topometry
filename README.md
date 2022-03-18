@@ -51,3 +51,18 @@ Contributions are very welcome! If you're interested in adding a new feature, ju
 
 [MIT License](https://github.com/davisidarta/topometry/blob/master/LICENSE)
 
+### Citation
+
+```
+@article {Sidarta-Oliveira2022.03.14.484134,
+	author = {Sidarta-Oliveira, Davi and Velloso, Licio A},
+	title = {A comprehensive dimensional reduction framework to learn single-cell phenotypic topology uncovers T cell diversity},
+	elocation-id = {2022.03.14.484134},
+	year = {2022},
+	doi = {10.1101/2022.03.14.484134},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134},
+	eprint = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134.full.pdf},
+	journal = {bioRxiv}
+}
+```

@@ -24,7 +24,8 @@
   <component name="ChangeListManager">
     <list default="true" id="1f096a7a-2dfc-474d-b4e4-ab5b358255da" name="Default Changelist" comment="Release">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.rst" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/about.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/about.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -142,6 +143,7 @@
       <workItem from="1647035592066" duration="12399000" />
       <workItem from="1647163692841" duration="3228000" />
       <workItem from="1647465697961" duration="2403000" />
+      <workItem from="1647546461538" duration="1595000" />
     </task>
     <task id="LOCAL-00001" summary="- Further cleaning and fixing previous commit">
       <created>1636343241588</created>
