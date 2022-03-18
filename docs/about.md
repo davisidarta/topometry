@@ -4,7 +4,7 @@ TopOMetry (Topologically Optimized geoMetry) is a high-level python library to e
 It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
 to visualize them with different layout optimization algorithms. The main objective is to achieve approximations of
 the [Laplace-Beltrami Operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator), a natural way to describe
-data geometry and its high-dimensional topology.
+data geometry and its high-dimensional topology. You can read more in our [manuscript](https://doi.org/10.1101/2022.03.14.484134).
 
 TopOMetry main class is the [TopOGraph](https://topometry.readthedocs.io/en/latest/topograph/) object. In a ``TopOGraph``, topological metrics are recovered with diffusion
 harmonics, fuzzy simplicial sets or Continuous-k-Nearest-Neighbors, and used to obtain topological basis (multiscale Diffusion Maps and/or
@@ -28,3 +28,19 @@ For single-cell data
 analysis, check the tutorials on [evaluating different workflows](pbmc3k.md), 
 [learning T CD4 diversity (PBMC 68k)](pbmc68k.md)  and 
 [embedding single-cell data to non-Euclidean spaces](Non_euclidean_tutorial.md).
+
+## Citation
+
+```
+@article {Sidarta-Oliveira2022.03.14.484134,
+	author = {Sidarta-Oliveira, Davi and Velloso, Licio A},
+	title = {A comprehensive dimensional reduction framework to learn single-cell phenotypic topology uncovers T cell diversity},
+	elocation-id = {2022.03.14.484134},
+	year = {2022},
+	doi = {10.1101/2022.03.14.484134},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134},
+	eprint = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134.full.pdf},
+	journal = {bioRxiv}
+}
+```
