@@ -111,7 +111,7 @@ sc.pl.violin(adata, ['n_genes', 'total_counts', 'pct_counts_mt'],
     
 
 
-This data contains 6,437 cells with 36,601 sequenced genes each. A great deal of this is just experimental noise, so we need to perform some quality control. Here, we'll do the default quality-control analysis:
+This data contains 68,579 cells with 32,738 sequenced genes. A great deal of this is just experimental noise, so we need to perform some quality control. Here, we'll do the default quality-control analysis:
 
 
 ```python
