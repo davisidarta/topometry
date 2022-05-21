@@ -744,7 +744,7 @@ def simplicial_set_embedding(
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
     euclidean_output=True,
-    parallel=False,
+    parallel=True,
     verbose=False,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -976,6 +976,7 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
 
+        # TODO: USE SIGMAS, RHOS AND DISTS TO CREATE A 'METRIC' OF NON-LINEAR DISTORTION
         emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set_ann(
             embedding,
             densmap_kwds["n_neighbors"],
