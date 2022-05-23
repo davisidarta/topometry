@@ -8,8 +8,8 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
-from scipy.sparse import (SparseEfficiencyWarning, csr_matrix, find, issparse)
-from scipy.sparse.linalg import eigsh
+from scipy.sparse import (SparseEfficiencyWarning, csr_matrix, find, issparse, spdiags)
+from scipy.sparse.linalg import eigsh, svds
 from sklearn.base import TransformerMixin
 from topo.base.ann import kNN
 from topo.tpgraph import multiscale
@@ -117,8 +117,8 @@ class Diffusor(TransformerMixin):
 
     transitions : bool (optional, default False)
         Whether to decompose the transition graph when transforming.
-    norm : bool (optional, default True)
-        Whether to normalize the kernel transition probabilities to approximate the LPO.
+    norm : bool (optional, default False)
+        Whether to normalize the kernel transition probabilities to approximate the LBO.
     eigen_expansion : bool (optional, default False)
         Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).
     n_jobs : int (optional, default 4)
