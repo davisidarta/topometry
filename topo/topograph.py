@@ -230,7 +230,7 @@ class TopOGraph(TransformerMixin):
         self.efC = efC
         self.efS = efS
         self.kernel_use = kernel_use
-        self.norm = False
+        self.norm = True
         self.transitions = transitions
         self.eigen_expansion = eigen_expansion
         self.verbosity = verbosity
@@ -254,6 +254,7 @@ class TopOGraph(TransformerMixin):
         self.CLapMap = None
         self.CLapMap_evals = None
         self.FuzzyBasis = None
+        self.FuzzyBasisResults = None
         self.FuzzyLapMap = None
         self.FuzzyLapMap_evals = None
         self.n = None
@@ -591,6 +592,8 @@ class TopOGraph(TransformerMixin):
                                         return_instance=False
                                         )
             del data_use
+            import gc
+            gc.collect()
             self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
                 self.ContBasis,
                 self.n_eigs,
@@ -642,7 +645,12 @@ class TopOGraph(TransformerMixin):
                                                          apply_set_operations=True,
                                                          return_dists=False,
                                                          verbose=self.bases_graph_verbose)
+
+            # Guarantee symmetry
+            self.FuzzyBasisResults = fuzzy_results
             self.FuzzyBasis = fuzzy_results[0]
+            self.FuzzyBasis = (self.FuzzyBasis + self.FuzzyBasis.T) / 2
+            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]), np.arange(self.FuzzyBasis.shape[0]))] = 0
 
             self.FuzzyLapMap, self.FuzzyLapMap_evals = spt.LapEigenmap(
                 self.FuzzyBasis,
@@ -755,7 +763,7 @@ class TopOGraph(TransformerMixin):
                                  efC=self.efC,
                                  efS=self.efS,
                                  kernel_use=self.kernel_use,
-                                 norm=self.norm,
+                                 norm=False,
                                  transitions=self.transitions,
                                  eigen_expansion=self.eigen_expansion,
                                  verbose=self.bases_graph_verbose,
