@@ -645,7 +645,6 @@ class TopOGraph(TransformerMixin):
                                                          apply_set_operations=True,
                                                          return_dists=False,
                                                          verbose=self.bases_graph_verbose)
-
             # Guarantee symmetry
             self.FuzzyBasisResults = fuzzy_results
             self.FuzzyBasis = fuzzy_results[0]
