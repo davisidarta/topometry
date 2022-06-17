@@ -6,14 +6,6 @@
 # These are commented with `DS`
 
 import numpy as np
-import scipy.sparse
-import torch
-from pymde import constraints
-from pymde import preprocess
-from pymde import problem
-from pymde import quadratic
-from pymde.functions import penalties, losses
-
 
 # Some custom minimum-distortion-embedding problems
 
@@ -31,10 +23,9 @@ def _remove_anchor_anchor_edges(edges, data, anchors):
     return edges, data
 
 
-
 def IsomorphicMDE(data,
-                  attractive_penalty=penalties.Log1p,
-                  repulsive_penalty=penalties.Log,
+                  attractive_penalty=None,
+                  repulsive_penalty=None,
                   embedding_dim=2,
                   constraint=None,
                   n_neighbors=None,
@@ -109,6 +100,21 @@ def IsomorphicMDE(data,
     pymde.MDE
         A ``pymde.MDE`` object, based on the original data.
     """
+    try:
+        import pymde
+        _have_pymde = True
+    except ImportError('pyMDE is needed for this embedding. Install it with `pip install pymde`'):
+        return print('pyMDE is needed for this embedding. Install it with `pip install pymde`')
+
+    from pymde import constraints, preprocess, problem, quadratic
+    from pymde.functions import penalties
+    import torch
+
+    if attractive_penalty is None:
+        attractive_penalty = penalties.Log1p
+
+    if repulsive_penalty is None:
+        repulsive_penalty = penalties.Log
 
     if isinstance(data, preprocess.graph.Graph):
         n = data.n_items
@@ -121,6 +127,7 @@ def IsomorphicMDE(data,
         # target included edges to be ~1% of total number of edges
         n_choose_2 = n * (n - 1) / 2
         n_neighbors = int(max(min(15, n_choose_2 * 0.01 / n), 5))
+
     if n_neighbors > n:
         problem.LOGGER.warning(
             (
@@ -197,6 +204,7 @@ def IsomorphicMDE(data,
         negative_edges = preprocess.sample_edges(
             n, n_repulsive, exclude=edges
         ).to(device)
+
         negative_weights = -torch.ones(
             negative_edges.shape[0], dtype=X_init.dtype, device=device
         )
@@ -241,9 +249,10 @@ def IsomorphicMDE(data,
         )
     return mde
 
+
 def IsometricMDE(data,
                  embedding_dim=2,
-                 loss=losses.Absolute,
+                 loss=None,
                  constraint=None,
                  max_distances=5e7,
                  device="cpu",
@@ -306,9 +315,23 @@ def IsometricMDE(data,
     pymde.MDE
         A ``pymde.MDE`` instance, based on preserving the original distances.
     """
+    try:
+        import pymde
+        _have_pymde = True
+    except ImportError('pyMDE is needed for this embedding. Install it with `pip install pymde`'):
+        return print('pyMDE is needed for this embedding. Install it with `pip install pymde`')
+
+    from pymde import constraints, preprocess, problem, quadratic
+    from pymde.functions import losses
+    import torch
+    from scipy.sparse import issparse
+
+    if loss is None:
+        loss = losses.Absolute
+
     if not isinstance(
         data, (np.ndarray, torch.Tensor, preprocess.graph.Graph)
-    ) and not scipy.sparse.issparse(data):
+    ) and not issparse(data):
         raise ValueError(
             "`data` must be a np.ndarray/torch.Tensor/scipy.sparse matrix"
             ", or a pymde.Graph."
@@ -352,46 +375,3 @@ def IsometricMDE(data,
     )
     return mde
 
-
-def SpectralMDE(data, edges, weights, embedding_dim=2, cg=False, max_iter=40, device='cpu'):
-    """
-    Performs spectral embedding (very useful for initializations).
-    Parameters
-    ----------
-    data: np.ndarray, torch.tensor, sp.csr_matrix or pymde.graph
-        Input data or graph
-    edges: torch.tensor, optional
-        Tensor of edges. Optional if `data` is a pymde.graph
-    weights: torch.tensor, optional
-        Tensor of weights. Optional if `data` is a pymde.graph
-    embedding_dim: int, optional, default 2
-        Output dimension space to reduce the graph to.
-    cg: bool
-        If True, uses a preconditioned CG method to find the embedding,
-        which requires that the Laplacian matrix plus the identity is
-        positive definite; otherwise, a Lanczos method is used. Use True when
-        the Lanczos method is too slow (which might happen when the number of
-        edges is very large).
-    max_iter: int
-        max iteration count for the CG method
-    device: str, optional, default 'cpu'
-
-    Returns
-    -------
-
-    The output of an appropriately fit pymde.quadratic.spectral problem, with shape (n_items, embedding_dim).
-    n_items is the number of samples from the input data or graph.
-
-    """
-    if isinstance(data, preprocess.graph.Graph):
-        n_items = data.n_items
-    else:
-        n_items = data.shape[0]
-    if isinstance(data, preprocess.graph.Graph):
-        edges = data.edges.to(device)
-        weights = data.weights.to(device)
-
-    emb = quadratic.spectral(
-        n_items, embedding_dim, edges, weights, cg=cg, max_iter=max_iter, device=device
-    )
-    return emb

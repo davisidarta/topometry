@@ -1,9 +1,8 @@
 #####################################
-# NMSLIB approximate-nearest neighbors sklearn wrapper
-# NMSLIB: https://github.com/nmslib/nmslib
-# Wrapper author: Davi Sidarta-Oliveira
+# Wrappers for approximate nearest neighbor search
+# Author: Davi Sidarta-Oliveira
 # School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta [at] fcm [dot] unicamp [dot] br
+# contact: davisidarta@fcm.unicamp.br
 ######################################
 
 import time
@@ -94,10 +93,12 @@ def kNN(X, n_neighbors=5, metric='euclidean', n_jobs=1, backend='nmslib', M=15, 
                                        efS=efS,
                                        verbose=False).fit(X)
         knn = nbrs.transform(X)
-    else:
+    elif backend == 'sklearn':
         # Construct a k-nearest-neighbors graph
         nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs).fit(X)
         knn = nbrs.kneighbors_graph(X, mode='distance')
+
+
 
     if return_instance:
         return nbrs, knn
@@ -742,3 +743,5 @@ class HNSWlibTransformer(BaseEstimator):
     def fit_transform(self, X):
         self.fit(X)
         return self.transform(X)
+
+
