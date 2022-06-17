@@ -213,7 +213,8 @@ class TopOGraph(TransformerMixin):
                  t='inf',
                  p=11 / 16,
                  transitions=True,
-                 random_state=None
+                 random_state=None,
+                 norm=False
                  ):
         self.graph = graph
         self.basis = basis
@@ -230,7 +231,7 @@ class TopOGraph(TransformerMixin):
         self.efC = efC
         self.efS = efS
         self.kernel_use = kernel_use
-        self.norm = True
+        self.norm = norm
         self.transitions = transitions
         self.eigen_expansion = eigen_expansion
         self.verbosity = verbosity
@@ -563,8 +564,11 @@ class TopOGraph(TransformerMixin):
                                               cache=self.cache_base)
             if self.kernel_use == 'simple' or self.kernel_use == 'decay':
                 self.DiffBasis.metric = 'precomputed'
-            start = time.time()
-            self.MSDiffMap = self.DiffBasis.fit_transform(self.base_knn_graph)
+                start = time.time()
+                self.MSDiffMap = self.DiffBasis.fit_transform(self.base_knn_graph)
+            else:
+                start = time.time()
+                self.MSDiffMap = self.DiffBasis.fit_transform(X)
             self.MSDiffMap_evals = self.DiffBasis.res['EigenValues']
             end = time.time()
             self.runtimes['DB'] = end - start
@@ -1133,7 +1137,7 @@ class TopOGraph(TransformerMixin):
             from pymde.preprocess import Graph
             from topo.layouts import mde
         except ImportError:
-            return print("pymde is required for this. Install it with `pip install pymde`")
+            return print("pyMDE is required for this. Install it with `pip install pymde`")
         attractive_penalty = penalties.Log1p
         repulsive_penalty = penalties.Log
         loss = losses.Absolute
@@ -2057,8 +2061,8 @@ class TopOGraph(TransformerMixin):
               M=15,
               efC=30,
               random_seed=42,
-              n_epochs=200,
-              n_init_epochs=20,
+              n_epochs=600,
+              n_init_epochs=150,
               spread=1.0,
               min_dist=0.4,
               alpha=1.0,

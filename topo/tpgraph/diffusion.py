@@ -352,7 +352,7 @@ class Diffusor(TransformerMixin):
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
 
-        # Diffusion through Markov chain
+        # Update kernel, diffusion through Markov chain
         D = np.ravel(self.K.sum(axis=1))
         if self.alpha > 0:
             # L_alpha
@@ -381,7 +381,7 @@ class Diffusor(TransformerMixin):
         return self
 
 
-    def transform(self, X):
+    def transform(self, X=None):
         """
         Fits the renormalized Laplacian approximating the Laplace Beltrami-Operator
         in a discrete eigendecomposition. Then multiscales the resulting components.
@@ -445,7 +445,7 @@ class Diffusor(TransformerMixin):
 
                 if residual < 1:
                     print('Could not find an eigengap! Consider increasing `n_neighbors` or `n_eigs` !'
-                          ' Falling back to `eigen_expansion=False`, will not attempt')
+                          ' Falling back to `eigen_expansion=False`, will not attempt further decomppositions')
                     self.eigen_expansion = False
 
         if self.eigen_expansion:
