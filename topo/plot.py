@@ -10,7 +10,7 @@ except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral', **kwargs):
     """
     Basic scatter plot function.
 
@@ -37,7 +37,8 @@ def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral')
         c=labels,
         s=pt_size,
         marker=marker,
-        alpha=opacity)
+        alpha=opacity,
+        **kwargs)
     return plt.show()
 
 
@@ -341,4 +342,72 @@ def plot_all_layouts(TopOGraph, labels=None, pt_size=5, marker='o', opacity=1, c
 
     return plt.show()
 
+
+def plot_point_cov(points, nstd=2, ax=None, **kwargs):
+    pos = points.mean(axis=0)
+    cov = np.cov(points, rowvar=False)
+    return plot_cov_ellipse(cov, pos, nstd, ax, **kwargs)
+
+def eigsorted(cov):
+    vals, vecs = np.linalg.eigh(cov)
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
+
+def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+    vals, vecs = eigsorted(cov)
+    theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+    # Width and height are "full" widths, not radius
+    width, height = 2 * nstd * np.sqrt(np.absolute(vals))
+    ellip = Ellipse(pos, width=width, height=height, angle=theta, **kwargs)
+    ax.add_artist(ellip)
+    return ellip
+
+def plot_riemann_metric(emb, laplacian, H_emb=None, n_plot=50, random_state=None,
+                        labels=None, pt_size=1, cmap='Spectral', alpha=0.1, std=1, figsize=(8,8), **kwargs):
+    """
+
+    """
+    if H_emb is None:
+        from topo.eval import RiemannMetric
+        rmetric = RiemannMetric(emb, laplacian)
+        H_emb = rmetric.get_dual_rmetric()
+
+    N = np.shape(emb)[0]
+    if random_state is None:
+        rng = np.random.RandomState()
+    elif isinstance(random_state, int):
+        rng = np.random.RandomState(random_state)
+    else:
+        rng = random_state
+    sample_points = rng.choice(range(N), n_plot, replace=False)
+    f, ax = plt.subplots(figsize=figsize)
+    ax.set_aspect('equal')  # if an ellipse is a circle no distortion occured.
+    if labels is not None:
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
+    else:
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size)
+    for i in range(n_plot):
+        ii = sample_points[i]
+        cov = H_emb[ii, :, :]
+        if labels is not None:
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none', color=colors[labels[ii]],
+                             alpha=alpha, **kwargs)
+        else:
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none',
+                             alpha=alpha, **kwargs)
+    plt.show()
+
+
+
+def draw_edges(ax, data, kernel, color='black', **kwargs):
+    for i in range(data.shape[0]-1):
+        for j in range(i+1, data.shape[0]):
+            affinity = kernel[i,j]
+            if affinity > 0:
+                ax.plot(data[[i,j],0], data[[i,j],1],
+                        color=color, alpha=affinity, zorder=0, **kwargs)
+    
 
