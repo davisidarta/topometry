@@ -108,7 +108,10 @@ def IsomorphicMDE(data,
 
     from pymde import constraints, preprocess, problem, quadratic
     from pymde.functions import penalties
-    import torch
+    try:
+        import torch
+    except ImportError('pytorch is needed for this embedding. Install it with `pip install pytorch`'):
+        return print('pyMDE is needed for this embedding. Install it with `pip install pymde`')
 
     if attractive_penalty is None:
         attractive_penalty = penalties.Log1p
@@ -323,7 +326,10 @@ def IsometricMDE(data,
 
     from pymde import constraints, preprocess, problem, quadratic
     from pymde.functions import losses
-    import torch
+    try:
+        import torch
+    except ImportError('pytorch is needed for this embedding. Install it with `pip install pytorch`'):
+        return print('pyMDE is needed for this embedding. Install it with `pip install pymde`')
     from scipy.sparse import issparse
 
     if loss is None:
