@@ -128,6 +128,20 @@ def _sparse_anisotropic_diffusion_symmetric(W, alpha=1, return_D_inv_sqrt=False)
 
 
 def graph_laplacian(W, laplacian='random_walk'):
+    """
+    Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
+    see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
+
+    Parameters
+    ----------
+    W : scipy.sparse.csr_matrix or np.ndarray
+        The graph adjacency or affinity matrix. Assumed to be symmetric and with diagonal 0.
+        No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done with W = (W + W.T)/2 ).
+
+    laplacian : str (optional, default 'random_walk').
+        The type of laplacian to use. Can be 'unnormalized', 'symmetric', or 'random_walk'.
+
+    """
     if sparse.issparse(W):
         if laplacian == 'unnormalized':
             lap_fun = _sparse_unnormalized_laplacian
@@ -150,7 +164,32 @@ def graph_laplacian(W, laplacian='random_walk'):
 
 def LE(W, n_eigs=10, laplacian='random_walk', drop_first=True, return_evals=False, eigen_tol=0):
     """
-    Laplacian Eigenmap
+    Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf), given a adjacency or affinity graph W.
+    The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is).
+    It's diagonal is assumed to be 0 (even thought this practice can be counterintuitive for kernels, it is needed for numerical
+    stability of the eigendecomposition and regularly used in other implementations). The eigenvectors associated with the smallest eigenvalues
+    form a new orthonormal basis which represents the graph in the feature space and are useful for denoising and clustering.
+
+    Parameters
+    ----------
+    W : scipy.sparse.csr_matrix or np.ndarray
+        The graph adjacency or affinity matrix. Assumed to be symmetric and with diagonal 0.
+
+    n_eigs : int (optional, default 10).
+        The number of eigenvectors to return.
+    
+    laplacian : str (optional, default 'random_walk').
+        The type of laplacian to use. Can be 'unnormalized', 'symmetric', or 'random_walk'.
+    
+    drop_first : bool (optional, default True).
+        Whether to drop the first eigenvector.
+    
+    return_evals : bool (optional, default False).
+        Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
+
+    eigen_tol : float (optional, default 0).
+        The tolerance for the eigendecomposition in scipy.sparse.linalg.eigsh().
+
     """
     if n_eigs > np.shape(W)[0]:
         raise ValueError('n_eigs must be less than or equal to the number of nodes.')
@@ -188,9 +227,13 @@ def component_layout(
         laplacian='random_walk',
         eigen_tol=10e-4
 ):
-    """Provide a layout relating the separate connected components. This is done
+    """
+    Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
     of the centroids.
+
+    This implementation was adapted from Leland McInness' implementation of spectral initialization.
+
     Parameters
     ----------
     W: numpy.ndarray, pandas.DataFrame or scipy.sparse.csr_matrix.
@@ -239,6 +282,10 @@ def multi_component_layout(
     their centroids, then spectrally embed each individual connected component positioning
     them according to the centroid embeddings. This provides a decent embedding of each
     component while placing the components in good relative positions to one another.
+
+    This implementation was adapted from Leland McInness' implementation of spectral initialization.
+
+
     Parameters
     ----------
     graph: sparse matrix
@@ -312,6 +359,8 @@ def multicomponent_LE(W, n_eigs=10, laplacian='random_walk', linkage=np.min, dro
     Multicomponent Laplacian Eigenmaps
 
     Graph layout using Laplacian Eigenmaps with routines for working with multiple connected components.
+
+    This implementation was adapted from Leland McInness' implementation of spectral initialization.
 
     """
     if random_state is None:
