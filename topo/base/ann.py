@@ -20,6 +20,7 @@ def kNN(X,
         n_jobs=-1,
         backend='nmslib',
         low_memory=True,
+        symmetrize=True,
         M=15,
         p=11/16,
         efC=50,
@@ -44,6 +45,10 @@ def kNN(X,
         resolution, but users should beware that a too low value may render granulated and vaguely
         defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
         values can slightly increase computational time.
+
+    backend : str (optional, default 'nmslib').
+        Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib', 
+        'pynndescent','annoy', 'faiss' and 'sklearn'.
 
     metric : str (optional, default 'cosine').
         Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
@@ -79,9 +84,14 @@ def kNN(X,
         A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
         expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
     
+    symmetrize : bool (optional, default True).
+        Whether to symmetrize the output of approximate nearest neighbors search. The default is True
+        and uses additive symmetrization, i.e. knn = ( knn + knn.T ) / 2 .
+
     **kwargs : dict (optional, default {}).
         Additional parameters to be passed to the backend approximate nearest-neighbors library.
-        Use only parameters known to the desired backend library. 
+        Use only parameters known to the desired backend library.
+         
     Returns
     -------
 
@@ -100,11 +110,8 @@ def kNN(X,
                                       efS=efS,
                                       verbose=verbose).fit(X)
         knn = nbrs.transform(X)
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
-    elif backend == 'hnwslib':
+
+    elif backend == 'hnswlib':
         nbrs = HNSWlibTransformer(n_neighbors=n_neighbors,
                                        metric=metric,
                                        n_jobs=n_jobs,
@@ -113,10 +120,7 @@ def kNN(X,
                                        efS=efS,
                                        verbose=False).fit(X)
         knn = nbrs.transform(X)
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
+
     elif backend == 'pynndescent':
         try:
             from pynndescent import PyNNDescentTransformer
@@ -139,10 +143,6 @@ def kNN(X,
                                           verbose=verbose, **kwargs).fit(X)
         knn = nbrs.transform(X)
 
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
     elif backend == 'annoy':
         nbrs = AnnoyTransformer(metric=metric,
                                 n_neighbors=n_neighbors,
@@ -150,10 +150,6 @@ def kNN(X,
                                 n_trees=n_trees, **kwargs).fit(X)
         knn = nbrs.transform(X)
 
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
 
     elif backend == 'faiss':
         try:
@@ -166,10 +162,6 @@ def kNN(X,
                                 n_jobs=n_jobs, **kwargs).fit(X)
         knn = nbrs.transform(X)
 
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
     else:
         backend = 'sklearn'
         if verbose:
@@ -180,10 +172,13 @@ def kNN(X,
         nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs, **kwargs).fit(X)
         knn = nbrs.kneighbors_graph(X, mode='distance')
 
-        if return_instance:
-            return nbrs, knn
-        else:
-            return knn
+    if symmetrize:
+        knn = ( knn + knn.T ) / 2
+
+    if return_instance:
+        return nbrs, knn
+    else:
+        return knn
 
 
 class NMSlibTransformer(TransformerMixin, BaseEstimator):

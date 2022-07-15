@@ -165,7 +165,7 @@ class RiemannMetric(object):
 
     def get_rmetric( self, mode_inv = 'svd', return_svd = False ):
         """
-        Compute the Reimannian Metric
+        Compute the Riemannian Metric
         """
         if self.H is None:
             self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = True, mode_inv = mode_inv)

@@ -353,7 +353,7 @@ def eigsorted(cov):
     order = vals.argsort()[::-1]
     return vals[order], vecs[:, order]
 
-def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
+def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     if ax is None:
         ax = plt.gca()
     vals, vecs = eigsorted(cov)
@@ -367,6 +367,20 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
 def plot_riemann_metric(emb, laplacian, H_emb=None, n_plot=50, random_state=None,
                         labels=None, pt_size=1, cmap='Spectral', alpha=0.1, std=1, figsize=(8,8), **kwargs):
     """
+    Plot Riemannian metric using ellipses.
+
+    Parameters
+    ----------
+    
+    emb: numpy.ndarray
+        Embedding matrix.
+    
+    lapacian: numpy.ndarray
+       Graph Laplacian matrix.
+    
+    H_emb: numpy.ndarray
+        Embedding matrix of the H.
+
 
     """
     if H_emb is None:

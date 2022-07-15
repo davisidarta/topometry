@@ -4,7 +4,7 @@ from numpy import random
 
 def PaCMAP(data=None,
                init=None,
-               n_dims=2,
+               n_components=2,
                n_neighbors=10,
                MN_ratio=0.5,
                FP_ratio=2.0,
@@ -25,7 +25,7 @@ def PaCMAP(data=None,
 
     init : the initialization of the lower dimensional embedding. One of "pca" or "random", or a user-provided numpy ndarray with the shape (N, 2). Default to "random".
 
-    n_dims :  the number of dimension of the output. Default to 2.
+    n_components :  the number of dimension of the output. Default to 2.
 
     n_neighbors : the number of neighbors considered in the k-Nearest Neighbor graph. Default to 10 for dataset whose
         sample size is smaller than 10000. For large dataset whose sample size (n) is larger than 10000, the default value
@@ -63,7 +63,7 @@ def PaCMAP(data=None,
     except ImportError('TriMAP is needed for this embedding. Install it with `pip install trimap`'):
         return print('TriMAP is needed for this embedding. Install it with `pip install trimap`')
 
-    pacmap_emb = pacmap.PaCMAP(n_dims=n_dims,
+    pacmap_emb = pacmap.PaCMAP(n_components=n_components,
                                n_neighbors=n_neighbors,
                                MN_ratio=MN_ratio,
                                FP_ratio=FP_ratio,
@@ -72,6 +72,7 @@ def PaCMAP(data=None,
                                pair_FP=pair_FP,
                                distance=distance,
                                lr=lr,
+                               apply_pca=False,
                                num_iters=num_iters,
                                verbose=verbose,
                                intermediate=intermediate).fit_transform(X=data, init=init)
