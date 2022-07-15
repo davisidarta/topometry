@@ -185,8 +185,8 @@ class Diffusor(TransformerMixin):
         self.t = t
         self.multiscale = multiscale
         self.n_neighbors = n_neighbors
-        self.n_eigs = n_eigs 
-        self.use_eigs = None # Deprecated
+        self.n_eigs = None # Deprecated
+        self.use_eigs = use_eigs
         self.alpha = alpha
         self.n_jobs = n_jobs
         self.backend = backend
@@ -420,7 +420,6 @@ class Diffusor(TransformerMixin):
                 (D, (range(self.N), range(self.N))), shape=[self.N, self.N])
             self.P = Dreg.dot(self.K)
 
-        # This was the original implementation, but it is not symmetric.
         #D = np.ravel(self.K.sum(axis=1))
         # if self.alpha > 0:
         #    # L_alpha
