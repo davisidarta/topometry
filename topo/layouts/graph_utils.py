@@ -222,7 +222,6 @@ def fuzzy_simplicial_set_ann(
                                                          verbose=verbose)
 
     knn_dists = knn_dists.astype(np.float32)
-    knn_dists = knn_dists
 
     sigmas, rhos = smooth_knn_dist(
         knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
@@ -966,6 +965,7 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
+        # TODO: FIX DENSMAP!
         (knn_indices, knn_dists, rp_forest,) = fast_knn_indices(
             embedding,
             densmap_kwds["n_neighbors"],
@@ -976,7 +976,6 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
 
-        # TODO: USE SIGMAS, RHOS AND DISTS TO CREATE A 'METRIC' OF NON-LINEAR DISTORTION
         emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set_ann(
             embedding,
             densmap_kwds["n_neighbors"],
