@@ -695,12 +695,10 @@ class TopOGraph(TransformerMixin):
                                                      return_dists=True,
                                                      verbose=self.bases_graph_verbose)
 
-            self.FuzzyConnectivities = {
-                'rho': fuzzy_results[2], 'sigma': fuzzy_results[1]}
+            self.FuzzyConnectivities = {'rho': fuzzy_results[2], 'sigma': fuzzy_results[1]}
             self.FuzzyBasis = fuzzy_results[0]
             self.FuzzyBasis = (self.FuzzyBasis + self.FuzzyBasis.T) / 2
-            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]),
-                             np.arange(self.FuzzyBasis.shape[0]))] = 0
+            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]), np.arange(self.FuzzyBasis.shape[0]))] = 0
             self.FuzzyLapMap, self.FuzzyLapMap_evals = spt.LE(self.FuzzyBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
             end = time.time()
             self.runtimes['FB'] = end - start
@@ -821,11 +819,11 @@ class TopOGraph(TransformerMixin):
                 self.runtimes['fb_diff_graph'] = end - start
             if self.cache_graph:
                 if self.basis == 'diffusion':
-                    self.db_diff_graph = DiffGraph.T
+                    self.db_diff_graph = DiffGraph.P
                 if self.basis == 'continuous':
-                    self.cb_diff_graph = DiffGraph.T
+                    self.cb_diff_graph = DiffGraph.P
                 if self.basis == 'fuzzy':
-                    self.fb_diff_graph = DiffGraph.T
+                    self.fb_diff_graph = DiffGraph.P
 
         elif self.graph == 'cknn':
             start = time.time()
@@ -901,7 +899,7 @@ class TopOGraph(TransformerMixin):
             print('     Topological `' + str(self.graph) +
                   '` graph extracted in = %f (sec)' % (end - start))
         if self.graph == 'diff':
-            return DiffGraph.T
+            return DiffGraph.P
         elif self.graph == 'cknn':
             return CknnGraph
         elif self.graph == 'fuzzy':
@@ -929,10 +927,6 @@ class TopOGraph(TransformerMixin):
         """
         if graph is None:
             if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
                 if graph is None:
                     if self.graph == 'diff':
                         if self.db_diff_graph is None:
@@ -948,11 +942,6 @@ class TopOGraph(TransformerMixin):
                         graph = self.db_cknn_graph
 
             elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print(
-                        'Error: Basis set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
                 if graph is None:
                     if self.graph == 'diff':
                         if self.cb_diff_graph is None:
@@ -968,10 +957,6 @@ class TopOGraph(TransformerMixin):
                         graph = self.cb_cknn_graph
 
             elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
                 if graph is None:
                     if self.graph == 'diff':
                         if self.fb_diff_graph is None:
@@ -987,8 +972,7 @@ class TopOGraph(TransformerMixin):
                         graph = self.fb_cknn_graph
 
         start = time.time()
-        spt_layout = spt.multicomponent_LE(
-            W=graph, n_eigs=n_components, laplacian='random_walk', random_state=self.random_state, eigen_tol=self.eigen_tol)
+        spt_layout = spt.spectral_layout(graph, n_components, self.random_state, self.eigen_tol)
         expansion = 10.0 / np.abs(spt_layout).max()
         spt_layout = (spt_layout * expansion).astype(
             np.float32

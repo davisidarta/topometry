@@ -32,7 +32,6 @@ def multiscale(res,
 
 
     """
-    use_eigs = len(np.array(res["EigenValues"])) // 2
     evals = np.array(res["EigenValues"])
     if n_eigs == 'knee':
         try:
@@ -45,17 +44,16 @@ def multiscale(res,
             n_eigs = 'max'
         else:
             use_eigs = int(kn.knee)
-    if isinstance(n_eigs, int):
+    elif isinstance(n_eigs, int):
         use_eigs = int(n_eigs)
-    if use_eigs < 5:
-        if verbose:
-            print('Raising n_eigs to maximum computed!')
-        n_eigs = 'max'
-    if n_eigs == 'max':
+        if use_eigs < 5:
+            if verbose:
+                print('Raising n_eigs to maximum computed!')
+            n_eigs = 'max'
+    elif n_eigs == 'max':
         use_eigs = int(np.sum(evals > 0, axis=0))
-    if not isinstance(use_eigs, int):
-        raise Exception(
-            'Set `n_eigs` to either \'knee\', \'max\', \'comp_gap\' or an `int` value.')
+    else:
+        raise ValueError('n_eigs must be an integer or "max" or "knee"')
 
     # Multiscale
     eigs_idx = list(range(1, int(use_eigs)))
@@ -79,7 +77,7 @@ def multiscale(res,
             print('Multiscaled ' + str(round(use_eigs)) +
                   ' diffusion components.')
     data = np.array(data)
-    return data, kn, use_eigs
+    return data, use_eigs
 
 
 def decay_plot(evals):
