@@ -404,7 +404,7 @@ class Diffusor(TransformerMixin):
         # Kernel symmetrization
         W = (W + W.T) / 2
         self.K = W
-        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 0
+        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 1
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
 
@@ -488,7 +488,7 @@ class Diffusor(TransformerMixin):
         self.res["EigenValues"] = pd.Series(self.res["EigenValues"])
         if self.multiscale:
             self.res['DiffusionMaps'], self.scaled_eigs = ms.multiscale(
-                self.res, n_eigs=self.use_eigs, verbose=self.verbose)
+                self.res, n_eigs='max', verbose=self.verbose)
         else:
             # Guarantee t is an integer
             if self.t is None:
