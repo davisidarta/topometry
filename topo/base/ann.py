@@ -98,6 +98,9 @@ def kNN(X,
     A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.
 
     """
+    if n_jobs == -1:
+        from joblib import cpu_count
+        n_jobs = cpu_count()
     if backend == 'nmslib':
         # Construct an approximate k-nearest-neighbors graph
         nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
@@ -174,7 +177,9 @@ def kNN(X,
 
     if symmetrize:
         knn = ( knn + knn.T ) / 2
-
+        knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 1
+        # handle nan, zeros
+        knn.data = np.where(np.isnan(knn.data), 1, knn.data)
     if return_instance:
         return nbrs, knn
     else:

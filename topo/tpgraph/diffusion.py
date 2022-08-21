@@ -14,7 +14,7 @@ from scipy.sparse.linalg import eigsh
 from sklearn.base import TransformerMixin
 from topo.base.ann import kNN
 from topo.tpgraph import multiscale as ms
-from topo.spectral import _sparse_anisotropic_diffusion_symmetric
+from topo.spectral import diffusion_operator
 
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
@@ -404,13 +404,13 @@ class Diffusor(TransformerMixin):
         # Kernel symmetrization
         W = (W + W.T) / 2
         self.K = W
-        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 1
+        self.K[(np.arange(self.K.shape[0]), np.arange(self.K.shape[0]))] = 0
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
 
         # Anisotropic diffusion. Here we'll use the symmetrized version, so we'll need to convert it back later
         if self.alpha > 0:
-            self.P, self._D_left = _sparse_anisotropic_diffusion_symmetric(
+            self.P, self._D_left = diffusion_operator(
                 self.K, self.alpha, return_D_inv_sqrt=True)
         else:
             # if no anisotropy is added, there's no need to convert it later
@@ -419,24 +419,6 @@ class Diffusor(TransformerMixin):
             Dreg = csr_matrix(
                 (D, (range(self.N), range(self.N))), shape=[self.N, self.N])
             self.P = Dreg.dot(self.K)
-
-        # This was the original implementation, but it is not symmetric.
-        #D = np.ravel(self.K.sum(axis=1))
-        # if self.alpha > 0:
-        #    # L_alpha
-        #    D[D != 0] = D[D != 0] ** (-self.alpha)
-        #    Dmat = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N])
-        #    self.K = Dmat.dot(self.K).dot(Dmat)
-        #    # New diagonal degree matrix based on the new kernel matrix
-        #    Dd = np.ravel(self.K.sum(axis=1))
-        #    Dd[Dd != 0] = 1 / Dd[Dd != 0]
-        #    # Setting the diffusion operator
-        #    Dalpha_inv = csr_matrix((Dd, (range(self.N), range(self.N))), shape=[self.N, self.N])
-        #    self.P = Dalpha_inv.dot(self.K)
-        # else:
-        #    D[D != 0] = 1 / D[D != 0]
-        #    Dreg = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N])
-        #    self.P = Dreg.dot(self.K)
 
         end = time.time()
         if self.verbose:
