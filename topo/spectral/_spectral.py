@@ -2,11 +2,8 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from scipy import sparse
-
-from sklearn.metrics import pairwise_distances
 from sklearn.utils import as_float_array, check_random_state
-from sklearn.utils.extmath import _deterministic_vector_sign_flip
-
+from sklearn.metrics import pairwise_distances
 
 def _dense_degree(W):
     return np.diag(W.sum(axis=1))
@@ -45,6 +42,27 @@ def _dense_anisotropic_diffusion(W, alpha=1):
     Pa = (np.diag(1/Dd.diagonal())@Wa)
     return Pa
 
+def _dense_anisotropic_diffusion_symmetric(W, alpha=1, return_D_inv_sqrt=False):
+    if alpha < 0:
+        alpha = 0
+    D = _dense_degree(W)
+    # Dinva is D^-alpha
+    Dinva = np.diag(1/(D.diagonal()**alpha))
+    Wa = Dinva @ (W @ Dinva)
+    Da = _dense_degree(Wa)
+    Dalpha_inv = np.diag(1/(Da.diagonal()))
+    Pa = Dalpha_inv @ Wa
+    # Now let's build the symmetrized version Pasym:
+    D_right = _dense_degree(Pa)
+    D_left = D_right.copy()
+    D_right = np.sqrt(D_right.diagonal())
+    D_left = np.diag(1/np.sqrt(D_left.diagonal()))
+    Psym = D_right @ (Pa @ D_left)
+    if return_D_inv_sqrt:
+        return Psym, D_left
+    else:
+        return Psym
+
 def _sparse_degree(W):
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
@@ -54,7 +72,7 @@ def _sparse_unnormalized_laplacian(W):
     D = _sparse_degree(W)
     L = D - W
     return L
-    
+
 def _sparse_symmetrized_normalized_laplacian(W):
     D = _sparse_degree(W)
     L = D - W
@@ -63,7 +81,7 @@ def _sparse_symmetrized_normalized_laplacian(W):
     # D ^-1/2:
     D_tilde[D_tilde != 0] = 1 / np.sqrt(D_tilde[D_tilde != 0])
     Dinvs = sparse.csr_matrix((D_tilde, (range(N), range(N))), shape=[N, N])
-    # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2 
+    # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
     Lsym_norm = Dinvs.dot(L).dot(Dinvs)
     return Lsym_norm
 
@@ -113,89 +131,90 @@ def _sparse_anisotropic_diffusion_symmetric(W, alpha=1, return_D_inv_sqrt=False)
     D_left = sparse.csr_matrix((D_left, (range(N), range(N))), shape=[N, N])
     # Note the resulting operator is symmetric!
     Psym = D_right.dot(Pa).dot(D_left)
-    # Useful to get the eigenvectors of the original P matrix:
-    # evals, evecs = sparse.linalg.eigsh(P, which='LM')
-    # evecs = np.real(evecs)
-    # evals = np.real(evals)
-    # idx = evals.argsort()[::-1]
-    # evals = evals[idx]
-    # evecs = evecs[:, idx]
-    # DM (P) = D_left.dot(evecs)
     if return_D_inv_sqrt:
         return Psym, D_left
     else:
         return Psym
 
 
-def graph_laplacian(W, laplacian='random_walk'):
+def graph_laplacian(W, laplacian_type='random_walk'):
     """
     Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
     see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
+    
     Parameters
     ----------
     W : scipy.sparse.csr_matrix or np.ndarray
         The graph adjacency or affinity matrix. Assumed to be symmetric and with diagonal 0.
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done with W = (W + W.T)/2 ).
+
     laplacian : str (optional, default 'random_walk').
-        The type of laplacian to use. Can be 'unnormalized', 'symmetric', or 'random_walk'.
+        The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
     """
     if sparse.issparse(W):
-        if laplacian == 'unnormalized':
+        if laplacian_type == 'unnormalized':
             lap_fun = _sparse_unnormalized_laplacian
-        elif laplacian == 'symmetric':
+        elif laplacian_type == 'normalized':
             lap_fun = _sparse_symmetrized_normalized_laplacian
-        elif laplacian == 'random_walk':
+        elif laplacian_type == 'random_walk':
             lap_fun = _sparse_normalized_random_walk_laplacian
         else:
-            raise ValueError('Unknown laplacian type: {}'.format(laplacian))
+            raise ValueError('Unknown laplacian type: {}'.format(laplacian_type) + '. Should \
+            be one of \"unnormalized\", \"normalized\", or \"random_walk\".')
     else:
-        if laplacian == 'unnormalized':
+        if laplacian_type == 'unnormalized':
             lap_fun = _dense_unnormalized_laplacian
-        elif laplacian == 'symmetric':
+        elif laplacian_type == 'normalized':
             lap_fun = _dense_symmetrized_normalized_laplacian
-        elif laplacian == 'random_walk':
+        elif laplacian_type == 'random_walk':
             lap_fun = _dense_normalized_random_walk_laplacian
         else:
-            raise ValueError('Unknown laplacian type: {}'.format(laplacian))
+            raise ValueError('Unknown laplacian type: {}'.format(laplacian_type) + '. Should \
+            be one of \"unnormalized\", \"normalized\", or \"random_walk\".')
     return lap_fun(W)
 
-def LE(W, n_eigs=10, laplacian='random_walk', drop_first=True, return_evals=False, eigen_tol=0):
+
+def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals=False, eigen_tol=0):
     """
     Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf), given a adjacency or affinity graph W.
     The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is).
     It's diagonal is assumed to be 0 (even thought this practice can be counterintuitive for kernels, it is needed for numerical
     stability of the eigendecomposition and regularly used in other implementations). The eigenvectors associated with the smallest eigenvalues
     form a new orthonormal basis which represents the graph in the feature space and are useful for denoising and clustering.
+
     Parameters
     ----------
     W : scipy.sparse.csr_matrix or np.ndarray
         The graph adjacency or affinity matrix. Assumed to be symmetric and with diagonal 0.
     n_eigs : int (optional, default 10).
         The number of eigenvectors to return.
-    
+
     laplacian : str (optional, default 'random_walk').
         The type of laplacian to use. Can be 'unnormalized', 'symmetric', or 'random_walk'.
-    
+
     drop_first : bool (optional, default True).
         Whether to drop the first eigenvector.
-    
+
     return_evals : bool (optional, default False).
         Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
+
     eigen_tol : float (optional, default 0).
         The tolerance for the eigendecomposition in scipy.sparse.linalg.eigsh().
     """
     if n_eigs > np.shape(W)[0]:
-        raise ValueError('n_eigs must be less than or equal to the number of nodes.')
+        raise ValueError(
+            'n_eigs must be less than or equal to the number of nodes.')
     # Compute graph Laplacian
-    L = graph_laplacian(W, laplacian)
+    L = graph_laplacian(W, laplacian_type)
     if not sparse.issparse(L):
-        L = sparse.csr_matrix(L) # for ARPACK efficiency
+        L = sparse.csr_matrix(L)  # for ARPACK efficiency
     # Add one more eig if drop_first is True
     if drop_first:
         n_eigs = n_eigs + 1
-    num_lanczos_vectors = max(2 * n_eigs + 1, int(np.sqrt(W.shape[0])))
+    num_lanczos_vectors = max(2 * n_eigs + 2, int(np.sqrt(W.shape[0])))
     # Compute eigenvalues and eigenvectors
-    evals, evecs = sparse.linalg.eigsh(L, k=n_eigs, which='SM', tol=eigen_tol, ncv=num_lanczos_vectors, maxiter=L.shape[0] * 5)
+    evals, evecs = sparse.linalg.eigsh(
+        L, k=n_eigs, which='SM', tol=eigen_tol, ncv=num_lanczos_vectors, maxiter=L.shape[0] * 5)
     evals = np.real(evals)
     evecs = np.real(evecs)
     # Sort eigenvalues and eigenvectors in ascending order
@@ -211,218 +230,106 @@ def LE(W, n_eigs=10, laplacian='random_walk', drop_first=True, return_evals=Fals
     else:
         return evecs
 
-# def component_layout(
-#         W,
-#         n_components,
-#         component_labels,
-#         dim,
-#         linkage=np.min,
-#         laplacian='random_walk',
-#         eigen_tol=10e-4
-# ):
-#     """
-#     Provide a layout relating the separate connected components. This is done
-#     by taking the centroid of each component and then performing a spectral embedding
-#     of the centroids.
-#     This implementation was adapted from Leland McInness' implementation of spectral initialization.
-#     Parameters
-#     ----------
-#     W: numpy.ndarray, pandas.DataFrame or scipy.sparse.csr_matrix.
-#          Affinity or adjacency matrix.
-#     n_components: int
-#         The number of distinct components to be layed out.
-#     component_labels: array of shape (n_samples)
-#         For each vertex in the graph the label of the component to
-#         which the vertex belongs.
-#     dim: int
-#         The chosen embedding dimension.
-#     Returns
-#     -------
-#     component_embedding: array of shape (n_components, dim)
-#         The ``dim``-dimensional embedding of the ``n_components``-many
-#         connected components.
-#     """
-#     # cannot compute centroids from precomputed distances
-#     # instead, compute centroid distances using linkage
-#     distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
-#     linkage = np.min
-#     for c_i in range(n_components):
-#         dm_i = W[component_labels == c_i]
-#         for c_j in range(c_i + 1, n_components):
-#             dist = linkage(dm_i[:, component_labels == c_j])
-#             distance_matrix[c_i, c_j] = dist
-#             distance_matrix[c_j, c_i] = dist
-#     affinity_matrix = np.exp(-(distance_matrix ** 2))
-#     component_embedding = LE(affinity_matrix, dim, laplacian=laplacian, eigen_tol=eigen_tol)
-#     component_embedding /= component_embedding.max()
-#     return component_embedding
 
-# def multi_component_layout(
-#     graph,
-#     n_components,
-#     component_labels,
-#     dim,
-#     random_state,
-#     linkage=np.min,
-#     laplacian='random_walk',
-#     eigen_tol=10e-4
-# ):
-#     """Specialised layout algorithm for dealing with graphs with many connected components.
-#     This will first find relative positions for the components by spectrally embedding
-#     their centroids, then spectrally embed each individual connected component positioning
-#     them according to the centroid embeddings. This provides a decent embedding of each
-#     component while placing the components in good relative positions to one another.
-#     This implementation was adapted from Leland McInness' implementation of spectral initialization.
-#     Parameters
-#     ----------
-#     graph: sparse matrix
-#         The adjacency matrix of the graph to be embedded.
-#     n_components: int
-#         The number of distinct components to be layed out.
-#     component_labels: array of shape (n_samples)
-#         For each vertex in the graph the label of the component to
-#         which the vertex belongs.
-#     dim: int
-#         The chosen embedding dimension.
-#     Returns
-#     -------
-#     embedding: array of shape (n_samples, dim)
-#         The initial embedding of ``graph``.
-#     """
-#     result = np.empty((graph.shape[0], dim), dtype=np.float32)
-#     if n_components > 2 * dim:
-#         meta_embedding = component_layout(
-#             graph,
-#             n_components,
-#             component_labels,
-#             dim,
-#             linkage,
-#             laplacian,
-#             eigen_tol
-#         )
-#     else:
-#         k = int(np.ceil(n_components / 2.0))
-#         base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
-#         meta_embedding = np.vstack([base, -base])[:n_components]
-#     for label in range(n_components):
-#         component_graph = graph.tocsr()[component_labels == label, :].tocsc()
-#         component_graph = component_graph[:, component_labels == label].tocoo()
-
-#         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
-#         data_range = distances[distances > 0.0].min() / 2.0
-
-#         if component_graph.shape[0] < 2 * dim:
-#             result[component_labels == label] = (
-#                 random_state.uniform(
-#                     low=-data_range,
-#                     high=data_range,
-#                     size=(component_graph.shape[0], dim),
-#                 )
-#                 + meta_embedding[label]
-#             )
-#             continue
-
-#         try:
-#             evals, evecs = LE(component_graph, dim, laplacian=laplacian, return_evals=True, eigen_tol=eigen_tol)
-#             order = np.argsort(evals)[1:k]
-#             component_embedding = evecs[:, order]
-#             expansion = data_range / np.max(np.abs(component_embedding))
-#             component_embedding *= expansion
-#             result[component_labels == label] = (
-#                 component_embedding + meta_embedding[label]
-#             )
-#         except sparse.linalg.ArpackError:
-#             from warnings import warn
-#             warn(
-#                 "WARNING: Eigendecomposition FAILED! This is likely due to too small an eigengap. Consider\n"
-#                 "adding some noise or jitter to your data.\n\n"
-#             )
-#             return print('Eigendecomposition failed!')
-#     return result
-
-# def multicomponent_LE(W, n_eigs=10, laplacian='random_walk', linkage=np.min, drop_first=True, eigen_tol=0, random_state=None):
-#     """
-#     Multicomponent Laplacian Eigenmaps
-#     Graph layout using Laplacian Eigenmaps with routines for working with multiple connected components.
-#     This implementation was adapted from Leland McInness' implementation of spectral initialization.
-#     """
-#     if random_state is None:
-#         random_state = np.random.RandomState()
-#     elif isinstance(random_state, np.random.RandomState):
-#         pass
-#     elif isinstance(random_state, int):
-#         random_state = np.random.RandomState(random_state)
-#     else:
-#         raise ValueError('RandomState error! No valid random state was defined. Must be `None`, integer or np.random.RandomState object.')
-
-#     n_components, labels = sparse.csgraph.connected_components(W, directed=False)
-
-#     if n_components > 1:
-#         return multi_component_layout(W, n_components, labels, n_eigs, random_state, linkage=linkage, laplacian=laplacian, eigen_tol=eigen_tol)
-#     else:
-#         return LE(W, n_eigs, laplacian=laplacian, drop_first=drop_first, return_evals=False, eigen_tol=eigen_tol)
+def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
+    # Compute diffusion operator
+    if sparse.issparse(W):
+        if symmetric:
+            P, D_left = _sparse_anisotropic_diffusion_symmetric(
+                W, alpha, return_D_inv_sqrt=return_D_inv_sqrt)
+        else:
+            P = _sparse_anisotropic_diffusion(W, alpha)
+    else:
+        if symmetric:
+            P, D_left = _dense_anisotropic_diffusion_symmetric(
+                W, alpha, return_D_inv_sqrt=return_D_inv_sqrt)
+        else:
+            P = _dense_anisotropic_diffusion(W, alpha)
+    if symmetric:
+        if return_D_inv_sqrt:
+            return P, D_left
+        else:
+            return P
+    else:
+        return P
 
 
-def LapEigenmap(W,
-                n_eigs=10,
-                norm_laplacian=True,
-                eigen_tol=10e-4,
-                return_evals=False,
-                random_state=None):
+def DM(W, n_eigs=10, alpha=1.0, return_evals=False, symmetric=True, eigen_tol=10e-4, t=None):
     """
-    Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf) on the input data.
-    ----------
+    Performs [Diffusion Maps](https://doi.org/10.1016/j.acha.2006.04.006), given a adjacency or affinity graph W.
+    The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is).
+    It's diagonal is assumed to be 0 (even thought this practice can be counterintuitive for kernels, it is needed for numerical
+    stability of the eigendecomposition and regularly used in other implementations). The eigenvectors associated with the smallest eigenvalues
+    form a new orthonormal basis which represents the graph in the feature space and are useful for denoising and clustering.
+
     Parameters
     ----------
-    `W` : numpy.ndarray, pandas.DataFrame or scipy.sparse.csr_matrix.
-         Affinity or adjacency matrix.
-    `n_eigs` : int (optional, default 10).
-         Number of eigenvectors to decompose the graph Laplacian into.
-    `eigen_tol` : float (optional, default 10e-4)
-        Tolerance for eigendecomposition precision.
-    `norm_laplacian` : bool (optional, default True).
-        Whether to renormalize the graph Laplacian.
-    `return_evals` : bool (optional, default False).
-        Whether to also return the eigenvalues in a tuple of eigenvectors, eigenvalues. Defaults to False.
-    ----------
+
+    W : scipy.sparse.csr_matrix or np.ndarray
+        The graph adjacency or affinity matrix. Assumed to be symmetric and with diagonal 0.
+
+    n_eigs : int (optional, default 10).
+        The number of eigenvectors to return.
+
+    alpha : float (optional, default 1.0).
+        Anisotropy to be applied to the diffusion map. Refered to as alpha in the diffusion maps literature.
+
+    return_evals : bool (optional, default False).
+        Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
+
+    eigen_tol : float (optional, default 0).
+        The tolerance for the eigendecomposition in scipy.sparse.linalg.eigsh().
+
+    t : int (optional, default 1).
+        The number of steps to take in the diffusion map.
+
     Returns
     ----------
         * If return_evals is True :
-            A tuple of eigenvectors and eigenvalues.
+            A tuple of scaled eigenvectors (the diffusion maps) and eigenvalues.
         * If return_evals is False :
-            An array of ranked eigenvectors.
+            An array of scaled eigenvectors (the diffusion maps).
+
     """
-    if isinstance(W, sparse.csr_matrix):
-        pass
-    elif isinstance(W, np.ndarray):
-        W = sparse.csr_matrix(W)
-    elif isinstance(W, pd.DataFrame):
-        W = W.to_numpy()
-        W = sparse.csr_matrix(W)
+    if t is not None:
+        if not isinstance(t, int):
+            raise ValueError('t must be `None` or an integer.')
+    if n_eigs > np.shape(W)[0]:
+        raise ValueError(
+            'n_eigs must be less than or equal to the number of nodes.')
+    # Compute diffusion operator
+    if symmetric:
+        P, D_left = diffusion_operator(
+            W, alpha, symmetric, return_D_inv_sqrt=True)
     else:
-        return print('Data should be a numpy.ndarray,pandas.DataFrame or'
-                     'a scipy.sparse.csr_matrix for obtaining approximate nearest neighbors with \'nmslib\'.')
-
-    laplacian, dd = sparse.csgraph.laplacian(
-        W, normed=norm_laplacian, return_diag=True)
-    laplacian = _set_diag(laplacian, 1, norm_laplacian)
-    laplacian *= -1
-    random_state = check_random_state(random_state)
-    #v0 = _init_arpack_v0(laplacian.shape[0], random_state)
-    n_eigs = n_eigs + 1
+        P = diffusion_operator(W, alpha, symmetric, return_D_inv_sqrt=False)
+    # Compute eigenvalues and eigenvectors
+    num_lanczos_vectors = max(2 * n_eigs + 2, int(np.sqrt(P.shape[0])))
     evals, evecs = sparse.linalg.eigsh(
-        laplacian, k=n_eigs, which='SM', tol=eigen_tol)
-    evecs = evecs.T[n_eigs::-1]
-    if norm_laplacian:
-        # recover u = D^-1/2 x from the eigenvector output x
-        evecs = evecs / dd
-    evecs = _deterministic_vector_sign_flip(evecs)
-    evecs = evecs[1:n_eigs].T
-
-    if return_evals:
-        return evecs, evals
+        P, k=n_eigs, which='LM', tol=eigen_tol, ncv=num_lanczos_vectors, maxiter=P.shape[0] * 5)
+    evecs = np.real(evecs)
+    evals = np.real(evals)
+    if symmetric:
+        evecs = D_left.dot(evecs)
+    idx = evals.argsort()[::-1]
+    evals = evals[idx]
+    evecs = evecs[:, idx]
+    # Normalize
+    for i in range(evecs.shape[1]):
+        evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
+    if t is not None:
+        if t > 1:
+            evals = np.power(evals, t)
+        diffmap = evecs * evals
     else:
-        return evecs
+        use_eigs = int(np.sum(evals > 0, axis=0))
+        eigs_idx = list(range(1, int(use_eigs)))
+        eig_vals = np.ravel(evals[eigs_idx])
+        diffmap = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
+    if return_evals:
+        return diffmap, evals
+    else:
+        return diffmap
 
 
 def _set_diag(laplacian, value, norm_laplacian):
@@ -455,8 +362,8 @@ def component_layout(
         n_components,
         component_labels,
         dim,
-        norm_laplacian=True,
-        eigen_tol=10e-4
+        eigen_tol=10e-4,
+        return_evals=False
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -482,7 +389,7 @@ def component_layout(
     # cannot compute centroids from precomputed distances
     # instead, compute centroid distances using linkage
     distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
-
+    # use single linkage
     linkage = np.min
 
     for c_i in range(n_components):
@@ -494,11 +401,13 @@ def component_layout(
 
     affinity_matrix = np.exp(-(distance_matrix ** 2))
 
-    component_embedding = LapEigenmap(
-        W=affinity_matrix, n_eigs=dim, norm_laplacian=norm_laplacian, eigen_tol=eigen_tol)
+    component_embedding, evals = LE(
+        affinity_matrix, n_eigs=dim, laplacian="normalized", eigen_tol=eigen_tol, return_evals=True)
     component_embedding /= component_embedding.max()
-
-    return component_embedding
+    if return_evals:
+        return component_embedding, evals
+    else:
+        return component_embedding
 
 
 def multi_component_layout(
@@ -506,29 +415,10 @@ def multi_component_layout(
     n_components,
     component_labels,
     dim,
-    random_state
+    random_state,
+    eigen_tol,
+    return_eval_list
 ):
-    """Specialised layout algorithm for dealing with graphs with many connected components.
-    This will first find relative positions for the components by spectrally embedding
-    their centroids, then spectrally embed each individual connected component positioning
-    them according to the centroid embeddings. This provides a decent embedding of each
-    component while placing the components in good relative positions to one another.
-    Parameters
-    ----------
-    graph: sparse matrix
-        The adjacency matrix of the graph to be embedded.
-    n_components: int
-        The number of distinct components to be layed out.
-    component_labels: array of shape (n_samples)
-        For each vertex in the graph the label of the component to
-        which the vertex belongs.
-    dim: int
-        The chosen embedding dimension.
-    Returns
-    -------
-    embedding: array of shape (n_samples, dim)
-        The initial embedding of ``graph``.
-    """
 
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
@@ -538,19 +428,20 @@ def multi_component_layout(
             n_components,
             component_labels,
             dim,
+            return_evals=False
         )
+        k = dim + 1
     else:
         k = int(np.ceil(n_components / 2.0))
         base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
         meta_embedding = np.vstack([base, -base])[:n_components]
 
+    evals_list = []
     for label in range(n_components):
         component_graph = graph.tocsr()[component_labels == label, :].tocsc()
         component_graph = component_graph[:, component_labels == label].tocoo()
-
         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
         data_range = distances[distances > 0.0].min() / 2.0
-
         if component_graph.shape[0] < 2 * dim:
             result[component_labels == label] = (
                 random_state.uniform(
@@ -563,9 +454,6 @@ def multi_component_layout(
             continue
 
         diag_data = np.asarray(component_graph.sum(axis=0))
-        # standard Laplacian
-        # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-        # L = D - graph
         # Normalized Laplacian
         I = sparse.identity(component_graph.shape[0], dtype=np.float64)
         D = sparse.spdiags(
@@ -578,100 +466,74 @@ def multi_component_layout(
         k = dim + 1
         num_lanczos_vectors = max(
             2 * k + 1, int(np.sqrt(component_graph.shape[0])))
-        try:
-            eigenvalues, eigenvectors = sparse.linalg.eigsh(
-                L,
-                k,
-                which="SM",
-                ncv=num_lanczos_vectors,
-                tol=1e-4,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 2,
-            )
-            order = np.argsort(eigenvalues)[1:k]
-            component_embedding = eigenvectors[:, order]
-            expansion = data_range / np.max(np.abs(component_embedding))
-            component_embedding *= expansion
-            result[component_labels == label] = (
-                component_embedding + meta_embedding[label]
-            )
-        except sparse.linalg.ArpackError:
-            warn(
-                "WARNING: spectral initialisation failed! The eigenvector solver\n"
-                "failed. This is likely due to too small an eigengap. Consider\n"
-                "adding some noise or jitter to your data.\n\n"
-            )
-            return print('Spectral embedding failed!')
+        eigenvalues, eigenvectors = sparse.linalg.eigsh(
+            L,
+            k,
+            which="SM",
+            ncv=num_lanczos_vectors,
+            tol=eigen_tol,
+            v0=np.ones(L.shape[0]),
+            maxiter=graph.shape[0] * 2,
+        )
+        order = np.argsort(eigenvalues)[1:k]
+        component_embedding = eigenvectors[:, order]
+        expansion = data_range / np.max(np.abs(component_embedding))
+        component_embedding *= expansion
+        result[component_labels == label] = (
+            component_embedding + meta_embedding[label]
+        )
+        evals_list.append(eigenvalues[order])
 
-    return result
+    if return_eval_list:
+        return result, evals_list
+    else:
+        return result
 
 
-def spectral_layout(graph, dim, random_state, tol=10e-4):
+def spectral_layout(graph, n_eigs=30, eigen_tol=10e-4, return_evals=False, random_state=None):
     """Given a graph compute the spectral embedding of the graph. This is
-    simply the eigenvectors of the laplacian of the graph. Here we use the
-    normalized laplacian.
+    simply the eigenvectors of the laplacian of the graph. 
+
     Parameters
     ----------
-    graph: sparse matrix
+    graph : sparse matrix
         The (weighted) adjacency matrix of the graph as a sparse matrix.
-    dim: int
+
+    n_eigs : int
         The dimension of the space into which to embed.
+
+    eigen_tol : float
+        The tolerance for the eigendecomposition computation. 
+
+    laplacian_type : string
+        The type of laplacian to use. Can be 'unnormalized', 'symmetric' or 'random_walk'.
+
+    return_evals : bool
+        Whether to also return the eigenvalues of the laplacian.
+
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
+
     Returns
     -------
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
-    n_components, labels = sparse.csgraph.connected_components(graph)
-
+    if random_state is None:
+        random_state = np.random.RandomState()
+    n_components, labels = sparse.csgraph.connected_components(graph, directed=False)
     if n_components > 1:
         return multi_component_layout(
             graph,
             n_components,
             labels,
-            dim,
+            n_eigs,
             random_state,
+            eigen_tol,
+            return_evals
         )
-
-    diag_data = np.asarray(graph.sum(axis=0))
-    # standard Laplacian
-    # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-    # L = D - graph
-    # Normalized Laplacian
-    I = sparse.identity(graph.shape[0], dtype=np.float64)
-    D = sparse.spdiags(
-        1.0 / (np.sqrt(diag_data)+10e-8), 0, graph.shape[0], graph.shape[0]
-    )
-    L = I - D * graph * D
-
-    k = dim + 1
-    num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    try:
-        if L.shape[0] < 2000000:
-            eigenvalues, eigenvectors = sparse.linalg.eigsh(
-                L,
-                k,
-                which="SM",
-                ncv=num_lanczos_vectors,
-                tol=tol,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 2,
-            )
-        else:
-            eigenvalues, eigenvectors = sparse.linalg.lobpcg(
-                L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
-            )
-        order = np.argsort(eigenvalues)[1:k]
-        return eigenvectors[:, order]
-    except sparse.linalg.ArpackError:
-        warn(
-            "WARNING: spectral initialisation failed! The eigenvector solver\n"
-            "failed. This is likely due to too small an eigengap. Consider\n"
-            "lowering the tolerance parameter `tol`, or adding some noise or jitter to your data.\n\n"
-            "Falling back to random projection!"
-        )
-        return random_state.uniform(low=-10.0, high=10.0, size=(graph.shape[0], dim))
+    else:
+        return LE(graph, laplacian_type='normalized', n_eigs=n_eigs, eigen_tol=eigen_tol, return_evals=return_evals)
 
 
 def spectral_clustering(init, max_svd_restarts=30, n_iter_max=30, random_state=None, copy=True):
@@ -821,4 +683,4 @@ def _init_arpack_v0(size, random_state):
     """
     random_state = check_random_state(random_state)
     v0 = random_state.uniform(-1, 1, size)
-    return 
+    return

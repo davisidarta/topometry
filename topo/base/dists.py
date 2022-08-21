@@ -51,14 +51,12 @@ if _have_numba:
     _mock_cost = 1.0 - _mock_identity
     _mock_ones = np.ones(2, dtype=np.float64)
 
-
     @numba.njit()
     def sign(a):
         if a < 0:
             return -1
         else:
             return 1
-
 
     @numba.njit(fastmath=True)
     def euclidean(x, y):
@@ -70,7 +68,6 @@ if _have_numba:
         for i in range(x.shape[0]):
             result += (x[i] - y[i]) ** 2
         return np.sqrt(result)
-
 
     @numba.njit(fastmath=True)
     def euclidean_grad(x, y):
@@ -86,7 +83,6 @@ if _have_numba:
         grad = (x - y) / (1e-6 + d)
         return d, grad
 
-
     @numba.njit()
     def standardised_euclidean(x, y, sigma=_mock_ones):
         """Euclidean distance standardised against a vector of standard
@@ -99,7 +95,6 @@ if _have_numba:
             result += ((x[i] - y[i]) ** 2) / sigma[i]
 
         return np.sqrt(result)
-
 
     @numba.njit(fastmath=True)
     def standardised_euclidean_grad(x, y, sigma=_mock_ones):
@@ -115,7 +110,6 @@ if _have_numba:
         grad = (x - y) / (1e-6 + d * sigma)
         return d, grad
 
-
     @numba.njit()
     def manhattan(x, y):
         """Manhattan, taxicab, or l1 distance.
@@ -127,7 +121,6 @@ if _have_numba:
             result += np.abs(x[i] - y[i])
 
         return result
-
 
     @numba.njit()
     def manhattan_grad(x, y):
@@ -142,7 +135,6 @@ if _have_numba:
             grad[i] = np.sign(x[i] - y[i])
         return result, grad
 
-
     @numba.njit()
     def chebyshev(x, y):
         """Chebyshev or l-infinity distance.
@@ -154,7 +146,6 @@ if _have_numba:
             result = max(result, np.abs(x[i] - y[i]))
 
         return result
-
 
     @numba.njit()
     def chebyshev_grad(x, y):
@@ -174,7 +165,6 @@ if _have_numba:
 
         return result, grad
 
-
     @numba.njit()
     def minkowski(x, y, p=2):
         """Minkowski distance.
@@ -190,7 +180,6 @@ if _have_numba:
             result += (np.abs(x[i] - y[i])) ** p
 
         return result ** (1.0 / p)
-
 
     @numba.njit()
     def minkowski_grad(x, y, p=2):
@@ -216,7 +205,6 @@ if _have_numba:
 
         return result ** (1.0 / p), grad
 
-
     @numba.njit()
     def poincare(u, v):
         """Poincare distance.
@@ -228,7 +216,6 @@ if _have_numba:
         sq_v_norm = np.sum(v * v)
         sq_dist = np.sum(np.power(u - v, 2))
         return np.arccosh(1 + 2 * (sq_dist / ((1 - sq_u_norm) * (1 - sq_v_norm))))
-
 
     @numba.njit()
     def hyperboloid_grad(x, y):
@@ -252,7 +239,6 @@ if _have_numba:
 
         return np.arccosh(B), grad
 
-
     @numba.njit()
     def weighted_minkowski(x, y, w=_mock_ones, p=2):
         """A weighted version of Minkowski distance.
@@ -267,7 +253,6 @@ if _have_numba:
             result += (w[i] * np.abs(x[i] - y[i])) ** p
 
         return result ** (1.0 / p)
-
 
     @numba.njit()
     def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
@@ -293,7 +278,6 @@ if _have_numba:
 
         return result ** (1.0 / p), grad
 
-
     @numba.njit()
     def mahalanobis(x, y, vinv=_mock_identity):
         result = 0.0
@@ -310,7 +294,6 @@ if _have_numba:
             result += tmp * diff[i]
 
         return np.sqrt(result)
-
 
     @numba.njit()
     def mahalanobis_grad(x, y, vinv=_mock_identity):
@@ -332,7 +315,6 @@ if _have_numba:
         grad = grad_tmp / (1e-6 + dist)
         return dist, grad
 
-
     @numba.njit()
     def hamming(x, y):
         result = 0.0
@@ -341,7 +323,6 @@ if _have_numba:
                 result += 1.0
 
         return float(result) / x.shape[0]
-
 
     @numba.njit()
     def canberra(x, y):
@@ -352,7 +333,6 @@ if _have_numba:
                 result += np.abs(x[i] - y[i]) / denominator
 
         return result
-
 
     @numba.njit()
     def canberra_grad(x, y):
@@ -369,7 +349,6 @@ if _have_numba:
 
         return result, grad
 
-
     @numba.njit()
     def bray_curtis(x, y):
         numerator = 0.0
@@ -382,7 +361,6 @@ if _have_numba:
             return float(numerator) / denominator
         else:
             return 0.0
-
 
     @numba.njit()
     def bray_curtis_grad(x, y):
@@ -401,7 +379,6 @@ if _have_numba:
 
         return dist, grad
 
-
     @numba.njit()
     def jaccard(x, y):
         num_non_zero = 0.0
@@ -417,7 +394,6 @@ if _have_numba:
         else:
             return float(num_non_zero - num_equal) / num_non_zero
 
-
     @numba.njit()
     def matching(x, y):
         num_not_equal = 0.0
@@ -427,7 +403,6 @@ if _have_numba:
             num_not_equal += x_true != y_true
 
         return float(num_not_equal) / x.shape[0]
-
 
     @numba.njit()
     def dice(x, y):
@@ -443,7 +418,6 @@ if _have_numba:
             return 0.0
         else:
             return num_not_equal / (2.0 * num_true_true + num_not_equal)
-
 
     @numba.njit()
     def kulsinski(x, y):
@@ -462,7 +436,6 @@ if _have_numba:
                 num_not_equal + x.shape[0]
             )
 
-
     @numba.njit()
     def rogers_tanimoto(x, y):
         num_not_equal = 0.0
@@ -472,7 +445,6 @@ if _have_numba:
             num_not_equal += x_true != y_true
 
         return (2.0 * num_not_equal) / (x.shape[0] + num_not_equal)
-
 
     @numba.njit()
     def russellrao(x, y):
@@ -487,7 +459,6 @@ if _have_numba:
         else:
             return float(x.shape[0] - num_true_true) / (x.shape[0])
 
-
     @numba.njit()
     def sokal_michener(x, y):
         num_not_equal = 0.0
@@ -497,7 +468,6 @@ if _have_numba:
             num_not_equal += x_true != y_true
 
         return (2.0 * num_not_equal) / (x.shape[0] + num_not_equal)
-
 
     @numba.njit()
     def sokal_sneath(x, y):
@@ -514,16 +484,16 @@ if _have_numba:
         else:
             return num_not_equal / (0.5 * num_true_true + num_not_equal)
 
-
     @numba.njit()
     def haversine(x, y):
         if x.shape[0] != 2:
-            raise ValueError("haversine is only defined for 2 dimensional data")
+            raise ValueError(
+                "haversine is only defined for 2 dimensional data")
         sin_lat = np.sin(0.5 * (x[0] - y[0]))
         sin_long = np.sin(0.5 * (x[1] - y[1]))
-        result = np.sqrt(sin_lat ** 2 + np.cos(x[0]) * np.cos(y[0]) * sin_long ** 2)
+        result = np.sqrt(
+            sin_lat ** 2 + np.cos(x[0]) * np.cos(y[0]) * sin_long ** 2)
         return 2.0 * np.arcsin(result)
-
 
     @numba.njit()
     def haversine_grad(x, y):
@@ -532,13 +502,15 @@ if _have_numba:
         # TODO: reimplement with quaternions to avoid singularity
 
         if x.shape[0] != 2:
-            raise ValueError("haversine is only defined for 2 dimensional data")
+            raise ValueError(
+                "haversine is only defined for 2 dimensional data")
         sin_lat = np.sin(0.5 * (x[0] - y[0]))
         cos_lat = np.cos(0.5 * (x[0] - y[0]))
         sin_long = np.sin(0.5 * (x[1] - y[1]))
         cos_long = np.cos(0.5 * (x[1] - y[1]))
 
-        a_0 = np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
+        a_0 = np.cos(x[0] + np.pi / 2) * \
+            np.cos(y[0] + np.pi / 2) * sin_long ** 2
         a_1 = a_0 + sin_lat ** 2
 
         d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
@@ -564,7 +536,6 @@ if _have_numba:
         )
         return d, grad
 
-
     @numba.njit()
     def yule(x, y):
         num_true_true = 0.0
@@ -577,7 +548,8 @@ if _have_numba:
             num_true_false += x_true and (not y_true)
             num_false_true += (not x_true) and y_true
 
-        num_false_false = x.shape[0] - num_true_true - num_true_false - num_false_true
+        num_false_false = x.shape[0] - num_true_true - \
+            num_true_false - num_false_true
 
         if num_true_false == 0.0 or num_false_true == 0.0:
             return 0.0
@@ -585,7 +557,6 @@ if _have_numba:
             return (2.0 * num_true_false * num_false_true) / (
                 num_true_true * num_false_false + num_true_false * num_false_true
             )
-
 
     @numba.njit()
     def cosine(x, y):
@@ -603,7 +574,6 @@ if _have_numba:
             return 1.0
         else:
             return 1.0 - (result / np.sqrt(norm_x * norm_y))
-
 
     @numba.njit(fastmath=True)
     def cosine_grad(x, y):
@@ -626,7 +596,6 @@ if _have_numba:
             dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
 
         return dist, grad
-
 
     @numba.njit()
     def correlation(x, y):
@@ -657,7 +626,6 @@ if _have_numba:
         else:
             return 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
 
-
     @numba.njit()
     def hellinger(x, y):
         result = 0.0
@@ -675,7 +643,6 @@ if _have_numba:
             return 1.0
         else:
             return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_y))
-
 
     @numba.njit()
     def hellinger_grad(x, y):
@@ -707,7 +674,6 @@ if _have_numba:
 
         return dist, grad
 
-
     @numba.njit()
     def approx_log_Gamma(x):
         if x == 1:
@@ -718,7 +684,6 @@ if _have_numba:
         #  x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 +\
         #  x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0) +\
         #  x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
-
 
     @numba.njit()
     def log_beta(x, y):
@@ -732,11 +697,9 @@ if _have_numba:
         else:
             return approx_log_Gamma(x) + approx_log_Gamma(y) - approx_log_Gamma(x + y)
 
-
     @numba.njit()
     def log_single_beta(x):
         return np.log(2.0) * (-2.0 * x + 0.5) + 0.5 * np.log(2.0 * np.pi / x) + 0.125 / x
-
 
     # + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0) +\
     #  x2*(31.0/18432.0 + x2*(-691.0/180224.0 +\
@@ -744,7 +707,6 @@ if _have_numba:
     #  x2*(3189151.0/8912896.0 + x2*(-221930581.0/79691776.0) +\
     #  x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 +\
     #  x2*(14717667114151.0/3355443200.0 ))))))))))))
-
 
     @numba.njit()
     def ll_dirichlet(data1, data2):
@@ -775,10 +737,11 @@ if _have_numba:
                     self_denom2 += log_single_beta(data2[i])
 
         return np.sqrt(
-            1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2)))
-            + 1.0 / n1 * (log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1)))
+            1.0 / n2 * (log_b - log_beta(n1, n2) -
+                        (self_denom2 - log_single_beta(n2)))
+            + 1.0 / n1 * (log_b - log_beta(n2, n1) -
+                          (self_denom1 - log_single_beta(n1)))
         )
-
 
     @numba.njit(fastmath=True)
     def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
@@ -809,7 +772,6 @@ if _have_numba:
 
         return (kl1 + kl2) / 2
 
-
     @numba.njit(fastmath=True)
     def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
         """
@@ -839,7 +801,6 @@ if _have_numba:
         grad = (np.log(y / x) - (x / y) + 1) / 2
 
         return dist, grad
-
 
     @numba.njit()
     def correlation_grad(x, y):
@@ -875,7 +836,6 @@ if _have_numba:
 
         return dist, grad
 
-
     @numba.njit(fastmath=True)
     def sinkhorn_distance(
         x, y, M=_mock_identity, cost=_mock_cost, maxiter=64
@@ -901,7 +861,6 @@ if _have_numba:
 
         return result
 
-
     @numba.njit(fastmath=True)
     def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
         mu_1 = x[0] - y[0]
@@ -910,15 +869,16 @@ if _have_numba:
         sigma = np.abs(x[2]) + np.abs(y[2])
         sign_sigma = np.sign(x[2])
 
-        dist = (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma) + np.log(sigma) + np.log(2 * np.pi)
+        dist = (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma) + \
+            np.log(sigma) + np.log(2 * np.pi)
         grad = np.empty(3, np.float32)
 
         grad[0] = mu_1 / sigma
         grad[1] = mu_2 / sigma
-        grad[2] = sign_sigma * (1.0 / sigma - (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma ** 2))
+        grad[2] = sign_sigma * \
+            (1.0 / sigma - (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma ** 2))
 
         return dist, grad
-
 
     @numba.njit(fastmath=True)
     def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
@@ -949,11 +909,12 @@ if _have_numba:
 
         grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
         grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / (2 * det)
-        grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (2 * det ** 2)
-        grad[3] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (2 * det ** 2)
+        grad[2] = sign_s1 * (sigma_22 * (det - m_dist) +
+                             det * mu_2 ** 2) / (2 * det ** 2)
+        grad[3] = sign_s2 * (sigma_11 * (det - m_dist) +
+                             det * mu_1 ** 2) / (2 * det ** 2)
 
         return dist, grad
-
 
     @numba.njit(fastmath=True)
     def gaussian_energy_grad(x, y):  # pragma: no cover
@@ -994,39 +955,49 @@ if _have_numba:
                 np.array([0.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32),
             )
 
-        dist = x_inv_sigma_y_numerator / det_sigma + np.log(det_sigma) + np.log(2 * np.pi)
+        dist = x_inv_sigma_y_numerator / det_sigma + \
+            np.log(det_sigma) + np.log(2 * np.pi)
 
         grad = np.zeros(5, np.float32)
         grad[0] = (2 * sigma_22 * mu_1 - 2 * sigma_12 * mu_2) / det_sigma
         grad[1] = (2 * sigma_11 * mu_2 - 2 * sigma_12 * mu_1) / det_sigma
 
-        grad[2] = mu_2 * (mu_2 * np.cos(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
-        grad[2] += mu_1 * (mu_1 * np.sin(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
+        grad[2] = mu_2 * (mu_2 * np.cos(x[4]) ** 2 -
+                          mu_1 * np.cos(x[4]) * np.sin(x[4]))
+        grad[2] += mu_1 * (mu_1 * np.sin(x[4]) ** 2 -
+                           mu_2 * np.cos(x[4]) * np.sin(x[4]))
         grad[2] *= det_sigma
         grad[2] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_22
         grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_11
-        grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+        grad[2] += x_inv_sigma_y_numerator * 2 * \
+            sigma_12 * np.sin(x[4]) * np.cos(x[4])
         grad[2] /= det_sigma ** 2 + 1e-8
 
-        grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
-        grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+        grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 -
+                          mu_2 * np.cos(x[4]) * np.sin(x[4]))
+        grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 -
+                           mu_1 * np.cos(x[4]) * np.sin(x[4]))
         grad[3] *= det_sigma
         grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_22
         grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_11
-        grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+        grad[3] -= x_inv_sigma_y_numerator * 2 * \
+            sigma_12 * np.sin(x[4]) * np.cos(x[4])
         grad[3] /= det_sigma ** 2 + 1e-8
 
         grad[4] = (x[3] - x[2]) * (
-            2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1 ** 2 - mu_2 ** 2) * np.sin(2 * x[4])
+            2 * mu_1 * mu_2 *
+            np.cos(2 * x[4]) - (mu_1 ** 2 - mu_2 ** 2) * np.sin(2 * x[4])
         )
         grad[4] *= det_sigma
-        grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
-        grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
-        grad[4] -= x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+        grad[4] -= x_inv_sigma_y_numerator * \
+            (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
+        grad[4] -= x_inv_sigma_y_numerator * \
+            (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
+        grad[4] -= x_inv_sigma_y_numerator * 2 * \
+            sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
         grad[4] /= det_sigma ** 2 + 1e-8
 
         return dist, grad
-
 
     @numba.njit(fastmath=True)
     def spherical_gaussian_grad(x, y):  # pragma: no cover
@@ -1054,9 +1025,7 @@ if _have_numba:
 
         return dist, grad
 
-
     # Special discrete distances -- where x and y are objects, not vectors
-
 
     def get_discrete_params(data, metric):
         if metric == "ordinal":
@@ -1065,7 +1034,8 @@ if _have_numba:
             min_count = scipy.stats.tmin(data)
             max_count = scipy.stats.tmax(data)
             lambda_ = scipy.stats.tmean(data)
-            normalisation = count_distance(min_count, max_count, poisson_lambda=lambda_)
+            normalisation = count_distance(
+                min_count, max_count, poisson_lambda=lambda_)
             return {
                 "poisson_lambda": lambda_,
                 "normalisation": normalisation / 2.0,  # heuristic
@@ -1075,11 +1045,11 @@ if _have_numba:
             max_length = scipy.stats.tmax(lengths)
             max_dist = max_length / 1.5  # heuristic
             normalisation = max_dist / 2.0  # heuristic
-            return {"normalisation": normalisation, "max_dist": max_dist / 2.0}  # heuristic
+            # heuristic
+            return {"normalisation": normalisation, "max_dist": max_dist / 2.0}
 
         else:
             return {}
-
 
     @numba.jit()
     def categorical_distance(x, y):
@@ -1087,7 +1057,6 @@ if _have_numba:
             return 0.0
         else:
             return 1.0
-
 
     @numba.jit()
     def hierarchical_categorical_distance(x, y, cat_hierarchy=[{}]):
@@ -1098,11 +1067,9 @@ if _have_numba:
         else:
             return 1.0
 
-
     @numba.njit()
     def ordinal_distance(x, y, support_size=1.0):
         return abs(x - y) / support_size
-
 
     @numba.jit()
     def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
@@ -1128,7 +1095,6 @@ if _have_numba:
 
         return result / normalisation
 
-
     @numba.njit()
     def levenshtein(x, y, normalisation=1.0, max_distance=20):
         x_len, y_len = len(x), len(y)
@@ -1149,7 +1115,8 @@ if _have_numba:
                 insertion_cost = v1[j] + 1
                 substitution_cost = int(x[i] == y[j])
 
-                v1[j + 1] = min(deletion_cost, insertion_cost, substitution_cost)
+                v1[j + 1] = min(deletion_cost, insertion_cost,
+                                substitution_cost)
 
             v0 = v1
 
@@ -1158,7 +1125,6 @@ if _have_numba:
                 return max_distance / normalisation
 
         return v0[y_len] / normalisation
-
 
     named_distances = {
         # general minkowski distances
@@ -1259,7 +1225,6 @@ if _have_numba:
         poincare,
     )
 
-
     @numba.njit(parallel=True)
     def parallel_special_metric(X, Y=None, metric=hellinger):
         if Y is None:
@@ -1278,9 +1243,9 @@ if _have_numba:
 
         return result
 
-
     # We can gain efficiency by chunking the matrix into blocks;
     # this keeps data vectors in cache better
+
     @numba.njit(parallel=True, nogil=True)
     def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
         if Y is None:
@@ -1303,7 +1268,6 @@ if _have_numba:
                         result[i, j] = metric(X[i], XX[j])
         return result
 
-
     def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
         if callable(metric):
             if kwds is not None:
@@ -1319,7 +1283,6 @@ if _have_numba:
         else:
             special_metric_func = named_distances[metric]
         return parallel_special_metric(X, Y, metric=special_metric_func)
-
 
     # FASTDIST
 
@@ -1338,7 +1301,6 @@ if _have_numba:
             m[i] = m[i] / norm ** (1 / 2)
         return np.dot(u, m.T)
 
-
     @numba.jit(nopython=True, fastmath=True)
     def cosine_matrix_to_matrix(a, b):
         """
@@ -1355,9 +1317,8 @@ if _have_numba:
             b[i] = b[i] / norm ** (1 / 2)
         return np.dot(a, b.T)
 
-
     @numba.jit(nopython=True, fastmath=True)
-    def cosine_pairwise_distance(a, return_matrix=False):
+    def cosine_pairwise_distance(a, return_matrix=True):
         """
         """
         n = a.shape[0]
@@ -1383,14 +1344,8 @@ if _have_numba:
                 out[i] = np.dot(a[perm[i][0]], a[perm[i][1]])
             return out
 
-
     @numba.jit(nopython=True, fastmath=True)
-    def matrix_to_matrix_distance(a, b, metric, metric_name):
-        """
-
-        """
-        if metric_name == "cosine":
-            return cosine_matrix_to_matrix(a, b)
+    def matrix_to_matrix_distance(a, b, metric):
         n, m = a.shape[0], b.shape[0]
         out = np.zeros((n, m))
         for i in range(n):
@@ -1398,24 +1353,19 @@ if _have_numba:
                 out[i][j] = metric(a[i], b[j])
         return out
 
-
     @numba.jit(nopython=True, fastmath=True)
-    def matrix_pairwise_distance(a, metric, metric_name, return_matrix=False):
-        if metric_name == "cosine":
-            return cosine_pairwise_distance(a, return_matrix)
-
+    def matrix_pairwise_distance(a, metric, return_matrix=True):
+        n = a.shape[0]
+        rows = np.arange(n)
+        perm = [(rows[i], rows[j]) for i in range(n) for j in range(i + 1, n)]
+        if return_matrix:
+            out_mat = np.zeros((n, n))
+            for i in range(n):
+                for j in range(i):
+                    out_mat[i][j] = metric(a[i], a[j])
+            return out_mat + out_mat.T
         else:
-            n = a.shape[0]
-            rows = np.arange(n)
-            perm = [(rows[i], rows[j]) for i in range(n) for j in range(i + 1, n)]
-            if return_matrix:
-                out_mat = np.zeros((n, n))
-                for i in range(n):
-                    for j in range(i):
-                        out_mat[i][j] = metric(a[i], a[j])
-                return out_mat + out_mat.T
-            else:
-                out = np.zeros((len(perm), 1))
-                for i in range(len(perm)):
-                    out[i] = metric(a[perm[i][0]], a[perm[i][1]])
-                return out
+            out = np.zeros((len(perm), 1))
+            for i in range(len(perm)):
+                out[i] = metric(a[perm[i][0]], a[perm[i][1]])
+            return out

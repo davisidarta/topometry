@@ -8,10 +8,10 @@ from sklearn.base import TransformerMixin
 from scipy.sparse import issparse
 import topo.spectral._spectral as spt
 from topo.base.ann import kNN
-from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+from topo.tpgraph.fuzzy import fuzzy_simplicial_set_ann
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
-from topo.tpgraph.multiscale import decay_plot, multiscale
+from topo.tpgraph.multiscale import decay_plot
 
 try:
     import hnswlib
@@ -223,7 +223,6 @@ class TopOGraph(TransformerMixin):
                  t='inf',
                  p=11 / 16,
                  random_state=None,
-                 norm=True
                  ):
         self.diff_t = diff_t
         self.multiscale = multiscale
