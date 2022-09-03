@@ -1,11 +1,9 @@
 import matplotlib
 from scipy.sparse import issparse, csr_matrix
 from sklearn.utils import resample
-from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.layouts.map import fuzzy_embedding
 from topo.base.ann import kNN
-
-matplotlib.use('Agg')  # plotting backend compatible with screen
 from topo.topograph import TopOGraph
 from topo.eval.global_scores import global_score_pca
 from topo.eval.local_scores import knn_spearman_r
@@ -660,7 +658,7 @@ def eval_models_layouts(TopOGraph, X, subsample=None, k=None, n_jobs=None, metri
             umap_emb = umap_operator.fit_transform(data)
         except:
             print("UMAP is not installed. Will use MAP as comparison.")
-            fuzzy_results = fuzzy_simplicial_set_ann(X, n_neighbors=k,
+            fuzzy_results = fuzzy_simplicial_set(X, n_neighbors=k,
                                                          backend=TopOGraph.backend, metric=metric,
                                                          n_jobs=n_jobs, efC=TopOGraph.efC, M=TopOGraph.M,
                                                          verbose=TopOGraph.bases_graph_verbose)

@@ -4,11 +4,11 @@
 #
 import time
 import numpy as np
-from sklearn.base import TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.sparse import issparse
 import topo.spectral._spectral as spt
 from topo.base.ann import kNN
-from topo.tpgraph.fuzzy import fuzzy_simplicial_set_ann
+from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
 from topo.tpgraph.multiscale import decay_plot
@@ -35,7 +35,7 @@ except ImportError:
     _have_faiss = False
 
 
-class TopOGraph(TransformerMixin):
+class TopOGraph(BaseEstimator, TransformerMixin):
     """
 
      Main TopOMetry class for learning topological similarities, bases, graphs, and layouts from high-dimensional data.
@@ -569,33 +569,30 @@ class TopOGraph(TransformerMixin):
             print('RandomState error! No random state was defined!')
 
         # First build a kNN graph:
-        if self.kernel_use == 'simple' or self.kernel_use == 'decay':
-            if self.basis == 'diffusion':
-                if self.base_knn_graph is None:
-                    if self.verbosity >= 1:
-                        print('Computing neighborhood graph...')
-                    start = time.time()
-                    self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
-                                                                    metric=self.base_metric,
-                                                                    n_jobs=self.n_jobs,
-                                                                    backend=self.backend,
-                                                                    M=self.M,
-                                                                    efC=self.efC,
-                                                                    efS=self.efS,
-                                                                    return_instance=True,
-                                                                    verbose=self.bases_graph_verbose)
-                    end = time.time()
-                    self.runtimes['kNN'] = end - start
+        if self.base_knn_graph is None:
+            if self.verbosity >= 1:
+                print('Computing neighborhood graph...')
+            start = time.time()
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
+                                                            metric=self.base_metric,
+                                                            n_jobs=self.n_jobs,
+                                                            backend=self.backend,
+                                                            M=self.M,
+                                                            efC=self.efC,
+                                                            efS=self.efS,
+                                                            return_instance=True,
+                                                            verbose=self.bases_graph_verbose)
+            end = time.time()
+            self.runtimes['kNN'] = end - start
 
-                    if self.verbosity >= 1:
-                        print(
-                            ' Base kNN graph computed in %f (sec)' % (
-                                end - start))
+            if self.verbosity >= 1:
+                print(' Base kNN graph computed in %f (sec)' % (
+                    end - start))
 
         if self.verbosity >= 1:
             print('Building topological basis...' +
                   'using ' + str(self.basis) + ' model.')
-        
+
         # Next use the kNN graph to build kernels that converge to the LBO
         # at the limit of large data (diffusion operator, fuzzy simplicial sets or CkNN)
 
@@ -634,23 +631,16 @@ class TopOGraph(TransformerMixin):
 
         elif self.basis == 'continuous':
             start = time.time()
-            if issparse(X):
-                data_use = X.toarray()
-            else:
-                data_use = X
-
-            start = time.time()
-            self.ContBasis = cknn_graph(data_use,
+            self.ContBasis = cknn_graph(self.base_knn_graph,
                                         n_neighbors=self.base_knn,
                                         delta=self.delta,
-                                        metric=self.base_metric,
-                                        t=self.t,
+                                        metric='precomputed',
                                         include_self=True,
-                                        is_sparse=True,
-                                        return_instance=False
+                                        verbose=self.bases_graph_verbose
                                         )
             self.ContBasis = (self.ContBasis + self.ContBasis.T) / 2
-            self.ContBasis[(np.arange(self.ContBasis.shape[0]), np.arange(self.ContBasis.shape[0]))] = 0
+            self.ContBasis[(np.arange(self.ContBasis.shape[0]),
+                            np.arange(self.ContBasis.shape[0]))] = 0
             end = time.time()
 
             print('  Computed CkNN graph in %f (sec)' % (end - start))
@@ -658,17 +648,18 @@ class TopOGraph(TransformerMixin):
             del data_use
             import gc
             gc.collect()
-            
-            self.CLapMap, self.CLapMap_evals = spt.LE(self.ContBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
 
-            #self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
+            self.CLapMap, self.CLapMap_evals = spt.LE(
+                self.ContBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
+
+            # self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
             #    self.ContBasis,
             #    self.n_eigs,
             #    norm_laplacian=True,
             #    eigen_tol=self.eigen_tol,
             #    return_evals=True,
             #    random_state=self.random_state
-            #)
+            # )
             end = time.time()
             self.runtimes['CB'] = end - start
             if self.verbosity >= 1:
@@ -678,27 +669,28 @@ class TopOGraph(TransformerMixin):
 
         elif self.basis == 'fuzzy':
             start = time.time()
-            fuzzy_results = fuzzy_simplicial_set_ann(X,
-                                                     n_neighbors=self.base_knn,
-                                                     knn_indices=None,  # I can still improve the performance of this
-                                                     knn_dists=None,    # FIXME
-                                                     backend=self.backend,
-                                                     metric=self.base_metric,
-                                                     n_jobs=self.n_jobs,
-                                                     efC=self.efC,
-                                                     efS=self.efS,
-                                                     M=self.M,
-                                                     set_op_mix_ratio=1.0,
-                                                     local_connectivity=1.0,
-                                                     apply_set_operations=True,
-                                                     return_dists=True,
-                                                     verbose=self.bases_graph_verbose)
+            fuzzy_results = fuzzy_simplicial_set(self.base_knn_graph,
+                                                 n_neighbors=self.base_knn,
+                                                 backend=self.backend,
+                                                 metric=self.base_metric,
+                                                 n_jobs=self.n_jobs,
+                                                 efC=self.efC,
+                                                 efS=self.efS,
+                                                 M=self.M,
+                                                 set_op_mix_ratio=1.0,
+                                                 local_connectivity=1.0,
+                                                 apply_set_operations=True,
+                                                 return_dists=True,
+                                                 verbose=self.bases_graph_verbose)
 
-            self.FuzzyConnectivities = {'rho': fuzzy_results[2], 'sigma': fuzzy_results[1]}
+            self.FuzzyConnectivities = {
+                'rho': fuzzy_results[2], 'sigma': fuzzy_results[1]}
             self.FuzzyBasis = fuzzy_results[0]
             self.FuzzyBasis = (self.FuzzyBasis + self.FuzzyBasis.T) / 2
-            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]), np.arange(self.FuzzyBasis.shape[0]))] = 0
-            self.FuzzyLapMap, self.FuzzyLapMap_evals = spt.LE(self.FuzzyBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
+            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]),
+                             np.arange(self.FuzzyBasis.shape[0]))] = 0
+            self.FuzzyLapMap, self.FuzzyLapMap_evals = spt.LE(
+                self.FuzzyBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
             end = time.time()
             self.runtimes['FB'] = end - start
             if self.verbosity >= 1:
@@ -749,9 +741,8 @@ class TopOGraph(TransformerMixin):
         return decay_plot(evals=use_evals)
 
     def scree_plot(self):
-        #Backwards compability
+        # Backwards compability
         return self.eigenspectrum()
-
 
     def transform(self, basis=None):
         """
@@ -971,7 +962,8 @@ class TopOGraph(TransformerMixin):
                         graph = self.fb_cknn_graph
 
         start = time.time()
-        spt_layout = spt.spectral_layout(graph, n_components, self.random_state, self.eigen_tol)
+        spt_layout = spt.spectral_layout(
+            graph, n_components, self.random_state, self.eigen_tol)
         expansion = 10.0 / np.abs(spt_layout).max()
         spt_layout = (spt_layout * expansion).astype(
             np.float32
@@ -2916,7 +2908,7 @@ class TopOGraph(TransformerMixin):
             if remove_base_class:
                 self.base_nbrs_class = None
             else:
-                return(print('TopOGraph cannot be pickled with the NMSlib base class.'))
+                return (print('TopOGraph cannot be pickled with the NMSlib base class.'))
 
         if wd is None:
             import os

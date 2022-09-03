@@ -65,8 +65,8 @@ def kNN(X,
         -'jansen-shan'
 
     n_jobs : int (optional, default 1).
-        number of threads to be used in computation. Defaults to 1. The algorithm is highly
-        scalable to multi-threading.
+        Number of threads to be used in computation. Defaults to 1. Set to -1 to use all available CPUs.
+        Most algorithms are highly scalable to multithreading.
 
     M : int (optional, default 30).
         defines the maximum number of neighbors in the zero and above-zero layers during HSNW
@@ -177,9 +177,12 @@ def kNN(X,
 
     if symmetrize:
         knn = ( knn + knn.T ) / 2
-        knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 1
-        # handle nan, zeros
-        knn.data = np.where(np.isnan(knn.data), 1, knn.data)
+        if metric in ['angular', 'cosine']:
+            # distances must be monotonically decreasing, needs to be inverted with angular metrics
+            # otherwise, we'll have a similarity metric, not a distance metric
+            knn.data = 1 - knn.data 
+        knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
+        knn.data = np.where(np.isnan(knn.data), 0, knn.data)
     if return_instance:
         return nbrs, knn
     else:
