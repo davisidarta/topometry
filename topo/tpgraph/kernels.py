@@ -524,7 +524,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._K is None:
             raise ValueError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
-        self._A = self._K > 0
+        self._A = (self._K > 0).astype(int)
         return self._A
 
     @property
@@ -555,7 +555,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._K is None:
             raise ValueError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
-        return self.adjacency()
+        if self._A is None:
+            self._A = self.adjacency()
+        return self._A
 
     @property
     def degree(self):
@@ -567,7 +569,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
-        self._degree = compute_degree(self._A)
+            self._degree = compute_degree(self._A)
         return self._degree
 
     @property
@@ -580,7 +582,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
-        self._weighted_degree = compute_degree(self._K)
+            self._weighted_degree = compute_degree(self._K)
         return self._weighted_degree
 
     def laplacian(self, laplacian_type=None):
@@ -599,12 +601,13 @@ class Kernel(BaseEstimator, TransformerMixin):
         L : scipy.sparse.csr_matrix
             The graph Laplacian.
         """
-        if self.K is None:
-            raise ValueError(
-                "No kernel matrix has been fitted yet. Call fit() first.")
-        if laplacian_type is None:
-            laplacian_type = self.laplacian_type
-        self._L = graph_laplacian(self.K, laplacian_type=laplacian_type)
+        if self._L is None:
+            if laplacian_type is None:
+                laplacian_type = self.laplacian_type
+            if self.cknn:
+                self._L = graph_laplacian(self.A, laplacian_type='unnormalized')
+            else:
+                self._L = graph_laplacian(self.K, laplacian_type=laplacian_type)
         return self._L
 
     @property
@@ -643,16 +646,16 @@ class Kernel(BaseEstimator, TransformerMixin):
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
-        if alpha is None or alpha < 0:
-            alpha = 0
-        if alpha > 1:
-            alpha = 1.0
-        if symmetric:
-            self._P, self.D_inv_sqrt = diffusion_operator(
-                self.K, alpha=alpha, symmetric=symmetric)
-        else:
-            self._P = diffusion_operator(
-                self.K, alpha=alpha, symmetric=symmetric)
+            if alpha is None or alpha < 0:
+                alpha = 0
+            if alpha > 1:
+                alpha = 1.0
+            if symmetric:
+                self._P, self.D_inv_sqrt = diffusion_operator(
+                    self.K, alpha=alpha, symmetric=symmetric)
+            else:
+                self._P = diffusion_operator(
+                    self.K, alpha=alpha, symmetric=symmetric)
         return self._P
 
     @property
@@ -684,17 +687,18 @@ class Kernel(BaseEstimator, TransformerMixin):
         D : scipy.sparse.csr_matrix
             The shortest paths matrix.
         """
-        if self._K is None:
-            raise ValueError(
-                "No kernel matrix has been fitted yet. Call fit() first.")
-        if landmark:
-            print('Landmarks are still to be implemented.')
-        SP = shortest_path(self.K, method='auto',
-                           directed=False, indices=indices)
-        SP = (SP + SP.T) / 2
-        SP[np.where(SP == 0)] = np.inf
-        SP[(np.arange(SP.shape[0]), np.arange(SP.shape[0]))] = 0
-        self._SP = SP
+        if self._SP is None:
+            if self._K is None:
+                raise ValueError(
+                    "No kernel matrix has been fitted yet. Call fit() first.")
+            if landmark:
+                print('Landmarks are still to be implemented.')
+            SP = shortest_path(self.K, method='auto',
+                            directed=False, indices=indices)
+            SP = (SP + SP.T) / 2
+            SP[np.where(SP == 0)] = np.inf
+            SP[(np.arange(SP.shape[0]), np.arange(SP.shape[0]))] = 0
+            self._SP = SP
         return self._SP
 
     @property

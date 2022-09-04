@@ -14,7 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 from joblib import cpu_count
 
 
-def kNN(X,
+def kNN(X, Y=None,
         n_neighbors=5,
         metric='euclidean',
         n_jobs=-1,
@@ -112,8 +112,6 @@ def kNN(X,
                                       efC=efC,
                                       efS=efS,
                                       verbose=verbose).fit(X)
-        knn = nbrs.transform(X)
-
     elif backend == 'hnswlib':
         nbrs = HNSWlibTransformer(n_neighbors=n_neighbors,
                                        metric=metric,
@@ -122,8 +120,6 @@ def kNN(X,
                                        efC=efC,
                                        efS=efS,
                                        verbose=False).fit(X)
-        knn = nbrs.transform(X)
-
     elif backend == 'pynndescent':
         try:
             from pynndescent import PyNNDescentTransformer
@@ -144,15 +140,11 @@ def kNN(X,
                                           n_jobs=n_jobs,
                                           low_memory=low_memory,
                                           verbose=verbose, **kwargs).fit(X)
-        knn = nbrs.transform(X)
-
     elif backend == 'annoy':
         nbrs = AnnoyTransformer(metric=metric,
                                 n_neighbors=n_neighbors,
                                 n_jobs=n_jobs,
                                 n_trees=n_trees, **kwargs).fit(X)
-        knn = nbrs.transform(X)
-
 
     elif backend == 'faiss':
         try:
@@ -163,17 +155,24 @@ def kNN(X,
         nbrs = FAISSTransformer(metric=metric,
                                 n_neighbors=n_neighbors,
                                 n_jobs=n_jobs, **kwargs).fit(X)
-        knn = nbrs.transform(X)
-
     else:
-        backend = 'sklearn'
         if verbose:
             print('Falling back to sklearn nearest-neighbors!')
+        backend = 'sklearn'
+
+    if backend != 'sklearn':
+        if Y is None:
+            knn = nbrs.transform(X)
+        else:
+            knn = nbrs.transform(Y)
 
     if backend == 'sklearn':
         # Construct a k-nearest-neighbors graph
         nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs, **kwargs).fit(X)
-        knn = nbrs.kneighbors_graph(X, mode='distance')
+        if Y is None:
+            knn = nbrs.kneighbors_graph(X, mode='distance')
+        else:
+            knn = nbrs.kneighbors_graph(Y, mode='distance')
 
     if symmetrize:
         knn = ( knn + knn.T ) / 2
@@ -189,7 +188,7 @@ def kNN(X,
         return knn
 
 
-class NMSlibTransformer(TransformerMixin, BaseEstimator):
+class NMSlibTransformer(BaseEstimator, TransformerMixin, ):
     """
     Wrapper for using nmslib as sklearn's KNeighborsTransformer. This implements
     an escalable approximate k-nearest-neighbors graph on spaces defined by nmslib.
