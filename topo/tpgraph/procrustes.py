@@ -730,7 +730,6 @@ def fit_transform_procrustes(x, fit_transform_call, procrustes_batch_size=5000, 
         Number of anchor points present in all batches. Used as a reference for the procrustes
         transform.
 
-
     Returns:
     --------
     x_transformed: np.array
