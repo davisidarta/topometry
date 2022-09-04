@@ -822,7 +822,7 @@
 
 #             plt.figure()
 #             plt.hist(p_alpha[alpha_ind_selected, :][0], bins=nbins)
-#             plt.xlabel(
+#             plt.xlabel(e
 #                 "Inseparability prob. for \u03B1=%2.2f"
 #                 % (self._alphas[0, alpha_ind_selected]),
 #                 fontsize=16,
