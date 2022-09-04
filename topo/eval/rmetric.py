@@ -6,7 +6,7 @@
 
 import numpy as np
 
-def riemann_metric(Y, laplacian, n_dim=None, invert_h=False, mode_inv = 'svd'):
+def riemann_metric(Y, laplacian, n_dim=None):
     n_samples = laplacian.shape[0]
     h_dual_metric = np.zeros((n_samples, n_dim, n_dim))
     n_dim_Y = Y.shape[1]
@@ -57,15 +57,16 @@ class RiemannMetric(object):
     compute G (and maybe even H) only at the requested points.
 
     This implementation is from megaman, by Marina Meila (License simplified BSD), with
-    adaptations from Davi Sidarta-Oliveira as included in TopOMetry.
+    adaptations from Davi Sidarta-Oliveira as included in TopOMetry for performance and
+    scikit-learn compability.
 
     Parameters
     -----------
     Y : embedding coordinates, shape = (n, mdimY)
-    affinity : estimated affinity from data, ideally a diffusion operator or a laplacian matrix,  shape = (n, n)
+    L : Laplacian matrix, shape = (n, n)
 
 
-    Returns
+    Attributes
     ----------
     mdimG : dimension of G, H
     mdimY : dimension of Y
@@ -101,27 +102,24 @@ class RiemannMetric(object):
         self.Gsvals = None
         self.detG = None
 
-    def get_dual_rmetric(self, invert_h = False, mode_inv = 'svd' ):
+    def get_dual_rmetric(self, invert_h = False):
         """
-        Compute the dual Riemannian Metric
-        This is not satisfactory, because if mdimG<mdimY the shape of H
-        will not be the same as the shape of G. TODO(maybe): return a (copied)
-        smaller H with only the rows and columns in G.
+        Computes the dual Riemannian Metric.
         """
         if self.H is None:
-            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = invert_h, mode_inv = mode_inv)
+            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
         if invert_h:
             return self.H, self.G
         else:
             return self.H
 
-    def get_rmetric( self, mode_inv = 'svd', return_svd = False ):
+    def get_rmetric(self, return_svd = False):
         """
         Compute the Riemannian Metric
         """
         if self.H is None:
-            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = True, mode_inv = mode_inv)
-        if (mode_inv == 'svd') and return_svd:
+            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
+        if return_svd:
             return self.G, self.Hvv, self.Hsvals, self.Gsvals
         else:
             return self.G
@@ -130,10 +128,48 @@ class RiemannMetric(object):
         return self.mdimG
 
     def get_detG(self):
+        """
+        Gets the determinant of the Riemannian metric.
+        """
         if self.G is None:
-            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = True, mode_inv = self.mode_inv)
+            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
         if self.detG is None:
             self.detG = 1./np.linalg.det(self.H)
+
+    def fit(self, Y, L=None):
+        """
+        Fit the Riemannian Metric to a new embedding Y.
+        """
+        self.Y = Y
+        if self.L is None:
+            if self.L is None:
+                raise ValueError("Laplacian matrix L is not set")
+            self.L = L
+        self.n, self.mdimY = Y.shape
+        return self.get_rmetric()
+
+    def transform(self, Y, L=None):
+        """
+        Here only for scikit-learn consistency. Calls the fit() method.
+        """
+        return self.fit()
+
+    def estimate_distortions(self):
+        N = self.H.shape[0]
+        distortions = np.zeros((N))
+        for i in range(N):
+            vals, vecs = eigsorted(self.H[i,:,:])
+            distortions[i] = np.sqrt(np.absolute(vals)).sum()
+        return distortions
+
+    def estimate_total_distortion(self):
+        return self.estimate_distortions(self.H).sum()
+
+def eigsorted(H):
+    vals, vecs = np.linalg.eigh(H)
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
+
 
 
 
