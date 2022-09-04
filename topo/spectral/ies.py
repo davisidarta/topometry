@@ -77,7 +77,6 @@ def compute_tangent_plane(embedding, laplacian):
     evals, evects = map(np.array, zip(*[eigsorted(HHi) for HHi in HH]))
     return evects
 
-
 def projected_volume(principal_space, intrinsic_dim, embedding_dim=None,
                      eigen_values=None, zeta=1):
     # From https://github.com/yuchaz/independent_coordinate_search
@@ -99,7 +98,6 @@ def projected_volume(principal_space, intrinsic_dim, embedding_dim=None,
     proj_volume = np.array(proj_volume)
     return proj_volume, all_axes
 
-
 def _comp_projected_volume(principal_space, proj_axis, intrinsic_dim,
                            embedding_dim, eigen_values=None, zeta=1):
     basis = principal_space[:, proj_axis, :min(intrinsic_dim, embedding_dim)]
@@ -115,14 +113,12 @@ def _comp_projected_volume(principal_space, proj_axis, intrinsic_dim,
     regu_term = _calc_regularizer(eigen_values, proj_axis, zeta)
     return np.log(parallelepipe_vol) - regu_term
 
-
 def _calc_regularizer(eigen_values, proj_axis, zeta=1):
     if eigen_values is None:
         return 0
     eigen_values = np.abs(eigen_values[proj_axis])
     regu_term = np.sum(eigen_values) * zeta
     return regu_term
-
 
 def ies_range_search(principal_space, intrinsic_dim, embedding_dim,
                      eigen_values, zeta_range):
@@ -147,7 +143,6 @@ def average_no_regu_gain(proj_vol, candidate_set_ix):
         average_gain_all.append(average_gain)
 
     return np.array(average_gain_all)
-
 
 def zeta_search(evects, lambdas, intrinsic_dim, embedding_dim, alpha=75,
                 low=1e-2, high=1e5, sep=300):
@@ -183,8 +178,6 @@ def zeta_search(evects, lambdas, intrinsic_dim, embedding_dim, alpha=75,
                         all_comb=all_comb, mid_x_all=mid_x_all)
 
     return zeta_chosen, plotting_dicts
-
-
 
 def greedy_coordinate_search(principal_space, intrinsic_dim, eigen_values=None,
                              zeta=1, return_records=False):
