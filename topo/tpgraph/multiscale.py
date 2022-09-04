@@ -80,35 +80,4 @@ def multiscale(res,
     return data, use_eigs
 
 
-def decay_plot(evals):
-    """
-    Plot the eigenspectrum decay.
 
-    Parameters
-    ----------
-    evals : Eigenvalues to be visualized.
-
-    Returns
-    -------
-
-    A simple plot of the spectrum decay.
-
-    """
-    import matplotlib.pyplot as plt
-    use_eigs = int(np.sum(evals > 0, axis=0))
-    ax1 = plt.subplot(1, 1, 1)
-    ax1.plot(range(0, len(evals)), evals, 'b')
-    ax1.set_ylabel('Eigenvalues')
-    ax1.set_xlabel('Eigenvectors')
-    if use_eigs == len(evals):
-        # Found a discrete eigengap
-        ax1.vlines(
-            use_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label=''
-        )
-        ax1.set_title('Spectrum decay and eigengap (%i)' %
-                      int(use_eigs))
-    else:
-        ax1.set_title('Spectrum decay')
-    ax1.legend(loc='best')
-    plt.tight_layout()
-    return plt.show()

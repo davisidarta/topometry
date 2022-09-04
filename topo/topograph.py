@@ -11,7 +11,6 @@ from topo.base.ann import kNN
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
-from topo.tpgraph.multiscale import decay_plot
 
 try:
     import hnswlib
@@ -738,6 +737,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             else:
                 return print(
                     'Error: No computed basis available!')
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            return print('Error: Matplotlib not found!')
+        from topo.plot import decay_plot
         return decay_plot(evals=use_evals)
 
     def scree_plot(self):
@@ -854,7 +858,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         elif self.graph == 'fuzzy':
             start = time.time()
-            FuzzyGraph = fuzzy_simplicial_set_ann(use_basis,
+            FuzzyGraph = fuzzy_simplicial_set(use_basis,
                                                   n_neighbors=self.graph_knn,
                                                   backend=self.backend,
                                                   metric=self.graph_metric,
@@ -1037,7 +1041,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 else:
                     X = self.FuzzyLapMap
 
-        fuzzy_set = fuzzy_simplicial_set_ann(X,
+        fuzzy_set = fuzzy_simplicial_set(X,
                                              n_neighbors=self.graph_knn,
                                              knn_indices=knn_indices,
                                              knn_dists=knn_dists,
