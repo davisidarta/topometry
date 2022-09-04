@@ -7,6 +7,7 @@
 
 import time
 import numpy as np
+from warnings import warn
 from scipy.sparse import csr_matrix, find, issparse
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.model_selection import train_test_split
@@ -101,6 +102,10 @@ def kNN(X, Y=None,
     if n_jobs == -1:
         from joblib import cpu_count
         n_jobs = cpu_count()
+    if Y is not None:
+        if backend == 'nmslib' or backend =='hnswlib':
+            warn("Only the 'pynndescent', 'annoy' and 'faiss' backends support Y. Falling back to 'annoy'...")
+            backend = 'annoy'
     if backend == 'nmslib':
         # Construct an approximate k-nearest-neighbors graph
         nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
@@ -141,6 +146,12 @@ def kNN(X, Y=None,
                                           low_memory=low_memory,
                                           verbose=verbose, **kwargs).fit(X)
     elif backend == 'annoy':
+        if issparse(X):
+            warn("Annoy does not support sparse matrices. Converting to array...")
+            X = X.toarray()
+        if Y is not None:
+            if issparse(Y):
+                Y = Y.toarray()
         nbrs = AnnoyTransformer(metric=metric,
                                 n_neighbors=n_neighbors,
                                 n_jobs=n_jobs,
@@ -173,22 +184,24 @@ def kNN(X, Y=None,
             knn = nbrs.kneighbors_graph(X, mode='distance')
         else:
             knn = nbrs.kneighbors_graph(Y, mode='distance')
-
+    if metric in ['angular', 'cosine']:
+        # distances must be monotonically decreasing, needs to be inverted with angular metrics
+        # otherwise, we'll have a similarity metric, not a distance metric
+        knn.data = 1 - knn.data 
     if symmetrize:
-        knn = ( knn + knn.T ) / 2
-        if metric in ['angular', 'cosine']:
-            # distances must be monotonically decreasing, needs to be inverted with angular metrics
-            # otherwise, we'll have a similarity metric, not a distance metric
-            knn.data = 1 - knn.data 
-        knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-        knn.data = np.where(np.isnan(knn.data), 0, knn.data)
+        if Y is None:
+            knn = ( knn + knn.T ) / 2
+            knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
+            knn.data = np.where(np.isnan(knn.data), 0, knn.data)
+        else:
+            knn = knn.dot(knn.T)
     if return_instance:
         return nbrs, knn
     else:
         return knn
 
 
-class NMSlibTransformer(BaseEstimator, TransformerMixin, ):
+class NMSlibTransformer(BaseEstimator, TransformerMixin):
     """
     Wrapper for using nmslib as sklearn's KNeighborsTransformer. This implements
     an escalable approximate k-nearest-neighbors graph on spaces defined by nmslib.

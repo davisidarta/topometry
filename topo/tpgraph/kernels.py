@@ -525,6 +525,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             raise ValueError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
         self._A = (self._K > 0).astype(int)
+        self._A = self._A.astype(float)
         return self._A
 
     @property
@@ -604,10 +605,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._L is None:
             if laplacian_type is None:
                 laplacian_type = self.laplacian_type
-            if self.cknn:
-                self._L = graph_laplacian(self.A, laplacian_type='unnormalized')
-            else:
-                self._L = graph_laplacian(self.K, laplacian_type=laplacian_type)
+            self._L = graph_laplacian(self.K, laplacian_type=laplacian_type)
         return self._L
 
     @property
