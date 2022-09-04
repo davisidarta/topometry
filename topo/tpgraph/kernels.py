@@ -186,7 +186,8 @@ def compute_kernel(X, metric='cosine',
         else:
             K = kNN(X, metric=metric, n_neighbors=k,
                     backend=backend, n_jobs=n_jobs, **kwargs)
-
+        if return_densities:
+            dens_dict['knn'] = K
     if fuzzy:
         cknn = False
         kernel, sigmas, rhos = fuzzy_simplicial_set(K,
@@ -221,9 +222,9 @@ def compute_kernel(X, metric='cosine',
                 dens_dict['adaptive_bw'] = adap_sd
             if expand_nbr_search:
                 new_k = int(k + (k - pm.max()))
-                K = kNN(X, metric=metric, k=new_k,
+                new_K = kNN(X, metric=metric, k=new_k,
                         backend=backend, n_jobs=n_jobs, **kwargs)
-                adap_sd_new = _adap_bw(K, new_k)
+                adap_sd_new = _adap_bw(new_K, new_k)
                 # Get an indirect measure of the local density
                 pm_new = np.interp(
                     adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k))
@@ -231,6 +232,7 @@ def compute_kernel(X, metric='cosine',
                     dens_dict['expanded_k_neighbor'] = new_k
                     dens_dict['omega_nbr_expanded'] = adap_sd_new
                     dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
+                    dens_dict['expanded_neighborhood_graph'] = new_K
         x, y, dists = find(K)
         # Normalize distances
         if adaptive_bw:
@@ -330,6 +332,9 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     Properties
     ----------
+    knn : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+        The computed k-nearest-neighbors graph.
+
     A : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The adjacency matrix of the kernel graph.
 
@@ -410,6 +415,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._adaptive_bw_nbr_expanded = None
         self._omega_nbr_expanded = None
         self._sample_densities = None
+        self._knn = None
         self.dens_dict = None
 
     def __repr__(self):
@@ -471,6 +477,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                                             n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
                                             expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
                                             backend=self.backend, n_jobs=self.n_jobs, **kwargs)
+        self._knn = self.dens_dict['knn']
         if self.fuzzy:
             self._sigma = self.dens_dict['sigma']
             self._rho = self.dens_dict['rho']
@@ -519,6 +526,16 @@ class Kernel(BaseEstimator, TransformerMixin):
                 "No kernel matrix has been fitted yet. Call fit() first.")
         self._A = self._K > 0
         return self._A
+
+    @property
+    def knn(self):
+        """
+        Returns the k-nearest-neighbors graph.
+        """
+        if self._knn is None:
+            raise ValueError(
+                "No k-nearest-neighbors graph has been fitted yet. Call fit() first.")
+        return self._knn
 
     @property
     def K(self):
@@ -769,7 +786,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             Y_imp = np.dot(P_diffused.toarray(), Y)
         return Y_imp
 
-    def filter(self, signal,
+    def filter(self, signal, replicates=None,
                beta=50,
                target=None,
                filterfunc=None,
@@ -787,6 +804,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         ----------
         signal: array-like
             Signal(s) to filter - usually sample labels.
+
+        replicates: array-like, optional (default None)
+            Replicate labels for each sample. If None, no replicates are assumed.
 
         beta : int (optional, default 50).
             Amount of smoothing to apply. Vary this parameter to get good estimates
@@ -874,9 +894,13 @@ class Kernel(BaseEstimator, TransformerMixin):
             self._sample_densities = pd.DataFrame(
                 densities, index=_labels_index, columns=sample_indicators.columns
             )
+
+        if replicates is not None:
+            return self._replicate_normalize_densities(replicates)
+
         return self._sample_densities
 
-    def replicate_normalize_densities(self, replicates):
+    def _replicate_normalize_densities(self, replicates):
         from sklearn.preprocessing import normalize
         replicates = np.unique(replicates)
         sample_likelihoods = self._sample_densities.copy()

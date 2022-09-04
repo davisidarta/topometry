@@ -11,12 +11,33 @@ from topo.eval.rmetric import RiemannMetric
 from itertools import combinations
 from scipy.spatial import procrustes
 
-def find_independent_coordinates(emb, emb_evals, laplacian, intrisic_dim, greedy=False, score=False, data=None):
+
+# minimally redundant?
+# # Independent coordinate search
+# k = n_neighbors?
+# result = eigvec[:, :1]
+# m = eigvec.shape[1]
+# ind = np.arange(eigvec.shape[0])[:, None][:, (k+1)*[0]]
+# i = 0
+# while i < m-1:
+#     inds, dists = NN(result)
+#     for j in range(i+1, m):
+#         i = j
+#         score = np.mean(np.sqrt(
+#         (eigvec[inds[dists != 0], i] -
+#         eigvec[ind[dists != 0], i])**2))
+#         if score > thresh:
+#             result = np.concatenate((result,
+#             eigvec[:, i:i+1]),
+#             axis=1)
+#             break 
+
+def find_independent_coordinates(emb, emb_evals, laplacian, intrinsic_dim, greedy=False, score=False, data=None):
     embedding_dim = emb.shape[1]
     evecs = compute_tangent_plane(emb, laplacian)
-    zeta_chosen, plotting_dict = zeta_search(evecs, emb_evals, intrisic_dim, embedding_dim)
+    zeta_chosen, plotting_dict = zeta_search(evecs, emb_evals, intrinsic_dim, embedding_dim)
     if not greedy:
-        proj_vol, all_comb = projected_volume(evecs, intrisic_dim, embedding_dim, emb_evals, zeta_chosen)
+        proj_vol, all_comb = projected_volume(evecs, intrinsic_dim, embedding_dim, emb_evals, zeta_chosen)
         chosen_axis = all_comb[proj_vol.mean(1).argmax()]
         if score:
             if data is None:
@@ -25,10 +46,10 @@ def find_independent_coordinates(emb, emb_evals, laplacian, intrisic_dim, greedy
     else:
         if score:
             return_records = True
-            chosen_axis, ratio_records, remaining_axes_records = greedy_coordinate_search(evecs, intrisic_dim, eigen_values=emb_evals, zeta=zeta_chosen, return_records=return_records)
+            chosen_axis, ratio_records, _ = greedy_coordinate_search(evecs, intrinsic_dim, eigen_values=emb_evals, zeta=zeta_chosen, return_records=return_records)
         else:
             return_records = False
-            chosen_axis = greedy_coordinate_search(evecs, intrisic_dim, eigen_values=emb_evals, zeta=zeta_chosen, return_records=return_records)
+            chosen_axis = greedy_coordinate_search(evecs, intrinsic_dim, eigen_values=emb_evals, zeta=zeta_chosen, return_records=return_records)
         if score:
             if data is None:
                 raise ValueError('Data must be provided to calculate the procrustes scores')

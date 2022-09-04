@@ -3,8 +3,9 @@ import numba
 import numpy as np
 from matplotlib.patches import Ellipse
 from sklearn.neighbors import KDTree
-from matplotlib import cm
+from sklearn.utils import check_random_state
 try:
+    from matplotlib import cm
     import matplotlib.pyplot as plt
 except ImportError:
     print("Matplotlib is required for the plotting functions.")
@@ -364,10 +365,10 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-def plot_riemann_metric(emb, laplacian, H_emb=None, n_plot=50, random_state=None,
-                        labels=None, pt_size=1, cmap='Spectral', alpha=0.1, std=1, figsize=(8,8), **kwargs):
+def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, 
+                        labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
     """
-    Plot Riemannian metric using ellipses.
+    Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
     Parameters
     ----------
@@ -375,11 +376,41 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, n_plot=50, random_state=None
     emb: numpy.ndarray
         Embedding matrix.
     
-    lapacian: numpy.ndarray
-       Graph Laplacian matrix.
+    laplacian: numpy.ndarray
+       Graph Laplacian matrix. Should be provided if H_emb is not provided.
     
     H_emb: numpy.ndarray
-        Embedding matrix of the H.
+        Embedding matrix of the H. Should be provided if laplacian is not provided.
+
+    n_plot: int (optional, default 50)
+        Number of ellipses to plot.
+
+    std: int (optional, default 1)
+        Standard deviation of the ellipses. This should be adjusted by hand for visualization purposes.
+
+    labels: numpy.ndarray (optional, default None)
+        Labels for the points.
+    
+    pt_size: int (optional, default 1)
+        Size of the points.
+    
+    cmap: str (optional, default 'Spectral')
+        Color map for the points.
+
+    figsize: tuple (optional, default (8,8))
+        Figure size.
+    
+    random_state: int (optional, default None)
+        Random state for sampling points to plot ellipses of.
+
+    kwargs: dict
+        Additional arguments for matplotlib.
+
+    References
+    ----------
+    "Non-linear dimensionality reduction: Riemannian metric estimation and
+    the problem of geometric discovery",
+    Dominique Perraul-Joncas, Marina Meila, arXiv:1305.7255
 
 
     """
@@ -389,20 +420,15 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, n_plot=50, random_state=None
         H_emb = rmetric.get_dual_rmetric()
 
     N = np.shape(emb)[0]
-    if random_state is None:
-        rng = np.random.RandomState()
-    elif isinstance(random_state, int):
-        rng = np.random.RandomState(random_state)
-    else:
-        rng = random_state
+    rng = check_random_state(random_state)
     sample_points = rng.choice(range(N), n_plot, replace=False)
     f, ax = plt.subplots(figsize=figsize)
     ax.set_aspect('equal')  # if an ellipse is a circle no distortion occured.
     if labels is not None:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap, *kwargs)
     else:
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, *kwargs)
     for i in range(n_plot):
         ii = sample_points[i]
         cov = H_emb[ii, :, :]
