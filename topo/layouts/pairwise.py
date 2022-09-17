@@ -63,7 +63,7 @@ def PaCMAP(data=None,
     except ImportError('TriMAP is needed for this embedding. Install it with `pip install trimap`'):
         return print('TriMAP is needed for this embedding. Install it with `pip install trimap`')
 
-    pacmap_emb = pacmap.PaCMAP(n_dims=n_dims,
+    pacmap_emb = pacmap.PaCMAP(n_components=n_dims,
                                n_neighbors=n_neighbors,
                                MN_ratio=MN_ratio,
                                FP_ratio=FP_ratio,
