@@ -1,2 +1,2 @@
-from ._spectral import spectral_layout, component_layout, multi_component_layout, LapEigenmap
+from ._spectral import spectral_layout, LE, DM, diffusion_operator, graph_laplacian
 from .umap_layouts import *
