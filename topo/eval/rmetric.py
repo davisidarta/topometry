@@ -1,13 +1,12 @@
-# This Riemann metric implementation was implemented by Marina Meila, with some adaptations from Davi Sidarta-Oliveira
+# This Riemann metric implementation was originally implemented by Marina Meila, with some adaptations from Davi Sidarta-Oliveira
 # The original source can be found at https://github.com/mmp2/megaman
 # Author: Marina Meila <mmp@stat.washington.edu>
 #         after the Matlab function rmetric.m by Dominique Perrault-Joncas
 # LICENSE: Simplified BSD https://github.com/mmp2/megaman/blob/master/LICENSE
 
 import numpy as np
-from scipy.sparse.csgraph import laplacian as lap_calc
 
-def riemann_metric(Y, laplacian, n_dim=None, invert_h=False, mode_inv = 'svd'):
+def riemann_metric(Y, laplacian, n_dim=None):
     n_samples = laplacian.shape[0]
     h_dual_metric = np.zeros((n_samples, n_dim, n_dim))
     n_dim_Y = Y.shape[1]
@@ -27,51 +26,19 @@ def riemann_metric(Y, laplacian, n_dim=None, invert_h=False, mode_inv = 'svd'):
         compute_G_from_H(h_dual_metric_full)
     return h_dual_metric, riemann_metric, Hvv, Hsvals, Gsvals
 
-def riemann_metric_lazy( Y, sample, laplacian, n_dim, invert_h=False, mode_inv = 'svd'):
-    n_samples = laplacian.shape[0]
-    laplacian = laplacian[sample,:]
-    n_dim_Y = Y.shape[1]
-    h_dual_metric_full = np.zeros((len(sample), n_dim_Y, n_dim_Y))
-    h_dual_metric = np.zeros((len(sample), n_dim, n_dim))
-    for i in np.arange(n_dim_Y):
-        for j in np.arange(i, n_dim_Y):
-            yij = Y[:,i]*Y[:,j]
-            h_dual_metric_full[ :, i, j] = 0.5*(laplacian.dot(yij)-Y[sample,j]*laplacian.dot(Y[:,i])-Y[sample,i]*laplacian.dot(Y[:,j]))
-    for j in np.arange(n_dim_Y - 1):
-        for i in np.arange(j+1, n_dim_Y):
-            h_dual_metric_full[ :,i,j] = h_dual_metric_full[:,j,i]
 
-    riemann_metric, h_dual_metric, Hvv, Hsvals, Gsvals = compute_G_from_H(h_dual_metric_full)
-    return h_dual_metric,riemann_metric, Hvv, Hsvals, Gsvals
-
-def compute_G_from_H(H, mdimG=None, mode_inv="svd"):
+def compute_G_from_H(H):
     n_samples = H.shape[0]
     n_dim = H.shape[2]
-    if mode_inv is 'svd':
-        Huu, Hsvals, Hvv = np.linalg.svd(H)
-        if mdimG is None or mdimG == n_dim:
-            # Gsvals = 1./Hsvals
-            Gsvals = np.divide(1, Hsvals, out=np.zeros_like(Hsvals), where=Hsvals != 0)
-            G = np.zeros((n_samples, n_dim, n_dim))
-            new_H = H
-            for i in np.arange(n_samples):
-                G[i,:,:] = np.dot(Huu[i,:,:], np.dot(np.diag(Gsvals[i,:]), Hvv[i,:,:]))
-        elif mdimG < n_dim:
-            Gsvals[:,:mdimG] = 1./Hsvals[:,:mdimG]
-            Gsvals[:,mdimG:] = 0.
-            # this can be redone with np.einsum() but it's barbaric
-            G = np.zeros((n_samples, mdimG, mdimG))
-            new_H = np.zeros((n_samples, mdimG, mdimG))
-            for i in np.arange(n_samples):
-                G[i,:,:mdimG] = np.dot(Huu[i,:,mdimG], np.dot( np.diag(Gsvals[i,:mdimG]), Hvv[i,:,:mdimG]))
-                new_H[i, :, :mdimG] = np.dot(Huu[i,:,mdimG], np.dot( np.diag(Hsvals[i,:mdimG]), Hvv[i,:,:mdimG]))
-        else:
-            raise ValueError('mdimG must be <= H.shape[1]')
-        return G, new_H, Hvv, Hsvals, Gsvals
-    else:
-        raise NotImplementedError('Not yet implemented non svd update.')
-        riemann_metric = np.linalg.inv(h_dual_metric)
-        return riemann_metric, None, None, None
+    Huu, Hsvals, Hvv = np.linalg.svd(H)
+    # Gsvals = 1./Hsvals
+    Gsvals = np.divide(1, Hsvals, out=np.zeros_like(Hsvals), where=Hsvals != 0)
+    G = np.zeros((n_samples, n_dim, n_dim))
+    new_H = H
+    for i in np.arange(n_samples):
+        G[i,:,:] = np.dot(Huu[i,:,:], np.dot(np.diag(Gsvals[i,:]), Hvv[i,:,:]))
+    return G, new_H, Hvv, Hsvals, Gsvals
+
 
 
 class RiemannMetric(object):
@@ -90,18 +57,16 @@ class RiemannMetric(object):
     compute G (and maybe even H) only at the requested points.
 
     This implementation is from megaman, by Marina Meila (License simplified BSD), with
-    adaptations from Davi Sidarta-Oliveira.
+    adaptations from Davi Sidarta-Oliveira as included in TopOMetry for performance and
+    scikit-learn compability.
 
     Parameters
     -----------
     Y : embedding coordinates, shape = (n, mdimY)
-    affinity : estimated affinity from data, ideally a diffusion operator,  shape = (n, n)
-    n_dim : the manifold domension
-    mod_inv : if mode_inv = svd, also returns Hvv, Hsvals,
-        Gsvals the (transposed) eigenvectors of
-        H and the singular values of H and G
+    L : Laplacian matrix, shape = (n, n)
 
-    Returns
+
+    Attributes
     ----------
     mdimG : dimension of G, H
     mdimY : dimension of Y
@@ -123,24 +88,12 @@ class RiemannMetric(object):
     the problem of geometric discovery",
     Dominique Perraul-Joncas, Marina Meila, arXiv:1305.7255
     """
-    def __init__(self, Y, affinity, n_dim=None, mode_inv='svd'):
+    def __init__(self, Y, L):
         # input data
         self.Y = Y
         self.n, self.mdimY = Y.shape
-        self.L = lap_calc(affinity)
-
-        # input params
-        if n_dim is None:
-            self.mdimG = self.mdimY
-        else:
-            if n_dim > self.mdimY:
-                raise ValueError('n_dim must be <= Y.shape[1]')
-            self.mdimG = n_dim    # dimension of the riemann_metric computed
-        self.mode_inv = mode_inv
-        if self.mode_inv not in set(('svd', 'inv')):
-            raise ValueError(("%s is not a valid value. Expected "
-                              "'svd', 'inv'") % self.mode_inv)
-
+        self.L = L
+        self.mdimG = self.mdimY
         # results and outputs
         self.H = None
         self.G = None
@@ -149,27 +102,24 @@ class RiemannMetric(object):
         self.Gsvals = None
         self.detG = None
 
-    def get_dual_rmetric( self, invert_h = False, mode_inv = 'svd' ):
+    def get_dual_rmetric(self, invert_h = False):
         """
-        Compute the dual Riemannian Metric
-        This is not satisfactory, because if mdimG<mdimY the shape of H
-        will not be the same as the shape of G. TODO(maybe): return a (copied)
-        smaller H with only the rows and columns in G.
+        Computes the dual Riemannian Metric.
         """
         if self.H is None:
-            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = invert_h, mode_inv = mode_inv)
+            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
         if invert_h:
             return self.H, self.G
         else:
             return self.H
 
-    def get_rmetric( self, mode_inv = 'svd', return_svd = False ):
+    def get_rmetric(self, return_svd = False):
         """
-        Compute the Reimannian Metric
+        Compute the Riemannian Metric
         """
         if self.H is None:
-            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = True, mode_inv = mode_inv)
-        if mode_inv is 'svd' and return_svd:
+            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
+        if return_svd:
             return self.G, self.Hvv, self.Hsvals, self.Gsvals
         else:
             return self.G
@@ -178,10 +128,52 @@ class RiemannMetric(object):
         return self.mdimG
 
     def get_detG(self):
+        """
+        Gets the determinant of the Riemannian metric.
+        """
         if self.G is None:
-            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG, invert_h = True, mode_inv = self.mode_inv)
+            self.H, self.G, self.Hvv, self.Hsval, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
         if self.detG is None:
-            if self.mdimG == self.mdimY:
-                self.detG = 1./np.linalg.det(self.H)
-            else:
-                self.detG = 1./np.linalg.det(self.H[:,:self.mdimG,:self.mdimG])
+            self.detG = 1./np.linalg.det(self.H)
+
+    def fit(self, Y, L=None):
+        """
+        Fit the Riemannian Metric to a new embedding Y.
+        """
+        self.Y = Y
+        if self.L is None:
+            if self.L is None:
+                raise ValueError("Laplacian matrix L is not set")
+            self.L = L
+        self.n, self.mdimY = Y.shape
+        return self.get_rmetric()
+
+    def transform(self, Y, L=None):
+        """
+        Here only for scikit-learn consistency. Calls the fit() method.
+        """
+        return self.fit()
+
+    def estimate_distortions(self):
+        N = self.H.shape[0]
+        distortions = np.zeros((N))
+        for i in range(N):
+            vals, vecs = eigsorted(self.H[i,:,:])
+            distortions[i] = np.sqrt(np.absolute(vals)).sum()
+        return distortions
+
+    def tangent_plane(self):
+        evals, evecs = map(np.array, zip(*[eigsorted(HHi) for HHi in self.H]))
+        return evecs
+    
+    def estimate_total_distortion(self):
+        return self.estimate_distortions(self.H).sum()
+
+def eigsorted(H):
+    vals, vecs = np.linalg.eigh(H)
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
+
+
+
+

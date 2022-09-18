@@ -200,6 +200,7 @@ class Diffusor(TransformerMixin):
     def fit(self, X):
         """
         Fits an adaptive anisotropic diffusion kernel to the data.
+        
         Parameters
         ----------
         X :
@@ -207,6 +208,7 @@ class Diffusor(TransformerMixin):
         Use with sparse data for top performance. You can adjust a series of
         parameters that can make the process faster and more informational depending
         on your dataset.
+
         Returns
         -------
             Diffusor object with kernel Diffusor.K and the transition potential Diffusor.P.
