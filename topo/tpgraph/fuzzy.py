@@ -1,7 +1,6 @@
-# These are some graph learning functions implemented in UMAP, added here with modifications
+# These are some graph learning functions implemented in UMAP, added here with slight modifications
 # for better speed and computational efficiency.
 # Originally implemented by Leland McInnes at https://github.com/lmcinnes/umap
-# I've implemented a scikit-learn compatible version with minor improvements for speed and scalability here.
 #
 #
 # Below are some graph learning functions implemented in UMAP, added here with modifications
@@ -44,7 +43,6 @@
 
 import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix
-from sklearn.base import TransformerMixin
 from topo.base.ann import kNN
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
