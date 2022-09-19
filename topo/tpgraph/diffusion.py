@@ -200,7 +200,7 @@ class Diffusor(TransformerMixin):
     def fit(self, X):
         """
         Fits an adaptive anisotropic diffusion kernel to the data.
-        
+
         Parameters
         ----------
         X :
@@ -375,8 +375,8 @@ class Diffusor(TransformerMixin):
 
         # Anisotropic diffusion. Here we'll use the symmetrized version, so we'll need to convert it back later
         if self.alpha > 0:
-            self.P, self._D_left = diffusion_operator(
-                self.K, self.alpha, return_D_inv_sqrt=True)
+            self.P = diffusion_operator(
+                self.K, self.alpha, symmetric=False, return_D_inv_sqrt=False)
         else:
             # if no anisotropy is added, there's no need to convert it later
             D = np.ravel(self.K.sum(axis=1))
@@ -416,9 +416,6 @@ class Diffusor(TransformerMixin):
         evals, evecs = eigsh(self.P, self.n_eigs, tol=self.tol, maxiter=self.N)
         evals = np.real(evals)
         evecs = np.real(evecs)
-        # If anisotropy was used, we'll need to convert the eigenvectors back
-        if self.alpha > 0:
-            evecs = self._D_left.dot(evecs)
         inds = np.argsort(evals)[::-1]
         evals = evals[inds]
         evecs = evecs[:, inds]

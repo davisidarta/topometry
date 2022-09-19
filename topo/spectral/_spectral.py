@@ -284,7 +284,7 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True,
         return evecs
 
 
-def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
+def diffusion_operator(W, alpha=1.0, symmetric=False, return_D_inv_sqrt=False):
     """
     Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
@@ -297,7 +297,7 @@ def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
     alpha : float (optional, default 1.0).
         Anisotropy to apply. 'Alpha' in the diffusion maps literature.
     
-    symmetric : bool (optional, default True).
+    symmetric : bool (optional, default False).
         Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
         when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
         during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric

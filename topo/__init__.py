@@ -1,5 +1,4 @@
 import sys
-
 from .base import ann
 from . import layouts as lt
 from .topograph import TopOGraph
@@ -9,7 +8,7 @@ from . import tpgraph as tpg
 from . import eval
 from . import utils
 from . import pipes
-from ._utils import read_pkl, annotate_doc_types
+from .utils._utils import read_pkl, annotate_doc_types
 
 from .version import __version__
 

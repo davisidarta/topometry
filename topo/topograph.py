@@ -211,7 +211,6 @@ class TopOGraph(TransformerMixin):
                  delta=1.0,
                  t='inf',
                  p=11 / 16,
-                 transitions=True,
                  random_state=None
                  ):
         self.graph = graph
@@ -229,7 +228,6 @@ class TopOGraph(TransformerMixin):
         self.efC = efC
         self.efS = efS
         self.kernel_use = kernel_use
-        self.transitions = transitions
         self.eigen_expansion = eigen_expansion
         self.verbosity = verbosity
         self.bases_graph_verbose = False
@@ -2580,37 +2578,49 @@ class TopOGraph(TransformerMixin):
                 self.graph = 'diff'
                 if self.db_diff_graph is None:
                     self.db_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_diff_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_diff_MAP is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_diff_MAP = self.MAP()
                 if run_MDE:
                     if self.db_diff_MDE is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_diff_MDE = self.MDE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
                 if self.db_cknn_graph is None:
                     self.db_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_cknn_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_cknn_MAP is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_cknn_MAP = self.MAP()
                 if run_MDE:
                     if self.db_cknn_MDE is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_cknn_MDE = self.MDE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
                 if self.db_fuzzy_graph is None:
                     self.db_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
                 if run_MAP:
                     if self.db_fuzzy_MAP is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_fuzzy_MAP = self.MAP()
                 if run_MDE:
                     if self.db_fuzzy_MDE is None:
+                        if self.SpecLayout is None:
+                            self.SpecLayout = self.spectral_layout(
+                            graph=self.db_diff_graph, n_components=n_components)
                         self.db_fuzzy_MDE = self.MDE(n_components=n_components)
         if run_cb:
             self.basis = 'continuous'
