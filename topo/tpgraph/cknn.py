@@ -53,43 +53,28 @@ def cknn_graph(X, n_neighbors=10,
         * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
         TopOMetry and will automatically convert the input array to csr_matrix for performance.
-    M : int (optional, default 15).
-        A neighborhood search parameter. Defines the maximum number of neighbors in the zero and above-zero layers
-        during HSNW (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check its manuscript(https://arxiv.org/abs/1603.09320).
-        HSNW is implemented in python via NMSlib (https://github.com/nmslib/nmslib) and HNWSlib
-        (https://github.com/nmslib/hnswlib).
-    efC : int (optional, default 50).
-        A neighborhood search parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-    efS : int (optional, default 50).
-        A neighborhood search parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-    
+
     n_jobs : int (optional, default 1).
         The number of jobs to use in the k-nearest-neighbors computation. Defaults to one (I highly recommend you use all available).
     verbose : bool (optional, default False).
         If True, print progress messages.
     kwargs : dict (optional, default {}).
         Additional parameters to pass to the k-nearest-neighbors backend.
-    
+
     """
     N = X.shape[0]
     if metric == 'precomputed':
         knn = X.copy()
     else:
         # Fit kNN - we'll use a smaller number of k-neighbors for the CkNN normalization
-        knn = kNN(X, n_neighbors=n_neighbors,
-                    metric=metric,
-                    n_jobs=n_jobs,
-                    backend=backend,
-                    M=M,
-                    efC=efC,
-                    efS=efS,
-                    verbose=verbose,
-                    *kwargs)
+        knn = kNN(X, Y=None,
+                  n_neighbors=n_neighbors,
+                  metric=metric,
+                  n_jobs=n_jobs,
+                  backend=backend,
+                  symmetrize=True,
+                  return_instance=False,
+                  verbose=verbose, **kwargs)
     median_k = np.floor(n_neighbors / 2).astype(int)
     adap_sd = np.zeros(N)
     for i in np.arange(len(adap_sd)):
@@ -102,7 +87,7 @@ def cknn_graph(X, n_neighbors=10,
     # prevent division by zero
     cknn_norm = delta * np.sqrt(adap_sd.dot(adap_sd.T)) + 1e-12
     A = csr_matrix(((dists / cknn_norm), (x, y)),
-                        shape=[N, N])
+                   shape=[N, N])
     dd = np.arange(N)
     if include_self:
         A[dd, dd] = True
@@ -112,6 +97,7 @@ def cknn_graph(X, n_neighbors=10,
         return A.astype(np.float)
     else:
         return A.astype(np.int)
+
 
 class CkNearestNeighbors(object):
     """
@@ -157,12 +143,12 @@ class CkNearestNeighbors(object):
     efS : int (optional, default 50).
         A neighborhood search parameter. Similarly to efC, increasing this value improves recall at the
         expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-    
+
     n_jobs : int (optional, default -1).
         The number of jobs to use in the k-nearest-neighbors computation. Defaults to all available CPUs.
     verbose : bool (optional, default False).
         If True, print progress messages.
-    
+
     """
 
     def __repr__(self):
@@ -211,17 +197,17 @@ class CkNearestNeighbors(object):
         Adjacency matrix of the CkNN graph. Weighted or unweighted, depending on the `weighted` parameter.
         """
         cknn_graph(X, n_neighbors=self.n_neighbors,
-                    delta=self.delta,
-                    metric=self.metric,
-                    weighted=self.weighted,
-                    include_self=self.include_self,
-                    backend=self.backend,
-                    n_jobs=self.n_jobs,
-                    M=self.M,
-                    efC=self.efC,
-                    efS=self.efS,
-                    verbose=self.verbose,
-                    *kwargs)
+                   delta=self.delta,
+                   metric=self.metric,
+                   weighted=self.weighted,
+                   include_self=self.include_self,
+                   backend=self.backend,
+                   n_jobs=self.n_jobs,
+                   M=self.M,
+                   efC=self.efC,
+                   efS=self.efS,
+                   verbose=self.verbose,
+                   *kwargs)
 
         return self.A
 

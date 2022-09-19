@@ -82,13 +82,6 @@ class Diffusor(TransformerMixin):
         -'hamming' (*)
         -'jaccard' (*)
         -'jansen-shan' (*)
-    p : int or float (optional, default 11/16 )
-        P for the Lp metric, when ``metric='lp'``.  Can be fractional. The default 11/16 approximates
-        an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
-        See https://en.wikipedia.org/wiki/Lp_space for some context.
-    transitions : bool (optional, default False)
-        Whether to estimate the diffusion transitions graph. If `True`, maps a basis encoding neighborhood
-         transitions probability during eigendecomposition. If 'False' (default), maps the diffusion kernel.
     alpha : int or float (optional, default 1)
         Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
         Defaults to 1 (no bias).
@@ -102,10 +95,6 @@ class Diffusor(TransformerMixin):
         adaptive decay rate, but no neighborhood expansion. Those, followed by '_adaptive', apply the neighborhood expansion process.
          The default and recommended is 'decay_adaptive'.
         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
-    transitions : bool (optional, default False)
-        Whether to decompose the transition graph when transforming.
-    norm : bool (optional, default False)
-        Whether to renormalize the kernel transition probabilities.
     eigen_expansion : bool (optional, default False)
         Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).
     n_jobs : int (optional, default 4)
@@ -133,7 +122,7 @@ class Diffusor(TransformerMixin):
                  n_neighbors=10,
                  n_eigs=50,
                  metric='cosine',
-                 kernel_use='simple',
+                 kernel_use='decay',
                  t=5,
                  multiscale=True,
                  plot_spectrum=False,
@@ -142,25 +131,17 @@ class Diffusor(TransformerMixin):
                  alpha=1,
                  tol=1e-4,
                  n_jobs=-1,
-                 backend='nmslib',
-                 p=None,
-                 M=15,
-                 efC=50,
-                 efS=50,
+                 backend='nmslib'
                  ):
         self.t = t
         self.multiscale = multiscale
         self.n_neighbors = n_neighbors
-        self.n_eigs = n_eigs 
-        self.use_eigs = None # Deprecated
+        self.n_eigs = n_eigs
+        self.use_eigs = None  # Deprecated
         self.alpha = alpha
         self.n_jobs = n_jobs
         self.backend = backend
         self.metric = metric
-        self.p = p
-        self.M = M
-        self.efC = efC
-        self.efS = efS
         self.kernel_use = kernel_use
         self.verbose = verbose
         self.plot_spectrum = plot_spectrum
@@ -197,17 +178,17 @@ class Diffusor(TransformerMixin):
             msg = msg + " \n    Multiscale diffusion maps fitted - Diffusor.res"
         return msg
 
-    def fit(self, X):
+    def fit(self, X, **kwargs):
         """
         Fits an adaptive anisotropic diffusion kernel to the data.
 
         Parameters
         ----------
-        X :
-            input data. Takes in numpy arrays and scipy csr sparse matrices.
-        Use with sparse data for top performance. You can adjust a series of
-        parameters that can make the process faster and more informational depending
-        on your dataset.
+        X : array-like, shape (n_samples, n_features)
+            Input data. Use sparse matrices for top performance. 
+
+        kwargs :
+            Additional keyword arguments passed to `topo.base.ann.kNN` for k-nearest-neighbors graph construction.
 
         Returns
         -------
@@ -274,14 +255,14 @@ class Diffusor(TransformerMixin):
             self.backend = 'nmslib'
 
         if self.metric != 'precomputed':
-            knn = kNN(X, n_neighbors=self.n_neighbors,
+            knn = kNN(X, Y=None,
+                      n_neighbors=self.n_neighbors,
                       metric=self.metric,
                       n_jobs=self.n_jobs,
                       backend=self.backend,
-                      M=self.M,
-                      efC=self.efC,
-                      efS=self.efS,
-                      verbose=self.verbose)
+                      symmetrize=True,
+                      return_instance=False,
+                      verbose=self.verbose, **kwargs)
 
         elif self.metric == 'precomputed':
             if self.verbose:
@@ -319,14 +300,14 @@ class Diffusor(TransformerMixin):
             self.new_k = int(self.n_neighbors + (self.n_neighbors - pm.max()))
             # increase neighbor search:
             # Construct a new approximate k-nearest-neighbors graph with new k
-            knn_new = kNN(X, n_neighbors=self.new_k,
-                          metric=self.metric,
-                          n_jobs=self.n_jobs,
-                          backend=self.backend,
-                          M=self.M,
-                          efC=self.efC,
-                          efS=self.efS,
-                          verbose=self.verbose)
+            knn_new = kNN(X, Y=None,
+                      n_neighbors=self.new_k,
+                      metric=self.metric,
+                      n_jobs=self.n_jobs,
+                      backend=self.backend,
+                      symmetrize=True,
+                      return_instance=False,
+                      verbose=self.verbose, **kwargs)
             x_new, y_new, dists_new = find(knn_new)
 
             # adaptive neighborhood size
@@ -391,8 +372,6 @@ class Diffusor(TransformerMixin):
                   (end - start_time, float(end - start_time) / self.N, self.n_jobs * float(end - start_time) / self.N))
 
         return self
-
-
 
     def transform(self, X=None):
         """
@@ -462,7 +441,7 @@ class Diffusor(TransformerMixin):
 
     def ind_dist_grad(self, data):
         """
-        Depracated from 0.1.1.0 onwards.
+        Depracated from 0.1.0.1 onwards.
         """
 
     def res_dict(self):
@@ -491,7 +470,7 @@ class Diffusor(TransformerMixin):
             n_eigs = self.n_eigs
 
         mms, self.scaled_eigs = ms.multiscale(self.res, n_eigs=n_eigs,
-                                                               verbose=self.verbose)
+                                              verbose=self.verbose)
 
         self.res['DiffusionMaps'] = mms
         return mms
@@ -525,4 +504,3 @@ class Diffusor(TransformerMixin):
         ax1.legend(loc='best')
         plt.tight_layout()
         return plt.show()
-

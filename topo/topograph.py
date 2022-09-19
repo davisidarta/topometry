@@ -8,7 +8,7 @@ from sklearn.base import TransformerMixin
 from scipy.sparse import issparse
 import topo.spectral._spectral as spt
 from topo.base.ann import kNN
-from topo.layouts.graph_utils import fuzzy_simplicial_set_ann
+from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.diffusion import Diffusor
 from topo.plot import decay_plot
@@ -17,12 +17,21 @@ try:
     _have_hnswlib = True
 except ImportError:
     _have_hnswlib = False
-
 try:
     import nmslib
     _have_nmslib = True
 except ImportError:
     _have_nmslib = False
+try:
+    import annoy
+    _have_annoy = True
+except ImportError:
+    _have_annoy = False
+try:
+    import faiss
+    _have_faiss = True
+except ImportError:
+    _have_faiss = False
 
 
 class TopOGraph(TransformerMixin):
@@ -110,29 +119,8 @@ class TopOGraph(TransformerMixin):
     graph_metric : str (optional, default 'cosine').
          Similar to `base_metric`, but used for building the topological graph.
 
-    p : int or float (optional, default 11/16 ).
-         P for the Lp metric, when `metric='lp'`.  Can be fractional. The default 11/16 approximates 2/3, that is,
-         an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
-
     n_jobs : int (optional, default 10).
          Number of threads to use in calculations. Set this to as much as possible for speed.
-
-    M : int (optional, default 15).
-        A neighborhood search parameter. Defines the maximum number of neighbors in the zero and above-zero layers
-        during HSNW (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check its manuscript(https://arxiv.org/abs/1603.09320).
-        HSNW is implemented in python via NMSlib (https://github.com/nmslib/nmslib) and HNWSlib
-        (https://github.com/nmslib/hnswlib).
-
-    efC : int (optional, default 50).
-        A neighborhood search parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-
-    efS : int (optional, default 50).
-        A neighborhood search parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
 
     transitions : bool (optional, default False).
         A diffusion harmonics parameter. Whether to use the transition probabilities rather than
@@ -198,9 +186,6 @@ class TopOGraph(TransformerMixin):
                  graph_metric='cosine',
                  n_jobs=1,
                  backend='nmslib',
-                 M=15,
-                 efC=50,
-                 efS=50,
                  verbosity=1,
                  cache_base=True,
                  cache_graph=True,
@@ -209,8 +194,6 @@ class TopOGraph(TransformerMixin):
                  plot_spectrum=False,
                  eigen_expansion=False,
                  delta=1.0,
-                 t='inf',
-                 p=11 / 16,
                  random_state=None
                  ):
         self.graph = graph
@@ -223,10 +206,6 @@ class TopOGraph(TransformerMixin):
         self.backend = backend
         self.base_metric = base_metric
         self.graph_metric = graph_metric
-        self.p = p
-        self.M = M
-        self.efC = efC
-        self.efS = efS
         self.kernel_use = kernel_use
         self.eigen_expansion = eigen_expansion
         self.verbosity = verbosity
@@ -234,7 +213,6 @@ class TopOGraph(TransformerMixin):
         self.layout_verbose = False
         self.plot_spectrum = plot_spectrum
         self.delta = delta
-        self.t = t
         self.cache_base = cache_base
         self.cache_graph = cache_graph
         self.random_state = random_state
@@ -464,7 +442,7 @@ class TopOGraph(TransformerMixin):
         msg = msg + " \n Active graph: " + str(self.graph) + ' graph.'
         return msg
 
-    def fit(self, X):
+    def fit(self, X, **kwargs):
         """
         Learn topological distances with diffusion harmonics and continuous metrics. Computes affinity operators
         that approximate the Laplace-Beltrami operator
@@ -473,6 +451,9 @@ class TopOGraph(TransformerMixin):
         ----------
         X :
             High-dimensional data matrix. Currently, supports only data from similar type (i.e. all bool, all float)
+
+        kwargs :
+            Additional keyword arguments passed to `topo.base.ann.kNN` for k-nearest-neighbors graph construction.
 
         Returns
         -------
@@ -490,6 +471,10 @@ class TopOGraph(TransformerMixin):
                 `TopoGraph.FuzzyBasis` with a fuzzy simplicial set model, containing continuous metrics.
 
         """
+        if self.n_jobs == -1:
+            from joblib import cpu_count
+            self.n_jobs = cpu_count()
+
         if self.verbosity >= 2:
             self.layout_verbose = True
             if self.verbosity == 3:
@@ -503,34 +488,73 @@ class TopOGraph(TransformerMixin):
             if not _have_hnswlib:
                 if _have_nmslib:
                     self.backend == 'nmslib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                elif _have_faiss:
+                    self.backend == 'faiss'
                 else:
                     self.backend == 'sklearn'
         if self.backend == 'nmslib':
             if not _have_nmslib:
                 if _have_hnswlib:
                     self.backend == 'hnswlib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                elif _have_faiss:
+                    self.backend == 'faiss'
                 else:
                     self.backend == 'sklearn'
+        if self.backend == 'annoy':
+            if not _have_annoy:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                elif _have_hnswlib:
+                    self.backend == 'hnswlib'
+                elif _have_faiss:
+                    self.backend == 'faiss'
+                else:
+                    self.backend == 'sklearn'
+        if self.backend == 'faiss':
+            if not _have_faiss:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                elif _have_hnswlib:
+                    self.backend == 'hnswlib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                else:
+                    self.backend == 'sklearn'
+        else:
+            print(
+                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+            self.backend == 'sklearn'
 
         self.n = X.shape[0]
         self.m = X.shape[1]
         if self.random_state is None:
             self.random_state = np.random.RandomState()
+        elif isinstance(self.random_state, np.random.RandomState):
+            pass
+        elif isinstance(self.random_state, int):
+            self.random_state = np.random.RandomState(self.random_state)
+        else:
+            print('RandomState error! No random state was defined!')
+        if self.base_metric == 'precomputed':
+            self.base_knn_graph = X.copy()
 
         # First build a kNN graph:
         if self.base_knn_graph is None:
             if self.verbosity >= 1:
                 print('Computing neighborhood graph...')
             start = time.time()
-            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, Y=None,
+                                                            n_neighbors=self.base_knn,
                                                             metric=self.base_metric,
                                                             n_jobs=self.n_jobs,
                                                             backend=self.backend,
-                                                            M=self.M,
-                                                            efC=self.efC,
-                                                            efS=self.efS,
+                                                            symmetrize=True,
                                                             return_instance=True,
-                                                            verbose=self.bases_graph_verbose)
+                                                            verbose=self.bases_graph_verbose, **kwargs)
             end = time.time()
             self.runtimes['kNN'] = end - start
             if self.verbosity >= 1:
@@ -574,16 +598,28 @@ class TopOGraph(TransformerMixin):
 
         elif self.basis == 'continuous':
             start = time.time()
-            self.ContBasis = cknn_graph(data_use,
-                                        n_neighbors=10,
-                                        delta=self.delta,
-                                        metric=self.base_metric,
-                                        weighted=True,
-                                        include_self=False,
-                                        return_densities=False,
-                                        backend=self.backend,
-                                        n_jobs=self.n_jobs,
-                                        verbose=self.bases_graph_verbose)
+            if self.base_knn_graph is not None:
+                self.ContBasis = cknn_graph(self.base_knn_graph,
+                                            n_neighbors=self.base_knn,
+                                            delta=self.delta,
+                                            metric='precomputed',
+                                            weighted=True,
+                                            include_self=False,
+                                            return_densities=False,
+                                            backend=self.backend,
+                                            n_jobs=self.n_jobs,
+                                            verbose=self.bases_graph_verbose)
+            else:
+                self.ContBasis = cknn_graph(X,
+                                            n_neighbors=self.base_knn,
+                                            delta=self.delta,
+                                            metric=self.base_metric,
+                                            weighted=True,
+                                            include_self=False,
+                                            return_densities=False,
+                                            backend=self.backend,
+                                            n_jobs=self.n_jobs,
+                                            verbose=self.bases_graph_verbose)
             self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
                 self.ContBasis,
                 self.n_eigs,
@@ -604,38 +640,31 @@ class TopOGraph(TransformerMixin):
                 knn_inds, knn_distances, grad, knn_graph = self.base_nbrs_class.ind_dist_grad(
                     X)
                 start = time.time()
-                fuzzy_results = fuzzy_simplicial_set_ann(X,
+                if self.base_knn_graph is not None:
+                    fuzzy_results = fuzzy_simplicial_set(self.base_knn_graph,
                                                          n_neighbors=self.base_knn,
-                                                         knn_indices=knn_inds,  # I can still improve the performance of this
-                                                         knn_dists=knn_distances,    # FIXME
+                                                         metric='precomputed',
                                                          backend=self.backend,
-                                                         metric=self.base_metric,
                                                          n_jobs=self.n_jobs,
-                                                         efC=self.efC,
-                                                         efS=self.efS,
-                                                         M=self.M,
                                                          set_op_mix_ratio=1.0,
                                                          local_connectivity=1.0,
                                                          apply_set_operations=True,
                                                          return_dists=False,
-                                                         verbose=self.bases_graph_verbose)
+                                                         verbose=self.bases_graph_verbose,
+                                                         **kwargs)
             else:
                 start = time.time()
-                fuzzy_results = fuzzy_simplicial_set_ann(X,
-                                                         n_neighbors=self.base_knn,
-                                                         knn_indices=None,  # I can still improve the performance of this
-                                                         knn_dists=None,    # FIXME
-                                                         backend=self.backend,
-                                                         metric=self.base_metric,
-                                                         n_jobs=self.n_jobs,
-                                                         efC=self.efC,
-                                                         efS=self.efS,
-                                                         M=self.M,
-                                                         set_op_mix_ratio=1.0,
-                                                         local_connectivity=1.0,
-                                                         apply_set_operations=True,
-                                                         return_dists=False,
-                                                         verbose=self.bases_graph_verbose)
+                fuzzy_results = fuzzy_simplicial_set(X,
+                                                     n_neighbors=self.base_knn,
+                                                     metric=self.base_metric,
+                                                     backend=self.backend,
+                                                     n_jobs=self.n_jobs,
+                                                     set_op_mix_ratio=1.0,
+                                                     local_connectivity=1.0,
+                                                     apply_set_operations=True,
+                                                     return_dists=False,
+                                                     verbose=self.bases_graph_verbose,
+                                                     **kwargs)
             # Guarantee symmetry
             self.FuzzyBasisResults = fuzzy_results
             self.FuzzyBasis = fuzzy_results[0]

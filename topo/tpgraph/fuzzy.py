@@ -154,7 +154,7 @@ def fuzzy_simplicial_set(
 
     sigmas: array of shape (n_samples,)
         The normalization factor derived from the metric tensor approximation. Equal
-        to the distance 
+        to the distance to the nearest neighbor.
 
     rhos: array of shape (n_samples,)
         The distance to the 1st nearest neighbor for each point.
