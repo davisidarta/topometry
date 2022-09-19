@@ -518,27 +518,23 @@ class TopOGraph(TransformerMixin):
             self.random_state = np.random.RandomState()
 
         # First build a kNN graph:
-        if self.kernel_use == 'simple' or self.kernel_use == 'decay':
-            if self.basis == 'diffusion':
-                if self.base_knn_graph is None:
-                    if self.verbosity >= 1:
-                        print('Computing neighborhood graph...')
-                    start = time.time()
-                    self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
-                                                                    metric=self.base_metric,
-                                                                    n_jobs=self.n_jobs,
-                                                                    backend=self.backend,
-                                                                    M=self.M,
-                                                                    efC=self.efC,
-                                                                    efS=self.efS,
-                                                                    return_instance=True,
-                                                                    verbose=self.bases_graph_verbose)
-                    end = time.time()
-                    self.runtimes['kNN'] = end - start
-                    if self.verbosity >= 1:
-                        print(
-                            ' Base kNN graph computed in %f (sec)' % (
-                                end - start))
+        if self.base_knn_graph is None:
+            if self.verbosity >= 1:
+                print('Computing neighborhood graph...')
+            start = time.time()
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
+                                                            metric=self.base_metric,
+                                                            n_jobs=self.n_jobs,
+                                                            backend=self.backend,
+                                                            M=self.M,
+                                                            efC=self.efC,
+                                                            efS=self.efS,
+                                                            return_instance=True,
+                                                            verbose=self.bases_graph_verbose)
+            end = time.time()
+            self.runtimes['kNN'] = end - start
+            if self.verbosity >= 1:
+                print(' Base kNN graph computed in %f (sec)' % (end - start))
 
         if self.verbosity >= 1:
             print('Building topological basis...' +
@@ -578,26 +574,16 @@ class TopOGraph(TransformerMixin):
 
         elif self.basis == 'continuous':
             start = time.time()
-            # # Enforce symmetry
-            # knn = self.base_knn_graph.toarray()
-            # knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-            # knn = (knn + knn.T) / 2
-            if issparse(X):
-                data_use = X.toarray()
-            else:
-                data_use = X
             self.ContBasis = cknn_graph(data_use,
-                                        n_neighbors=self.base_knn,
+                                        n_neighbors=10,
                                         delta=self.delta,
                                         metric=self.base_metric,
-                                        t=self.t,
-                                        include_self=True,
-                                        is_sparse=True,
-                                        return_instance=False
-                                        )
-            del data_use
-            import gc
-            gc.collect()
+                                        weighted=True,
+                                        include_self=False,
+                                        return_densities=False,
+                                        backend=self.backend,
+                                        n_jobs=self.n_jobs,
+                                        verbose=self.bases_graph_verbose)
             self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
                 self.ContBasis,
                 self.n_eigs,
@@ -759,22 +745,22 @@ class TopOGraph(TransformerMixin):
         if self.graph == 'diff':
             start = time.time()
             DiffGraph = Diffusor(n_neighbors=self.graph_knn,
-                                      n_eigs=self.n_eigs,
-                                      metric=self.graph_metric,
-                                      kernel_use=self.kernel_use,
-                                      t=None,
-                                      multiscale=True,
-                                      plot_spectrum=False,
-                                      verbose=self.bases_graph_verbose,
-                                      cache=self.cache_graph,
-                                      alpha=self.alpha,
-                                      tol=1e-6,
-                                      n_jobs=self.n_jobs,
-                                      backend=self.backend,
-                                      p=None,
-                                      M=self.M,
-                                      efC=self.efC,
-                                      efS=self.efS
+                                 n_eigs=self.n_eigs,
+                                 metric=self.graph_metric,
+                                 kernel_use=self.kernel_use,
+                                 t=None,
+                                 multiscale=True,
+                                 plot_spectrum=False,
+                                 verbose=self.bases_graph_verbose,
+                                 cache=self.cache_graph,
+                                 alpha=self.alpha,
+                                 tol=1e-6,
+                                 n_jobs=self.n_jobs,
+                                 backend=self.backend,
+                                 p=None,
+                                 M=self.M,
+                                 efC=self.efC,
+                                 efS=self.efS
                                  ).fit(use_basis)
             end = time.time()
             if self.basis == 'diffusion':
@@ -2582,13 +2568,13 @@ class TopOGraph(TransformerMixin):
                     if self.db_diff_MAP is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_diff_MAP = self.MAP()
                 if run_MDE:
                     if self.db_diff_MDE is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_diff_MDE = self.MDE(n_components=n_components)
             if run_cknn:
                 self.graph = 'cknn'
@@ -2598,13 +2584,13 @@ class TopOGraph(TransformerMixin):
                     if self.db_cknn_MAP is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_cknn_MAP = self.MAP()
                 if run_MDE:
                     if self.db_cknn_MDE is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_cknn_MDE = self.MDE(n_components=n_components)
             if run_fuzzy:
                 self.graph = 'fuzzy'
@@ -2614,13 +2600,13 @@ class TopOGraph(TransformerMixin):
                     if self.db_fuzzy_MAP is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_fuzzy_MAP = self.MAP()
                 if run_MDE:
                     if self.db_fuzzy_MDE is None:
                         if self.SpecLayout is None:
                             self.SpecLayout = self.spectral_layout(
-                            graph=self.db_diff_graph, n_components=n_components)
+                                graph=self.db_diff_graph, n_components=n_components)
                         self.db_fuzzy_MDE = self.MDE(n_components=n_components)
         if run_cb:
             self.basis = 'continuous'
