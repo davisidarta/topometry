@@ -10,3 +10,5 @@ dist/
 **/.idea/workspace.xml
 **/.idea/tasks.xml
 !**/site-packages/
+topo/spectral/__pycache__/umap_layouts.rdist-36.py38.1.nbc
+topo/spectral/__pycache__/umap_layouts.rdist-36.py38.nbi

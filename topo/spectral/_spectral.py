@@ -10,6 +10,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from sklearn.manifold import spectral_embedding
 from sklearn.metrics import pairwise_distances
 from sklearn.utils.extmath import _deterministic_vector_sign_flip
 from sklearn.utils import check_random_state, as_float_array

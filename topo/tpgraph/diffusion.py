@@ -95,8 +95,10 @@ class Diffusor(TransformerMixin):
         adaptive decay rate, but no neighborhood expansion. Those, followed by '_adaptive', apply the neighborhood expansion process.
          The default and recommended is 'decay_adaptive'.
         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
-    eigen_expansion : bool (optional, default False)
-        Whether to expand the eigendecomposition and stop near a discrete eigengap (bit limit).
+    transitions : bool (optional, default False)
+        Whether to decompose the transition graph when transforming.
+    norm : bool (optional, default False)
+        Whether to normalize the kernel transition probabilities.
     n_jobs : int (optional, default 4)
         Number of threads to use in calculations. Defaults to -1 (all but one). Escalates dramatically
          when using more threads.
@@ -131,7 +133,9 @@ class Diffusor(TransformerMixin):
                  alpha=1,
                  tol=1e-4,
                  n_jobs=-1,
-                 backend='nmslib'
+                 backend='nmslib',
+                 norm=False,
+                 transitions=False
                  ):
         self.t = t
         self.multiscale = multiscale
@@ -157,6 +161,8 @@ class Diffusor(TransformerMixin):
         self.P = None
         self.res = None
         self._D_left = None
+        self.transitions = transitions
+        self.norm = norm
 
     def __repr__(self):
         if self.metric != 'precomputed':
@@ -301,13 +307,13 @@ class Diffusor(TransformerMixin):
             # increase neighbor search:
             # Construct a new approximate k-nearest-neighbors graph with new k
             knn_new = kNN(X, Y=None,
-                      n_neighbors=self.new_k,
-                      metric=self.metric,
-                      n_jobs=self.n_jobs,
-                      backend=self.backend,
-                      symmetrize=True,
-                      return_instance=False,
-                      verbose=self.verbose, **kwargs)
+                          n_neighbors=self.new_k,
+                          metric=self.metric,
+                          n_jobs=self.n_jobs,
+                          backend=self.backend,
+                          symmetrize=True,
+                          return_instance=False,
+                          verbose=self.verbose, **kwargs)
             x_new, y_new, dists_new = find(knn_new)
 
             # adaptive neighborhood size
@@ -354,17 +360,36 @@ class Diffusor(TransformerMixin):
         # handle nan, zeros
         self.K.data = np.where(np.isnan(self.K.data), 1, self.K.data)
 
-        # Anisotropic diffusion. Here we'll use the symmetrized version, so we'll need to convert it back later
+        # # Anisotropic diffusion. Here we'll use the symmetrized version, so we'll need to convert it back later
+        # if self.alpha > 0:
+        #     self.P = diffusion_operator(
+        #         self.K, self.alpha, symmetric=False, return_D_inv_sqrt=False)
+        # else:
+        #     # if no anisotropy is added, there's no need to convert it later
+        #     D = np.ravel(self.K.sum(axis=1))
+        #     D[D != 0] = 1 / D[D != 0]
+        #     Dreg = csr_matrix(
+        #         (D, (range(self.N), range(self.N))), shape=[self.N, self.N])
+        #     self.P = Dreg.dot(self.K)
+                # Diffusion through Markov chain
+        D = np.ravel(self.K.sum(axis=1))
         if self.alpha > 0:
-            self.P = diffusion_operator(
-                self.K, self.alpha, symmetric=False, return_D_inv_sqrt=False)
-        else:
-            # if no anisotropy is added, there's no need to convert it later
-            D = np.ravel(self.K.sum(axis=1))
-            D[D != 0] = 1 / D[D != 0]
-            Dreg = csr_matrix(
-                (D, (range(self.N), range(self.N))), shape=[self.N, self.N])
-            self.P = Dreg.dot(self.K)
+            # L_alpha
+            D[D != 0] = D[D != 0] ** (-self.alpha)
+            mat = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N])
+            kernel = mat.dot(self.K).dot(mat)
+            D = np.ravel(kernel.sum(axis=1))
+
+        D[D != 0] = 1 / D[D != 0]
+        # Setting the diffusion operator
+        if self.norm:
+            self.K = kernel
+        if self.transitions:
+            self.P = csr_matrix((D, (range(self.N), range(self.N))), shape=[self.N, self.N]).dot(self.K)
+            # Guarantee symmetry
+            self.P = (self.P + self.TP.T) / 2
+            self.P[(np.arange(self.P.shape[0]), np.arange(self.P.shape[0]))] = 0
+
 
         end = time.time()
         if self.verbose:
@@ -391,8 +416,10 @@ class Diffusor(TransformerMixin):
         start_time = time.time()
         if self.t is None or self.t < 1:
             self.multiscale = True
-
-        evals, evecs = eigsh(self.P, self.n_eigs, tol=self.tol, maxiter=self.N)
+        if self.transitions:
+            evals, evecs = eigsh(self.P, self.n_eigs, tol=self.tol, maxiter=self.N)
+        else:
+            evals, evecs = eigsh(self.K, self.n_eigs, tol=self.tol, maxiter=self.N)
         evals = np.real(evals)
         evecs = np.real(evecs)
         inds = np.argsort(evals)[::-1]

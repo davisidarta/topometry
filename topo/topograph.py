@@ -194,7 +194,9 @@ class TopOGraph(TransformerMixin):
                  plot_spectrum=False,
                  eigen_expansion=False,
                  delta=1.0,
-                 random_state=None
+                 random_state=None,
+                 norm=False,
+                 transitions=False,
                  ):
         self.graph = graph
         self.basis = basis
@@ -286,6 +288,8 @@ class TopOGraph(TransformerMixin):
         self.db_NCVis = None
         self.cb_NCVis = None
         self.fb_NCVis = None
+        self.norm = norm
+        self.transitions = transitions
         self.runtimes = {}
 
     def __repr__(self):
@@ -494,7 +498,7 @@ class TopOGraph(TransformerMixin):
                     self.backend == 'faiss'
                 else:
                     self.backend == 'sklearn'
-        if self.backend == 'nmslib':
+        elif self.backend == 'nmslib':
             if not _have_nmslib:
                 if _have_hnswlib:
                     self.backend == 'hnswlib'
@@ -504,7 +508,7 @@ class TopOGraph(TransformerMixin):
                     self.backend == 'faiss'
                 else:
                     self.backend == 'sklearn'
-        if self.backend == 'annoy':
+        elif self.backend == 'annoy':
             if not _have_annoy:
                 if _have_nmslib:
                     self.backend == 'nmslib'
@@ -514,7 +518,7 @@ class TopOGraph(TransformerMixin):
                     self.backend == 'faiss'
                 else:
                     self.backend == 'sklearn'
-        if self.backend == 'faiss':
+        elif self.backend == 'faiss':
             if not _have_faiss:
                 if _have_nmslib:
                     self.backend == 'nmslib'
@@ -577,10 +581,8 @@ class TopOGraph(TransformerMixin):
                                       tol=1e-6,
                                       n_jobs=self.n_jobs,
                                       backend=self.backend,
-                                      p=None,
-                                      M=self.M,
-                                      efC=self.efC,
-                                      efS=self.efS)
+                                      norm=self.norm,
+                                      transitions=self.trasitions)
             if self.kernel_use == 'simple' or self.kernel_use == 'decay':
                 self.DiffBasis.metric = 'precomputed'
                 start = time.time()
