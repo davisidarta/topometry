@@ -9,11 +9,11 @@
 # TopOMetry - Topologically Optimized geoMetry
 
 
-## A global framework for dimensionality reduction: learning topologic metrics, orthonormal bases and graph layouts
-
 TopOMetry is a high-level python library to explore data topology through manifold learning. It is compatible with scikit-learn, meaning most of its operators can be easily pipelined.
 
 Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an set of orthonormal eigenbases (classically named the spectral or diffusion components). New topological operators are then learned from such eigenbases and can be used for clustering and graph-layout optimization (visualization). 
+
+There are many different ways to computationally approximate the LBO. TopOMetry tests a wide array of possible algorithmic combinations, combines them with existing graph-layout algorithm and scores them aftwerwards. This way, users do not have to choose a fixed method _a priori_, and can instead decide what works best for each use case.
 
 For more information, see the [manuscript](https://doi.org/10.1101/2022.03.14.484134).
 
