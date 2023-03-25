@@ -893,7 +893,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     try:
                         self.SpecLayout = self.spectral_layout(
                             n_components=n_components)
-                    except:
+                    except Exception:
                         print(
                             'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
                         self.SpecLayout = EigenDecomposition(
@@ -903,7 +903,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     try:
                         self.SpecLayout = self.spectral_layout(
                             n_components=n_components)
-                    except:
+                    except Exception:
                         print(
                             'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
                         self.SpecLayout = EigenDecomposition(
