@@ -11,6 +11,7 @@ from scipy.sparse import find, csr_matrix, linalg, lil_matrix, csc_matrix, kron,
 from scipy.sparse.csgraph import shortest_path, connected_components
 from scipy.spatial import procrustes
 from scipy.stats import rv_discrete
+from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
 from topo.base.ann import kNN
 from topo.base.dists import \
@@ -33,12 +34,19 @@ from topo.base.dists import \
      sokal_michener,
      sokal_sneath,
      yule,
-     matrix_pairwise_distance
+     matrix_pairwise_distance,
+     matrix_to_matrix_distance
      )
 from topo.spectral._spectral import graph_laplacian, diffusion_operator
 from topo.spectral._spectral import degree as compute_degree
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
+from topo.utils._utils import get_indices_distances_from_sparse_matrix
+import warnings
+# dumb warning, suggests lilmatrix but it doesnt work
+from scipy.sparse import SparseEfficiencyWarning
+warnings.simplefilter('ignore', SparseEfficiencyWarning)
+
 
 def _get_metric_function(metric):
     if metric == 'euclidean':
@@ -172,6 +180,7 @@ def compute_kernel(X, metric='cosine',
         If `cknn` is set to `True`, the dictionary contains the bandwidth metric.
     """
     dens_dict = {}
+    N = np.shape(X)[0]
     if n_jobs == -1:
         from joblib import cpu_count
         n_jobs = cpu_count()
@@ -184,33 +193,33 @@ def compute_kernel(X, metric='cosine',
             metric_fun = _get_metric_function(metric)
             K = matrix_pairwise_distance(X, metric_fun)
         else:
-            K = kNN(X, metric=metric, n_neighbors=k,
+            K = kNN(X, metric=metric, n_neighbors=k, symmetrize=True,
                     backend=backend, n_jobs=n_jobs, **kwargs)
         if return_densities:
             dens_dict['knn'] = K
     if fuzzy:
         cknn = False
-        kernel, sigmas, rhos = fuzzy_simplicial_set(K,
-                                                    n_neighbors=n_neighbors,
-                                                    metric='precomputed',
-                                                    set_op_mix_ratio=1.0,
-                                                    local_connectivity=1.0,
-                                                    apply_set_operations=True,
-                                                    return_dists=False,
-                                                    verbose=verbose)
+        W, sigmas, rhos = fuzzy_simplicial_set(K,
+                                               n_neighbors=n_neighbors,
+                                               metric='precomputed',
+                                               set_op_mix_ratio=1.0,
+                                               local_connectivity=1.0,
+                                               apply_set_operations=True,
+                                               return_dists=False,
+                                               verbose=verbose)
         if return_densities:
             dens_dict['sigma'] = sigmas
             dens_dict['rho'] = rhos
     elif cknn:
-        adjacency, kernel, adap_sd = cknn_graph(K, n_neighbors=n_neighbors,
-                                                delta=delta,
-                                                metric='precomputed',
-                                                weighted=None,
-                                                include_self=False,
-                                                return_densities=True,
-                                                verbose=verbose)
+        A, W, adap_sd = cknn_graph(K, n_neighbors=n_neighbors,
+                                   delta=delta,
+                                   metric='precomputed',
+                                   weighted=None,
+                                   include_self=False,
+                                   return_densities=True,
+                                   verbose=verbose)
         if return_densities:
-            dens_dict['unweighted_adjacency'] = adjacency
+            dens_dict['unweighted_adjacency'] = A
             dens_dict['adaptive_bw'] = adap_sd
     else:
         if adaptive_bw:
@@ -223,8 +232,9 @@ def compute_kernel(X, metric='cosine',
             if expand_nbr_search:
                 new_k = int(k + (k - pm.max()))
                 new_K = kNN(X, metric=metric, k=new_k,
-                        backend=backend, n_jobs=n_jobs, **kwargs)
+                            backend=backend, n_jobs=n_jobs, **kwargs)
                 adap_sd_new = _adap_bw(new_K, new_k)
+                x_new, y_new, dists_new = find(new_K)
                 # Get an indirect measure of the local density
                 pm_new = np.interp(
                     adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k))
@@ -233,6 +243,7 @@ def compute_kernel(X, metric='cosine',
                     dens_dict['omega_nbr_expanded'] = adap_sd_new
                     dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
                     dens_dict['expanded_neighborhood_graph'] = new_K
+                    dens_dict['knn_expanded'] = new_K
         x, y, dists = find(K)
         # Normalize distances
         if adaptive_bw:
@@ -240,31 +251,30 @@ def compute_kernel(X, metric='cosine',
             if alpha_decaying:
                 if expand_nbr_search:
                     dists = (
-                        dists / (adap_sd_new[x] + 1e-10)) ** np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
+                        dists_new / (adap_sd_new[x] + 1e-10)) ** np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
                 else:
                     dists = (dists / (adap_sd[x] + 1e-10)
                              ) ** np.power(2, ((k - pm[x]) / pm[x]))
             else:
                 if expand_nbr_search:
-                    dists = (dists / (adap_sd_new[x] + 1e-10)) ** 2
+                    dists = (dists_new / (adap_sd_new[x] + 1e-10))
                 else:
-                    dists = (dists / (adap_sd[x] + 1e-10)) ** 2
-            kernel = csr_matrix((np.exp(-dists), (x, y)), shape=K.shape)
+                    dists = (dists / (adap_sd[x] + 1e-10))
         else:
             if sigma is not None:
                 if sigma == 0:
                     sigma = 1e-10
                 dists = (dists / sigma) ** 2
-            kernel = csr_matrix((np.exp(-dists), (x, y)), shape=K.shape)
-        if symmetrize:
-            kernel = (kernel + kernel.T) / 2
-    kernel[(np.arange(kernel.shape[0]), np.arange(kernel.shape[0]))] = 0
-    # handle nan, zeros
-    kernel.data = np.where(np.isnan(kernel.data), 0, kernel.data)
+        W = csr_matrix((np.exp(-dists), (x, y)), shape=[N, N])
+    if symmetrize:
+        W = (W + W.T) / 2
+    W[(np.arange(N), np.arange(N))] = 0
+    # handle nan
+    W.data = np.where(np.isnan(W.data), 1, W.data)
     if not return_densities:
-        return kernel
+        return W
     else:
-        return kernel, dens_dict
+        return W, dens_dict
 
 
 class Kernel(BaseEstimator, TransformerMixin):
@@ -315,6 +325,15 @@ class Kernel(BaseEstimator, TransformerMixin):
     alpha_decaying : bool (optional, default False).
         Whether to use an adaptively decaying kernel.
 
+    laplacian_type : string (optional, default 'normalized')
+        The type of Laplacian to compute. Possible values are: 'normalized', 'unnormalized', 'random_walk' and 'geometric'.
+
+    anisotropy : float (optional, default 0).
+        The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.
+
+    semi_aniso : bool (optional, default False).
+        Whether to use semi-anisotropic diffusion. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
+
     symmetrize : bool (optional, default True).
         Whether to symmetrize the kernel matrix after normalizations.
 
@@ -340,22 +359,22 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     K : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The kernel matrix.
-    
+
     dens_dict : dict
         Dictionary containing the density information for each point in the dataset for the computed kernel.
 
     L : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The laplacian matrix of the kernel graph.
-    
+
     P : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The diffusion operator of the kernel graph.
 
     SP : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The shortest-path matrix.
-    
+
     degree : np.ndarray, shape (n_samples,)
         The degree of each point in the adjacency graph.
-    
+
     weighted_degree : np.ndarray, shape (n_samples,)
         The weighted degree of each point in the kernel graph.
 
@@ -370,12 +389,17 @@ class Kernel(BaseEstimator, TransformerMixin):
                  sigma=None,
                  adaptive_bw=True,
                  expand_nbr_search=False,
-                 alpha_decaying=True,
+                 alpha_decaying=False,
                  symmetrize=True,
                  backend='nmslib',
                  n_jobs=1,
                  laplacian_type='normalized',
-                 cache_input=False
+                 anisotropy=1,
+                 semi_aniso=False,
+                 n_landmarks=None,
+                 cache_input=False,
+                 verbose=False,
+                 random_state=None
                  ):
         self.n_neighbors = n_neighbors
         self.fuzzy = fuzzy
@@ -385,12 +409,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.backend = backend
         self.metric = metric
         self.sigma = sigma
+        self.semi_aniso = semi_aniso
         self.adaptive_bw = adaptive_bw
         self.expand_nbr_search = expand_nbr_search
         self.alpha_decaying = alpha_decaying
         self.symmetrize = symmetrize
+        self.n_landmarks = n_landmarks
         self.laplacian_type = laplacian_type
         self.cache_input = cache_input
+        self.verbose = verbose
+        self.random_state = random_state
         self.X = None
         self._K = None
         self.N = None
@@ -404,27 +432,28 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._SP = None
         self._P = None
         self._connected = None
-        self.D_inv_sqrt = None
-        self._components = None
-        self._components_indices = None
-        self._sigma = None
-        self._rho = None
-        self._adaptive_bw = None
-        self._omega = None
-        self._expanded_k_neighbor = None
-        self._adaptive_bw_nbr_expanded = None
-        self._omega_nbr_expanded = None
+        self.D_inv_sqrt_ = None
+        self.components_ = None
+        self.components_indices_ = None
+        self.sigma_ = None
+        self.rho_ = None
+        self.adaptive_bw_ = None
+        self.omega_ = None
+        self.expanded_k_neighbor_ = None
+        self.adaptive_bw_nbr_expanded_ = None
+        self.omega_nbr_expanded_ = None
         self._sample_densities = None
-        self._knn = None
+        self.knn_ = None
         self.dens_dict = None
+        self.anisotropy = anisotropy
 
     def __repr__(self):
         if self._K is not None:
-            if (self.N is not None) and (self.M is not None):
+            if self.metric == 'precomputed':
+                msg = "Kernel() estimator fitted with precomputed distance matrix"
+            elif (self.N is not None) and (self.M is not None):
                 msg = "Kernel() estimator fitted with %i samples and %i observations" % (
                     self.N, self.M)
-            elif self.metric == 'precomputed':
-                msg = "Kernel() estimator fitted with precomputed distance matrix"
             else:
                 msg = "Kernel() estimator without valid fitted data."
         else:
@@ -446,7 +475,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             msg = msg + kernel_msg
         return msg
 
-    def fit(self, X, **kwargs):
+    def fit(self, X, recompute=False, **kwargs):
         """
         Fits the kernel matrix to the data.
 
@@ -458,6 +487,9 @@ class Kernel(BaseEstimator, TransformerMixin):
             parameters that can make the process faster and more informational depending
             on your dataset.
 
+        recompute : bool (optional, default False).
+            Whether to recompute the kernel if it has already been computed.
+
         **kwargs : dict, optional
             Additional arguments to be passed to the k-nearest-neighbor backend.
 
@@ -466,51 +498,51 @@ class Kernel(BaseEstimator, TransformerMixin):
             The kernel matrix.
 
         """
-        if self.cknn:
-            self.laplacian_type = 'unnormalized'
+        self.random_state = check_random_state(self.random_state)
         if self.fuzzy:
             self.cknn = False
         if self.cache_input:
             self.X = X
         self.N, self.M = X.shape
-        self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
-                                            n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
-                                            expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
-                                            backend=self.backend, n_jobs=self.n_jobs, **kwargs)
-        self._knn = self.dens_dict['knn']
+        if self._K is None or (self._K is not None and recompute):
+            self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
+                                                     n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
+                                                     expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
+                                                     backend=self.backend, n_jobs=self.n_jobs, verbose=self.verbose, **kwargs)
+        if self.metric != 'precomputed':
+            self.knn_ = self.dens_dict['knn']
         if self.fuzzy:
-            self._sigma = self.dens_dict['sigma']
-            self._rho = self.dens_dict['rho']
+            self.sigma_ = self.dens_dict['sigma']
+            self.rho_ = self.dens_dict['rho']
         elif self.cknn:
             self._A = self.dens_dict['unweighted_adjacency']
-            self._adaptive_bw = self.dens_dict['adaptive_bw']
+            self.adaptive_bw_ = self.dens_dict['adaptive_bw']
         else:
             if self.adaptive_bw:
-                self._adaptive_bw = self.dens_dict['adaptive_bw']
-                self._omega = self.dens_dict['omega']
+                self.adaptive_bw_ = self.dens_dict['adaptive_bw']
+                self.omega_ = self.dens_dict['omega']
             if self.expand_nbr_search:
-                self._expanded_k_neighbor = self.dens_dict['expanded_k_neighbor']
-                self._adaptive_bw_nbr_expanded = self.dens_dict['adaptive_bw_nbr_expanded']
-                self._omega_nbr_expanded = self.dens_dict['omega_nbr_expanded']
+                self.expanded_k_neighbor_ = self.dens_dict['expanded_k_neighbor']
+                self.adaptive_bw_nbr_expanded_ = self.dens_dict['adaptive_bw_nbr_expanded']
+                self.omega_nbr_expanded_ = self.dens_dict['omega_nbr_expanded']
         return self
 
-    def transform(self, X):
+    def transform(self, X=None):
         """
         Returns the kernel matrix. Here for compability with scikit-learn only.
         """
         if self._K is None:
             raise ValueError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
-        if self.return_densities:
-            return self._K, self.dens_dict
+
         return self._K
 
-    def fit_transform(self, X, **kwargs):
+    def fit_transform(self, X, y=None):
         """
         Fits the kernel matrix to the data and returns the kernel matrix.
         Here for compability with scikit-learn only.
         """
-        self.fit(X, **kwargs)
+        self.fit(X)
         return self._K
 
     def adjacency(self):
@@ -533,10 +565,10 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         Returns the k-nearest-neighbors graph.
         """
-        if self._knn is None:
+        if self.knn_ is None:
             raise ValueError(
-                "No k-nearest-neighbors graph has been fitted yet. Call fit() first.")
-        return self._knn
+                "No k-nearest-neighbors graph has been fitted yet or precomputed versions were used!")
+        return self.knn_
 
     @property
     def K(self):
@@ -617,43 +649,46 @@ class Kernel(BaseEstimator, TransformerMixin):
             return self.laplacian()
         return self._L
 
-    def diff_op(self, alpha=1, symmetric=False):
+    def diff_op(self, anisotropy=1.0, symmetric=False):
         """
         Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
         Parameters
         ----------
-        alpha : float (optional, default 1.0).
-            Anisotropy to apply. 'Alpha' in the diffusion maps literature.
+        anisotropy : float (optional, default None).
+            Anisotropy to apply. 'Alpha' in the diffusion maps literature. Defaults to the anisotropy defined in the constructor.
 
         symmetric : bool (optional, default False).
             Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
-            when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
+            when using anisotropy (alpha > 1), as the diffusion operator P would be assymetric otherwise, which can be problematic
             during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
-            operator can be obtained by left multiplying by Kernel.D_inv_sqrt.
+            operator can be obtained by left multiplying by Kernel.D_inv_sqrt_.
 
         Returns
         -------
         P : scipy.sparse.csr_matrix
             The graph diffusion operator.
 
-        Populates the Kernel.D_inv_sqrt slot.
+        Populates the Kernel.D_inv_sqrt_ slot.
 
         """
+        if anisotropy is None:
+            anisotropy = self.anisotropy
         if self._P is None:
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
-            if alpha is None or alpha < 0:
-                alpha = 0
-            if alpha > 1:
-                alpha = 1.0
+            if anisotropy is None or anisotropy < 0:
+                anisotropy = 0
+            if anisotropy > 1:
+                anisotropy = 1.0
             if symmetric:
-                self._P, self.D_inv_sqrt = diffusion_operator(
-                    self.K, alpha=alpha, symmetric=symmetric)
+                self._P, self.D_inv_sqrt_ = diffusion_operator(
+                    self.K, alpha=anisotropy, semi_aniso=self.semi_aniso, symmetric=symmetric)
             else:
                 self._P = diffusion_operator(
-                    self.K, alpha=alpha, symmetric=symmetric)
+                    self.K, alpha=anisotropy, semi_aniso=self.semi_aniso, symmetric=symmetric)
+            self._P = (self._P + self._P.T) / 2
         return self._P
 
     @property
@@ -678,7 +713,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             not all sample nodes.
         indices : list of int (optional, default None).
             If None, the shortest paths are computed between all pairs of nodes. Else,
-            the shortest paths are computed between all pairs of nodes with indices in the list.
+            the shortest paths are computed between all pairs of nodes and nodes with specified indices.
 
         Returns
         -------
@@ -692,7 +727,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             if landmark:
                 print('Landmarks are still to be implemented.')
             SP = shortest_path(self.K, method='auto',
-                            directed=False, indices=indices)
+                               directed=False, indices=indices)
             SP = (SP + SP.T) / 2
             SP[np.where(SP == 0)] = np.inf
             SP[(np.arange(SP.shape[0]), np.arange(SP.shape[0]))] = 0
@@ -707,6 +742,14 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._SP is None:
             return self.shortest_paths()
         return self._SP
+
+    def get_indices_distances(self, n_neighbors=None, kernel=True):
+        if n_neighbors is None:
+            n_neighbors = self.n_neighbors
+        if kernel:
+            return get_indices_distances_from_sparse_matrix(self.K, n_neighbors)
+        else:
+            return get_indices_distances_from_sparse_matrix(self.knn_, n_neighbors)
 
     def _calculate_imputation_error(
         self, data, data_prev=None
@@ -788,6 +831,13 @@ class Kernel(BaseEstimator, TransformerMixin):
             Y_imp = np.dot(P_diffused.toarray(), Y)
         return Y_imp
 
+    def _get_landmarks(self, X, n_landmarks=None):
+        if n_landmarks is None:
+            if self.n_landmarks is None:
+                raise ValueError(
+                    "No number of landmarks has been specified. Call fit() first with the parameter `n_landmarks` set to an integer.")
+            n_landmarks = self.n_landmarks
+
     def filter(self, signal, replicates=None,
                beta=50,
                target=None,
@@ -797,7 +847,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                solver="chebyshev",
                chebyshev_order=100):
         """
-        This is derived from [MELD](https://github.com/KrishnaswamyLab/MELD) to estimate sample associated density estimation.
+        This is inspired from [MELD](https://github.com/KrishnaswamyLab/MELD) to estimate sample associated density estimation.
         However, you can naturally use this for any signal in your data, not just samples of specific conditions. In practice, this is just
         a simple [PyGSP](https://pygsp.readthedocs.io/en/stable/reference/filters.html#module-pygsp.filters) filter on a graph.
         Indeed, it calls PyGSP, so you'll need it installed to use this function.
@@ -878,8 +928,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                     _sample_indicators, columns=_LB.classes_
                 )
             sample_indicators = (
-                    sample_indicators / sample_indicators.sum(axis=0)
-                )
+                sample_indicators / sample_indicators.sum(axis=0)
+            )
             # convert to pygsp format
             # will need to pad 1's to diagonal for filtering
             if target is None:
@@ -892,7 +942,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                 def filterfunc(x):
                     return 1 / (1 + (beta * np.abs(x / graph.lmax - offset)) ** order)
             filt = filters.Filter(graph, filterfunc)
-            densities = filt.filter(sample_indicators, method=solver, order=chebyshev_order)
+            densities = filt.filter(
+                sample_indicators, method=solver, order=chebyshev_order)
             self._sample_densities = pd.DataFrame(
                 densities, index=_labels_index, columns=sample_indicators.columns
             )
@@ -907,8 +958,10 @@ class Kernel(BaseEstimator, TransformerMixin):
         replicates = np.unique(replicates)
         sample_likelihoods = self._sample_densities.copy()
         for rep in replicates:
-            curr_cols = self._sample_densities.columns[[col.endswith(rep) for col in self._sample_densities.columns]]
-            sample_likelihoods[curr_cols] = normalize(self._sample_densities[curr_cols], norm='l1')
+            curr_cols = self._sample_densities.columns[[
+                col.endswith(rep) for col in self._sample_densities.columns]]
+            sample_likelihoods[curr_cols] = normalize(
+                self._sample_densities[curr_cols], norm='l1')
         return sample_likelihoods
 
     def is_connected(self):
@@ -942,7 +995,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._connected = True
         return self._connected
 
-    def connected_components(self, target=None):
+    def _connected_components(self, target=None):
         """
         Finds the connected components of the kernel matrix by default.
         Other matrices can be specified for use with the `target` parameter.
@@ -997,10 +1050,10 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         return rd
 
-    def sparsify(self, epsilon=0.1, maxiter=30, random_state=None):
+    def sparsify(self, epsilon=0.1, maxiter=10, random_state=None):
         """
-        Sparsify a graph (with Spielman-Srivastava). This originally called PyGSP but now
-        has some adaptations.
+        Sparsify a graph (with the Spielman-Srivastava method). This originally only called PyGSP but now
+        also has some adaptations.
 
         Parameters
         ----------
@@ -1117,7 +1170,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             from pygsp import graphs, reduction
         except ImportError:
             raise ImportError(
-                "pygsp is not installed. Please install it with `pip install pygsp` to use filtering functions.")
+                "pygsp is not installed. Please install it with `pip install pygsp` to use interpolating functions.")
         # convert to pygsp format
         if target is None:
             graph = graphs.Graph(self.K)
@@ -1127,7 +1180,6 @@ class Kernel(BaseEstimator, TransformerMixin):
         signal_interpolated = reduction.interpolate(
             graph, f_subsampled, keep_inds, order, reg_eps)
         return signal_interpolated
-
 
     def write_pkl(self, wd=None, filename='mykernel.pkl'):
         try:
@@ -1140,3 +1192,4 @@ class Kernel(BaseEstimator, TransformerMixin):
         with open(wd + filename, 'wb') as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
         return print('Kernel saved at ' + wd + filename)
+

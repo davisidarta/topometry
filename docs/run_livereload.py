@@ -1,3 +1,4 @@
+import sys
 try:
     from livereload import Server, shell
 except ImportError:

@@ -11,13 +11,15 @@ except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def decay_plot(evals):
+def decay_plot(evals, title=None, figsize=(9, 5), fontsize=10):
     """
-    Plot the eigenspectrum decay.
+    Plot the eigenspectrum decay and its first derivatives.
 
     Parameters
     ----------
     evals : Eigenvalues to be visualized.
+
+    title : Title of the plot.
 
     Returns
     -------
@@ -25,21 +27,43 @@ def decay_plot(evals):
     A simple plot of the eigenspectrum decay.
 
     """
-    use_eigs = int(np.sum(evals > 0, axis=0))
-    ax1 = plt.subplot(1, 1, 1)
+    fig = plt.figure(figsize=figsize)
+    max_eigs = int(np.sum(evals > 0, axis=0))
+    first_diff = np.diff(evals)
+    eigengap = np.argmax(first_diff) + 1
+    ax1 = fig.add_subplot(1, 2, 1)
+    if title is not None:
+        plt.suptitle(title, fontsize=fontsize)
     ax1.plot(range(0, len(evals)), evals, 'b')
     ax1.set_ylabel('Eigenvalues')
     ax1.set_xlabel('Eigenvectors')
-    if use_eigs == len(evals):
-        # Found a discrete eigengap
+    if max_eigs == len(evals):
+        # Could not find a discrete eigengap crossing 0
         ax1.vlines(
-            use_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label=''
+            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
         )
-        ax1.set_title('Spectrum decay and eigengap (%i)' %
-                      int(use_eigs))
+        plt.suptitle('Spectrum decay and eigengap (%i)' %
+                      int(eigengap), fontsize=fontsize)
     else:
-        ax1.set_title('Spectrum decay')
+        ax1.vlines(
+            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+        )
+        plt.suptitle('Spectrum decay and eigengap (%i)' %
+                      int(max_eigs), fontsize=fontsize)
     ax1.legend(loc='best')
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2.scatter(range(0, len(first_diff)), first_diff)
+    ax2.set_ylabel('Eigenvalues first derivatives')
+    ax2.set_xlabel('Eigenvalues')
+    if max_eigs == len(evals):
+        # Could not find a discrete eigengap crossing 0
+        ax2.vlines(
+            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+        )
+    else:
+        ax2.vlines(
+            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+        )
     plt.tight_layout()
     return plt.show()
 
@@ -290,7 +314,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8), fontsize
     fig.suptitle('Graphs scores:', fontsize=fontsize)
     ax1.bar(keys, values, color=k_color)
     ax1.set_title('Geodesic Spearman R', fontsize=fontsize)
-    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=45)
+    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
     fig.tight_layout()
 
     if return_plot:
@@ -328,54 +352,6 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8), fontsi
 
 
 
-def plot_all_layouts(TopOGraph, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
-    n_bases = 0
-    n_graphs = 0
-    n_layouts = 0
-    if TopOGraph.MSDiffMap is not None:
-        n_bases = n_bases + 1
-    if TopOGraph.CLapMap is not None:
-        n_bases = n_bases + 1
-    if TopOGraph.FuzzyLapMap is not None:
-        n_bases = n_bases + 1
-    if TopOGraph.DiffGraph is not None:
-        n_graphs = n_graphs + 1
-    if TopOGraph.FuzzyGraph is not None:
-        n_graphs = n_graphs + 1
-    if TopOGraph.CknnGraph is not None:
-        n_graphs = n_graphs + 1
-    if TopOGraph.tSNE_Y is not None:
-        n_layouts = n_layouts + 1
-    if TopOGraph.MAP_Y is not None:
-        n_layouts = n_layouts + 1
-    if TopOGraph.TriMAP_Y is not None:
-        n_layouts = n_layouts + 1
-    if TopOGraph.PaCMAP_Y is not None:
-        n_layouts = n_layouts + 1
-    if TopOGraph.MDE_Y is not None:
-        n_layouts = n_layouts + 1
-    embeddings = []
-    emb_number = 0
-    emb_list = list()
-    for emb in embeddings:
-        if emb is not None:
-            emb_number = emb_number + 1
-            emb_list.append(emb)
-    fig, axes_tuple = plt.subplots(n_graphs, n_layouts)
-
-    for i in range(len(emb_list)):
-        axes_tuple[i].scatter(
-            emb_list[i][:, 0],
-            emb_list[i][:, 1],
-            cmap=cmap,
-            c=labels,
-            s=pt_size,
-            marker=marker,
-            alpha=opacity)
-
-    return plt.show()
-
-
 def plot_point_cov(points, nstd=2, ax=None, **kwargs):
     pos = points.mean(axis=0)
     cov = np.cov(points, rowvar=False)
@@ -397,8 +373,8 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, 
-                        labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
+def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, title=None, ax=None,
+                        labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
@@ -454,22 +430,26 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
     sample_points = rng.choice(range(N), n_plot, replace=False)
-    f, ax = plt.subplots(figsize=figsize)
-    ax.set_aspect('equal')  # if an ellipse is a circle no distortion occured.
+    if ax is None:
+        f, ax = plt.subplots(figsize=figsize)
+    if title is not None:
+        ax.set_title(title)
+    ax.grid(False)
+    ax.set_aspect('equal', 'datalim')  # if an ellipse is a circle no distortion occured.
     if labels is not None:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap, *kwargs)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap, **kwargs)
     else:
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, *kwargs)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, **kwargs)
     for i in range(n_plot):
         ii = sample_points[i]
         cov = H_emb[ii, :, :]
         if labels is not None:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none', color=colors[labels[ii]],
-                             alpha=alpha, **kwargs)
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None, color=colors[labels[ii]],
+                             alpha=alpha)
         else:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none',
-                             alpha=alpha, **kwargs)
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None,
+                             alpha=alpha)
     plt.show()
 
 
@@ -482,4 +462,29 @@ def draw_edges(ax, data, kernel, color='black', **kwargs):
                 ax.plot(data[[i,j],0], data[[i,j],1],
                         color=color, alpha=affinity, zorder=0, **kwargs)
     
+
+
+def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15, title='Eigenbasis local scores'):
+    keys = scores.keys()
+    values = scores.values()
+    cmap = get_cmap(len(keys), name='tab20')
+    k_color = list()
+    for k in np.arange(len(keys)):
+        k_color.append(cmap(k))
+
+    fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
+    fig.suptitle(title, fontsize=round(fontsize * 1.5))
+    ax1.set_xticklabels(keys, fontsize=fontsize, rotation=90)
+    ax1.bar(keys, values, color=k_color)
+    if log:
+        ax1.set_yscale('log')
+    fig.tight_layout()
+    if return_plot:
+        return plt.show()
+    else:
+        return fig
+
+def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
+    for key, value in evaluation_dict.items():
+        plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 

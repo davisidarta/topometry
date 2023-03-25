@@ -1,10 +1,9 @@
-# Quick-start
+# Quick-start cheat-sheet
 
 ## Fitting a TopOGraph
 Now, let's go through a quick start!
 
-TopOMetry functions around 
-
+TopOMetry functions around the `TopOGraph` class. It contains dictionaries, attributes and functions to analyse your data.
 From a  data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` 
 with default parameters: 
 

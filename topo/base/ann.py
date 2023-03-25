@@ -14,21 +14,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from joblib import cpu_count
 
-
 def kNN(X, Y=None,
         n_neighbors=5,
         metric='euclidean',
-        n_jobs=-1,
         backend='nmslib',
-        low_memory=True,
+        n_jobs=-1,
         symmetrize=True,
-        M=15,
-        p=11/16,
-        efC=50,
-        efS=50,
-        n_trees=50,
         return_instance=False,
-        verbose=False, **kwargs):
+        verbose=False,
+         **kwargs):
 
     """
     General function for computing k-nearest-neighbors graphs using NMSlib, HNSWlib, PyNNDescent, ANNOY, FAISS or scikit-learn.
@@ -69,25 +63,12 @@ def kNN(X, Y=None,
         Number of threads to be used in computation. Defaults to 1. Set to -1 to use all available CPUs.
         Most algorithms are highly scalable to multithreading.
 
-    M : int (optional, default 30).
-        defines the maximum number of neighbors in the zero and above-zero layers during HSNW
-        (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
-        HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
-
-    efC : int (optional, default 100).
-        A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-
-    efS : int (optional, default 100).
-        A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-    
     symmetrize : bool (optional, default True).
         Whether to symmetrize the output of approximate nearest neighbors search. The default is True
         and uses additive symmetrization, i.e. knn = ( knn + knn.T ) / 2 .
+
+    return_instance : bool (optional, default False).
+        Whether to also return the backend instance (i.e. the nearest-neighbors class). The default is False.
 
     **kwargs : dict (optional, default {}).
         Additional parameters to be passed to the backend approximate nearest-neighbors library.
@@ -96,8 +77,11 @@ def kNN(X, Y=None,
     Returns
     -------
 
-    A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.
+    knn_graph: scipy.sparse.csr_matrix, shape (n_samples, n_samples) 
+        A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.
 
+    knn_instance: object (optional, default None)
+        The backend instance (i.e. the nearest-neighbors class). Returned only if return_instance is True.
     """
     if n_jobs == -1:
         from joblib import cpu_count
@@ -110,40 +94,23 @@ def kNN(X, Y=None,
         # Construct an approximate k-nearest-neighbors graph
         nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
                                       metric=metric,
-                                      p=p,
                                       method='hnsw',
                                       n_jobs=n_jobs,
-                                      M=M,
-                                      efC=efC,
-                                      efS=efS,
-                                      verbose=verbose).fit(X)
+                                      verbose=verbose, **kwargs).fit(X)
     elif backend == 'hnswlib':
         nbrs = HNSWlibTransformer(n_neighbors=n_neighbors,
                                        metric=metric,
                                        n_jobs=n_jobs,
-                                       M=M,
-                                       efC=efC,
-                                       efS=efS,
-                                       verbose=False).fit(X)
+                                       verbose=False, **kwargs).fit(X)
     elif backend == 'pynndescent':
         try:
             from pynndescent import PyNNDescentTransformer
         except ImportError:
             return(print("PyNNDescent is required to use `pynndescent` as a kNN backend. Please install it with `pip install pynndescent`. "))
-        if metric == 'lp':
-            metric = 'minkowski'
-            metric_kwds={'p':p}
-            nbrs = PyNNDescentTransformer(metric=metric,
+        nbrs = PyNNDescentTransformer(metric=metric,
                                           n_neighbors=n_neighbors,
                                           n_jobs=n_jobs,
-                                          low_memory=low_memory,
-                                          metric_kwds=metric_kwds,
-                                          verbose=verbose, **kwargs).fit(X)
-        else:
-            nbrs = PyNNDescentTransformer(metric=metric,
-                                          n_neighbors=n_neighbors,
-                                          n_jobs=n_jobs,
-                                          low_memory=low_memory,
+                                          low_memory=True,
                                           verbose=verbose, **kwargs).fit(X)
     elif backend == 'annoy':
         if issparse(X):
@@ -154,8 +121,7 @@ def kNN(X, Y=None,
                 Y = Y.toarray()
         nbrs = AnnoyTransformer(metric=metric,
                                 n_neighbors=n_neighbors,
-                                n_jobs=n_jobs,
-                                n_trees=n_trees, **kwargs).fit(X)
+                                n_jobs=n_jobs, **kwargs).fit(X)
 
     elif backend == 'faiss':
         try:
@@ -171,12 +137,6 @@ def kNN(X, Y=None,
             print('Falling back to sklearn nearest-neighbors!')
         backend = 'sklearn'
 
-    if backend != 'sklearn':
-        if Y is None:
-            knn = nbrs.transform(X)
-        else:
-            knn = nbrs.transform(Y)
-
     if backend == 'sklearn':
         # Construct a k-nearest-neighbors graph
         nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs, **kwargs).fit(X)
@@ -184,6 +144,11 @@ def kNN(X, Y=None,
             knn = nbrs.kneighbors_graph(X, mode='distance')
         else:
             knn = nbrs.kneighbors_graph(Y, mode='distance')
+    else:
+        if Y is None:
+            knn = nbrs.transform(X)
+        else:
+            knn = nbrs.transform(Y)
     if metric in ['angular', 'cosine']:
         # distances must be monotonically decreasing, needs to be inverted with angular metrics
         # otherwise, we'll have a similarity metric, not a distance metric
@@ -192,9 +157,9 @@ def kNN(X, Y=None,
         if Y is None:
             knn = ( knn + knn.T ) / 2
             knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-            knn.data = np.where(np.isnan(knn.data), 0, knn.data)
+            knn.data = np.where(np.isnan(knn.data), 1, knn.data)
         else:
-            knn = knn.dot(knn.T)
+            warn('Symmetrization not performed when Y is provided.')
     if return_instance:
         return nbrs, knn
     else:

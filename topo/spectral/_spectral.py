@@ -35,27 +35,40 @@ def _dense_normalized_random_walk_laplacian(W):
     Lr = np.eye(*W.shape) - (np.diag(1/D.diagonal())@W)
     return Lr
 
-def _dense_anisotropic_diffusion(W, alpha=1):
-    # Note the resulting operator is not symmetric!
+def _dense_diffusion(W, alpha=0, semi_aniso=False):
     D = _dense_degree(W)
-    Da = np.diag(1/(D.diagonal()**alpha))
-    Wa = Da @ (W @ Da)
-    Dd = _dense_degree(Wa)
-    Pa = (np.diag(1/Dd.diagonal())@Wa)
+    if alpha > 0:
+        Da = np.diag(1/(D.diagonal()**alpha))
+        Wa = Da @ (W @ Da)
+        Dd = _dense_degree(Wa)
+        if semi_aniso:
+            Pa = (np.diag(1/Dd.diagonal())@W)
+        else:
+            Pa = (np.diag(1/Dd.diagonal())@Wa)
+    else:
+        Pa = (np.diag(1/D.diagonal())@W)
     return Pa
 
-def _dense_anisotropic_diffusion_symmetric(W, alpha=1, return_D_inv_sqrt=False):
+def _dense_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=False):
     if alpha < 0:
         alpha = 0
     D = _dense_degree(W)
-    # Dinva is D^-alpha
-    Dinva = np.diag(1/(D.diagonal()**alpha))
-    Wa = Dinva @ (W @ Dinva)
-    Da = _dense_degree(Wa)
-    Dalpha_inv = np.diag(1/(Da.diagonal()))
-    Pa = Dalpha_inv @ Wa
+    if alpha > 0:
+        # Dinva is D^-alpha
+        Dinva = np.diag(1/(D.diagonal()**alpha))
+        Wa = Dinva @ (W @ Dinva)
+        Da = _dense_degree(Wa)
+        Dalpha_inv = np.diag(1/(Da.diagonal()))
+        if semi_aniso:
+            Pa = Dalpha_inv @ W
+            D_right = _dense_degree(W)
+        else:
+            Pa = Dalpha_inv @ Wa
+            D_right = _dense_degree(Wa)
+    else:
+        Pa = (np.diag(1/D.diagonal())@W)
+        D_right = _dense_degree(W)
     # Now let's build the symmetrized version Pasym:
-    D_right = _dense_degree(Pa)
     D_left = D_right.copy()
     D_right = np.sqrt(D_right.diagonal())
     D_left = np.diag(1/np.sqrt(D_left.diagonal()))
@@ -97,45 +110,60 @@ def _sparse_symmetrized_normalized_laplacian(W):
 def _sparse_normalized_random_walk_laplacian(W):
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
-    # D ^-1/2:
+    # D ^-1:
     D[D != 0] = 1 / D[D != 0]
     Dinv = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
     I = sparse.identity(W.shape[0], dtype=np.float32)
     Lr = I - Dinv.dot(W)
     return Lr
 
-def _sparse_anisotropic_diffusion(W, alpha=1, return_d_alpha_inv=False):
+def _sparse_diffusion(W, alpha=0, semi_aniso=False):
     # Note the resulting operator is not symmetric!
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
-    D[D != 0] = D[D != 0] ** (-alpha)
-    # Dinva is D^-alpha
-    Dinva = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
-    Wa = Dinva.dot(W).dot(Dinva)
-    Da = np.ravel(Wa.sum(axis=1))
-    Da[Da != 0] = 1 / Da[Da != 0]
-    # Da is now D(alpha)^-1
-    Pa = sparse.csr_matrix((Da, (range(N), range(N))), shape=[N, N]).dot(Wa)
-    if return_d_alpha_inv:
-        return Pa, Da
+    if alpha > 0:
+        D[D != 0] = D[D != 0] ** (-alpha)
+        # Dinva is D^-alpha
+        Dinva = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
+        Wa = Dinva.dot(W).dot(Dinva)
+        Da = np.ravel(Wa.sum(axis=1))
+        Da[Da != 0] = 1 / Da[Da != 0]
+        # Da is now D(alpha)^-1
+        if semi_aniso:
+            # Weights the original kernel with the reweighted degree (non-canonical idea of mine, but works quite well)
+            P = sparse.csr_matrix((Da, (range(N), range(N))), shape=[N, N]).dot(W)
+        else:
+            P = sparse.csr_matrix((Da, (range(N), range(N))), shape=[N, N]).dot(Wa)
     else:
-        return Pa
+        D[D != 0] = 1 / D[D != 0]
+        Dd = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
+        P = Dd.dot(W)
+    return P
 
-def _sparse_anisotropic_diffusion_symmetric(W, alpha=1, return_D_inv_sqrt=False):
+def _sparse_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=False):
     if alpha < 0:
         alpha = 0
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
-    D[D != 0] = D[D != 0] ** (-alpha)
-    # Dinva is D^-alpha
-    Dinva = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
-    Wa = Dinva.dot(W).dot(Dinva)
-    Da = np.ravel(Wa.sum(axis=1))
-    Da[Da != 0] = 1 / Da[Da != 0]
-    Dalpha_inv = sparse.csr_matrix((Da, (range(N), range(N))), shape=[N, N])
-    Pa = Dalpha_inv.dot(Wa)
-    # Now let's build the symmetrized version Psym:
-    D_right = np.ravel(W.sum(axis=1))
+    if alpha > 0:
+        D[D != 0] = D[D != 0] ** (-alpha)
+        # Dinva is D^-alpha
+        Dinva = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
+        Wa = Dinva.dot(W).dot(Dinva)
+        Da = np.ravel(Wa.sum(axis=1))
+        Da[Da != 0] = 1 / Da[Da != 0]
+        Dalpha_inv = sparse.csr_matrix((Da, (range(N), range(N))), shape=[N, N])
+        if semi_aniso:
+            # Weights the original kernel with the reweighted degree (non canonical idea of mine, but works quite well)
+            Pa = Dalpha_inv.dot(W)
+            D_right = np.ravel(W.sum(axis=1))
+        else:
+            Pa = Dalpha_inv.dot(Wa)
+            D_right = np.ravel(Wa.sum(axis=1))
+    else:
+        D[D != 0] = 1 / D[D != 0]
+        Pa = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N]).dot(W)
+        D_right = np.ravel(W.sum(axis=1))
     D_left = D_right.copy()
     D_right[D_right != 0] = np.sqrt(D_right[D_right != 0])
     D_left[D_left != 0] = 1 / np.sqrt(D_left[D_left != 0])
@@ -161,7 +189,7 @@ def graph_laplacian(W, laplacian_type='random_walk'):
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
     laplacian : str (optional, default 'random_walk').
-        The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
+        The type of laplacian to use. Can be 'unnormalized', 'normalized', 'geometric' or 'random_walk'.
 
     Returns
     -------
@@ -246,12 +274,11 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True,
     # Add one more eig if drop_first is True
     if drop_first:
         n_eigs = n_eigs + 1
-    num_lanczos_vectors = max(2 * n_eigs + 2, int(np.sqrt(W.shape[0])))
     # Compute eigenvalues and eigenvectors
     try:
         if L.shape[0] < 1000000:
             evals, evecs = sparse.linalg.eigsh(
-                L, k=n_eigs, which='SM', tol=eigen_tol, ncv=num_lanczos_vectors, maxiter=L.shape[0] * 5)
+                L, k=n_eigs, which='SM', tol=eigen_tol, maxiter=L.shape[0] * 5)
         else:
             evals, evecs = sparse.linalg.lobpcg(
                 L, random_state.normal(size=(L.shape[0], n_eigs)), largest=False, tol=1e-8
@@ -282,7 +309,7 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True,
         return evecs
 
 
-def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
+def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False):
     """
     Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
@@ -301,6 +328,9 @@ def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
         during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
         operator can be obtained by left multiplying by D_inv_sqrt (returned if `return_D_inv_sqrt` set to True).
 
+    semi_aniso : bool (optional, default False).
+        Whether to use semi-anisotropic diffusion. This reweights the original kernel  (not the renormalized kernel) by the renormalized degree.
+
     return_D_inv_sqrt : bool (optional, default False).
         Whether to return a tuple of diffusion operator P and inverse square root of the degree matrix.
 
@@ -314,16 +344,16 @@ def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
     # Compute diffusion operator
     if sparse.issparse(W):
         if symmetric:
-            P, D_left = _sparse_anisotropic_diffusion_symmetric(
-                W, alpha, return_D_inv_sqrt=return_D_inv_sqrt)
+            P, D_left = _sparse_diffusion_symmetric(
+                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
         else:
-            P = _sparse_anisotropic_diffusion(W, alpha)
+            P = _sparse_diffusion(W, alpha, semi_aniso)
     else:
         if symmetric:
-            P, D_left = _dense_anisotropic_diffusion_symmetric(
-                W, alpha, return_D_inv_sqrt=return_D_inv_sqrt)
+            P, D_left = _dense_diffusion_symmetric(
+                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
         else:
-            P = _dense_anisotropic_diffusion(W, alpha)
+            P = _dense_diffusion(W, alpha, semi_aniso)
     if symmetric:
         if return_D_inv_sqrt:
             return P, D_left
@@ -333,7 +363,7 @@ def diffusion_operator(W, alpha=1.0, symmetric=True, return_D_inv_sqrt=False):
         return P
 
 
-def DM(W, n_eigs=10, alpha=1.0, return_evals=False, symmetric=True, eigen_tol=10e-4, t=None):
+def DM(W, n_eigs=10, alpha=0, return_evals=False, symmetric=False, eigen_tol=10e-4, t=None):
     """
     Performs [Diffusion Maps](https://doi.org/10.1016/j.acha.2006.04.006), given a adjacency or affinity graph W.
     The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is),
@@ -349,11 +379,15 @@ def DM(W, n_eigs=10, alpha=1.0, return_evals=False, symmetric=True, eigen_tol=10
     n_eigs : int (optional, default 10).
         The number of eigenvectors to return.
 
-    alpha : float (optional, default 1.0).
+    alpha : float (optional, default 0).
         Anisotropy to be applied to the diffusion map. Refered to as alpha in the diffusion maps literature.
 
     return_evals : bool (optional, default False).
         Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
+
+    symmetric : bool (optional, default False).
+        Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator, but
+        that can also be obtained by a simplistic mean with its the transpose with near identical results.
 
     eigen_tol : float (optional, default 0).
         The tolerance for the eigendecomposition in scipy.sparse.linalg.eigsh().
@@ -382,9 +416,8 @@ def DM(W, n_eigs=10, alpha=1.0, return_evals=False, symmetric=True, eigen_tol=10
     else:
         P = diffusion_operator(W, alpha, symmetric, return_D_inv_sqrt=False)
     # Compute eigenvalues and eigenvectors
-    num_lanczos_vectors = max(2 * n_eigs + 2, int(np.sqrt(P.shape[0])))
     evals, evecs = sparse.linalg.eigsh(
-        P, k=n_eigs, which='LM', tol=eigen_tol, ncv=num_lanczos_vectors, maxiter=P.shape[0] * 5)
+        P, k=n_eigs, which='LM', tol=eigen_tol, maxiter=P.shape[0] * 5)
     evecs = np.real(evecs)
     evals = np.real(evals)
     if symmetric:
@@ -439,7 +472,7 @@ def _set_diag(laplacian, value, norm_laplacian):
 
 
 
-def spectral_clustering(init, max_svd_restarts=30, n_iter_max=30, random_state=None, copy=True):
+def spectral_clustering(init, max_svd_restarts=50, n_iter_max=50, random_state=None, copy=True):
     """
     Search for a partition matrix (clustering) which is closest to the eigenvector embedding.
 
@@ -488,7 +521,8 @@ def spectral_clustering(init, max_svd_restarts=30, n_iter_max=30, random_state=N
 
     from scipy.sparse import csc_matrix
     from scipy.linalg import LinAlgError
-
+    
+    random_state = check_random_state(random_state)
     vectors = as_float_array(init, copy=copy)
 
     eps = np.finfo(float).eps

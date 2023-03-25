@@ -11,7 +11,7 @@ def global_loss_(X, Y):
     return GL
 
 
-def global_score_pca(X, Y):
+def global_score_pca(X, Y, X_is_pca=False):
     """
     Global score
     Input

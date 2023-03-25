@@ -22,9 +22,6 @@ def cknn_graph(X, n_neighbors=10,
                return_densities=False,
                backend='nmslib',
                n_jobs=1,
-               M=15,
-               efC=50,
-               efS=50,
                verbose=False,
                **kwargs):
     """
@@ -69,23 +66,6 @@ def cknn_graph(X, n_neighbors=10,
         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
         TopOMetry and will automatically convert the input array to csr_matrix for performance.
 
-    M : int (optional, default 15).
-        A neighborhood search parameter. Defines the maximum number of neighbors in the zero and above-zero layers
-        during HSNW (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check its manuscript(https://arxiv.org/abs/1603.09320).
-        HSNW is implemented in python via NMSlib (https://github.com/nmslib/nmslib) and HNWSlib
-        (https://github.com/nmslib/hnswlib).
-
-    efC : int (optional, default 50).
-        A neighborhood search parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-
-    efS : int (optional, default 50).
-        A neighborhood search parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-
     n_jobs : int (optional, default 1).
         The number of jobs to use in the k-nearest-neighbors computation. Defaults to one (I highly recommend you use all available).
 
@@ -106,11 +86,8 @@ def cknn_graph(X, n_neighbors=10,
                   metric=metric,
                   n_jobs=n_jobs,
                   backend=backend,
-                  M=M,
-                  efC=efC,
-                  efS=efS,
                   verbose=verbose,
-                  *kwargs)
+                  **kwargs)
 
     median_k = np.floor(n_neighbors / 2).astype(int)
     adap_sd = np.zeros(N)
