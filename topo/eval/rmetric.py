@@ -154,21 +154,8 @@ class RiemannMetric(object):
         """
         return self.fit()
 
-    def estimate_distortions(self):
-        N = self.H.shape[0]
-        distortions = np.zeros((N))
-        for i in range(N):
-            vals, vecs = eigsorted(self.H[i,:,:])
-            distortions[i] = np.sqrt(np.absolute(vals)).sum()
-        return distortions
 
-    def estimate_total_distortion(self):
-        return self.estimate_distortions(self.H).sum()
 
-def eigsorted(H):
-    vals, vecs = np.linalg.eigh(H)
-    order = vals.argsort()[::-1]
-    return vals[order], vecs[:, order]
 
 
 

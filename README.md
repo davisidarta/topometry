@@ -1,59 +1,49 @@
+
 [![Latest PyPI version](https://img.shields.io/pypi/v/topometry.svg)](https://pypi.org/project/topometry/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
+[![Downloads](https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/topometry)
+[![CodeFactor](https://www.codefactor.io/repository/github/davisidarta/topometry/badge)](https://www.codefactor.io/repository/github/davisidarta/topometry)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta)](https://twitter.com/davisidarta)
 
-## TopOMetry - Topologically Optimized geoMetry
-
-Documentation available at [Read The Docs](https://topometry.readthedocs.io/en/latest/).
+# TopOMetry - Topologically Optimized geoMetry
 
 
+## A global framework for dimensionality reduction: learning topologic metrics, orthonormal bases and graph layouts
 
-### A global framework for dimensionality reduction: learning topologic metrics, orthogonal bases and graph layouts
+TopOMetry is a high-level python library to explore data topology through manifold learning. It is compatible with scikit-learn, meaning most of its operators can be easily pipelined.
 
-TopOMetry is a high-level python library to explore data topology.
-It allows learning topological metrics, dimensionality reduced basis and graphs from data, as well
-to visualize them with different layout optimization algorithms. The main aim is to achieve sequential approximations of
-the [Laplace-Beltrami Operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator), a natural way to describe
-data geometry and its high-dimensional topology. For more information, see the [manuscript](https://doi.org/10.1101/2022.03.14.484134).
+Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an set of orthonormal eigenbases (classically named the spectral or diffusion components). New topological operators are then learned from such eigenbases and can be used for clustering and graph-layout optimization (visualization). 
 
-TopOMetry is designed to handle large-scale data matrices containing
-extreme topological diversity, such as those
-generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing), and can be used to perform topology-preserving
-visualizations.
+For more information, see the [manuscript](https://doi.org/10.1101/2022.03.14.484134).
 
-TopOMetry main class is the ``TopOGraph`` object. In a ``TopOGraph``, topological metrics are recovered with diffusion
-harmonics, fuzzy simplicial sets or Continuous-k-Nearest-Neighbors, and used to obtain orthogonal basis (multiscale Diffusion Maps and/or
-fuzzy or continuous versions of Laplacian Eigenmaps) that emphasize topological features and are robust to noise. On top of these basis, new graphs can be learned using k-nearest-neighbors
-graphs or with new topological metrics. The learned similarity metrics, basis and graphs are stored at the
-``TopOGraph`` object.
+TopOMetry was designed to handle large-scale data matrices containing extreme sample diversity, such as those generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing). It includes wrappers to deal with [AnnData](https://anndata.readthedocs.io/en/latest/index.html) objects using [scanpy](https://scanpy.readthedocs.io/en/stable/).
 
-Finally, different graph layout optimization algorithms built-in TopOMetry can be used for visualization: 
-* MAP (Manifold Approximation and Projection) - a lighter 
-[UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
-* [MDE](https://github.com/cvxgrp/pymde) (Minimum Distortion Embedding) - the ultimate swiss-army knife for graph layout optimization
-* [tSNE](https://github.com/DmitryUlyanov/Multicore-TSNE) (t-Stochasthic Neighborhood Embedding) - a classic of visualization, with parallelization
-* [TriMAP](https://github.com/eamid/trimap) - dimensionality reduction using triplets
-* [NCVis](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - for blazing fast performance
-* [PaCMAP](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled 
-Manifold Approximation and Projection) - for balanced visualizations
+-------------------
 
-The following image summarizes the TopOMetry workflow:
+## Documentation
 
-![TopOMetry in a glance](docs/img/TopOGraph_models.png)
+Documentation is available at [Read The Docs](https://topometry.readthedocs.io/en/latest/). There you'll find installation instructions, tutorials, walkthroughs and a detailed API for reference.
 
+-------------------
 
-### Contributing
+## Contributing
 
 Contributions are very welcome! If you're interested in adding a new feature, just let me know in the Issues section.
 
-### License
+-------------------
+
+## License
 
 [MIT License](https://github.com/davisidarta/topometry/blob/master/LICENSE)
 
-### Citation
+-------------------
 
-```
+## Citation
+
+If you find TopOMetry useful for your work, please cite our manuscript:
+
+``` bibtex
 @article {Sidarta-Oliveira2022.03.14.484134,
 	author = {Sidarta-Oliveira, Davi and Velloso, Licio A},
 	title = {A comprehensive dimensional reduction framework to learn single-cell phenotypic topology uncovers T cell diversity},

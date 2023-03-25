@@ -4,13 +4,27 @@ Welcome to TopOMetry documentation!
 
     <a href="https://pypi.org/project/topometry/"><img src="https://img.shields.io/pypi/v/topometry" alt="Latest PyPi version"></a>
 
+
 .. raw:: html
 
     <a href="https://github.com/davisidarta/topometry/"><img src="https://img.shields.io/github/stars/davisidarta/topometry?style=social&label=Stars" alt="GitHub stars"></a>
 
+
 .. raw:: html
 
-    <a href="https://twitter.com/davisidarta"><img src="https://img.shields.io/twitter/follow/davisidarta.svg?style=social&label=Follow" alt="Twitter"></a>
+    <a href="https://pepy.tech/project/topometry"><img src="https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads" alt="Downloads"></a>
+
+
+.. raw:: html
+
+    <a href="https://www.codefactor.io/repository/github/davisidarta/topometry"><img src="https://www.codefactor.io/repository/github/davisidarta/topometry/badge" alt="CodeFactor" /></a>
+
+
+.. raw:: html
+
+    <a href="https://twitter.com/davisidarta"><img src="https://img.shields.io/twitter/follow/davisidarta.svg?style=social&label=Follow @davisidarta" alt="Twitter"></a>
+
+
 
 TopOMetry (Topologically Optimized geoMetry) is a comprehensive dimensional reduction framework
 that dissects the steps of dimensional reduction approaches to learn latent topological representations.
@@ -33,26 +47,38 @@ meaning they can be easily pipelined.
     :maxdepth: 2
     :glob:
     :titlesonly:
-    :caption: Intro:
+    :caption: Installation:
+
+    installation
+    
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    :titlesonly:
+    :caption: Getting started:
 
     about
-    installation
     quickstart
 
 .. toctree::
-    :maxdepth: 3
-    :caption: General Tutorials:
+    :maxdepth: 2
+    :caption: General tutorials:
 
     MNIST_TopOMetry_Tutorial
+    Evaluations
+    classes_tutorial
+    Dimenality_estimation
+    Non_euclidean
     20Newsgroups_Tutorial
 
 .. toctree::
     :maxdepth: 3
-    :caption: Single-cell analysis:
+    :caption: Single-cell tutorials:
 
-    pbmc3k
-    pbmc68k
-    Non_euclidean_tutorial
+    singlecell
+    T_CD4_diversity
+    trajectory_inference
+    integration
 
 .. toctree::
     :maxdepth: 2

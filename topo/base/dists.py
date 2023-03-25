@@ -36,16 +36,18 @@
 
 
 # Silly trick to workaround ReadTheDocs documentation build
+# (it does not install numba and fails)
 try:
     import numba
     _have_numba = True
 except ImportError:
     _have_numba = False
 
+from sklearn.metrics import pairwise_distances
+
 if _have_numba:
     import numpy as np
     import scipy.stats
-    from sklearn.metrics import pairwise_distances
 
     _mock_identity = np.eye(2, dtype=np.float64)
     _mock_cost = 1.0 - _mock_identity
@@ -1284,7 +1286,7 @@ if _have_numba:
             special_metric_func = named_distances[metric]
         return parallel_special_metric(X, Y, metric=special_metric_func)
 
-    # FASTDIST
+    # FASTDIST (https://pypi.org/project/fastdist/) by Tal Boger - MIT License
 
     @numba.jit(nopython=True, fastmath=True)
     def cosine_vector_to_matrix(u, m):

@@ -46,14 +46,13 @@ import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix
 from sklearn.base import TransformerMixin
 from topo.base.ann import kNN
-from topo.utils.utils import get_indices_distances_from_sparse_matrix
+from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
-SMOOTH_K_TOLERANCE = 1e-5
-MIN_K_DIST_SCALE = 1e-3
+SMOOTH_K_TOLERANCE = 1e-6
+MIN_K_DIST_SCALE = 1e-4
 NPY_INFINITY = np.inf
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
-
 
 def fuzzy_simplicial_set(
         X,
@@ -61,9 +60,6 @@ def fuzzy_simplicial_set(
         metric='cosine',
         backend='nmslib',
         n_jobs=1,
-        efC=50,
-        efS=50,
-        M=15,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
         apply_set_operations=True,
@@ -77,6 +73,10 @@ def fuzzy_simplicial_set(
     locally approximating geodesic distance at each point, creating a fuzzy
     simplicial set for each such point, and then combining all the local
     fuzzy simplicial sets into a global one via a fuzzy union.
+
+    Originally implemented by Leland McInnes at https://github.com/lmcinnes/umap
+    under the BSD 3-Clause License.
+
     Parameters
     ----------
     X : array of shape (n_samples, n_features).
@@ -108,22 +108,6 @@ def fuzzy_simplicial_set(
 
     n_jobs : int (optional, default 1).
         Number of threads to be used in computation of nearest neighbors.  Set to -1 to use all available CPUs.
-
-    M : int (optional, default 30).
-        defines the maximum number of neighbors in the zero and above-zero layers during HSNW
-        (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
-        HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
-
-    efC : int (optional, default 100).
-        A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-
-    efS : int (optional, default 100).
-        A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 50-2000.
 
     knn_indices : array of shape (n_samples, n_neighbors) (optional).
         If the k-nearest neighbors of each point has already been calculated
@@ -190,14 +174,9 @@ def fuzzy_simplicial_set(
                   backend=backend,
                   low_memory=True,
                   symmetrize=True,
-                  M=M,
-                  p=11/16,
-                  efC=efC,
-                  efS=efS,
-                  n_trees=50,
                   return_instance=False,
                   verbose=verbose,
-                  *kwargs)
+                  **kwargs)
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
             knn, n_neighbors)
 
@@ -238,6 +217,10 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
     a local fuzzy simplicial set, with a membership strength for the
     1-simplex to each other data point.
+
+    Originally implemented by Leland McInnes at https://github.com/lmcinnes/umap
+    under the BSD 3-Clause License.
+
     Parameters
     ----------
     knn_indices: array of shape (n_samples, n_neighbors)
@@ -289,6 +272,9 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     computing the distance such that the cardinality of fuzzy set we generate
     is k.
 
+    Originally implemented by Leland McInnes at https://github.com/lmcinnes/umap
+    under the BSD 3-Clause License.
+    
     Parameters
     ----------
     distances: array of shape (n_samples, n_neighbors)

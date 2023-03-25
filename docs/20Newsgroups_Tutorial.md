@@ -1,14 +1,17 @@
-# TopOMetry for document embedding
+# Using TopOMetry for document embedding
 
-This tutorial reproduces an UMAP example on the [20 newsgroups dataset](http://qwone.com/~jason/20Newsgroups/) for document embedding, and compares its results to those of TopOMetry models. The 20 newsgroups dataset is a collection of forum posts, labelled by topic. The task here is to represent this high-dimensional information in a comprehensive visualization in which news within the same topic end up close together, and different topics get separated from each other. By the end of this tutorial, we'll see TopOMetry recoveries a lot of substructure that was missed by UMAP. This is possible by first harnessing topological information, and then using different layout methods to visualize and interpret it.
+This tutorial reproduces an UMAP example on the [20 newsgroups dataset](http://qwone.com/~jason/20Newsgroups/) for document embedding, and compares its results to those of TopOMetry models. The 20 newsgroups dataset is a collection of forum posts, labelled by topic. The task here is to represent this high-dimensional information in a comprehensive visualization in which news within the same topic end up close together, and different topics get separated from each other. By the end of this tutorial, we'll see TopOMetry recoveries a lot of substructure that was missed by using UMAP alone. This happens because TopOMetry's models extract latent information before learning a new topological graph which is may be embedded with UMAP.
 
 Load required libraries:
 
 
 ```python
+import numpy as np
 import pandas as pd
+
+# For comparison
 import umap
-import umap.plot
+import topo as tp
 
 # Used to get the data
 from sklearn.datasets import fetch_20newsgroups
@@ -17,33 +20,15 @@ from sklearn.feature_extraction.text import CountVectorizer
 # Some plotting libraries
 import matplotlib.pyplot as plt
 %matplotlib inline
-from bokeh.plotting import show, save, output_notebook, output_file
-from bokeh.resources import INLINE
-output_notebook(resources=INLINE)
 ```
-
-
-
-<div class="bk-root">
-    <a href="https://bokeh.org" target="_blank" class="bk-logo bk-logo-small bk-logo-notebook"></a>
-    <span id="1002">Loading BokehJS ...</span>
-</div>
-
-
-
 
 Download data:
 
 
 ```python
-%%time
 dataset = fetch_20newsgroups(subset='all',
                              shuffle=True, random_state=42)
 ```
-
-    CPU times: user 261 ms, sys: 46.7 ms, total: 307 ms
-    Wall time: 391 ms
-
 
 
 ```python
@@ -173,22 +158,39 @@ word_doc_matrix = vectorizer.fit_transform(dataset.data)
 
 
 ```python
-%%time
-embedding = umap.UMAP(n_components=2, metric='hellinger').fit(word_doc_matrix)
+umap_embedding = umap.UMAP(n_components=2, metric='hellinger').fit(word_doc_matrix)
 ```
 
-    CPU times: user 3min 27s, sys: 5.39 s, total: 3min 33s
-    Wall time: 1min 7s
-
+And define a plotting function to handle the categories names and colors for us:
 
 
 ```python
-f = umap.plot.points(embedding, labels=hover_df['category'])
+def plot_20k_newsgroups(embedding, figsize=(8,8)):
+    from matplotlib.patches import Patch
+    unique_labels = np.unique(hover_df['category'])
+    num_labels = unique_labels.shape[0]
+    color_key = plt.get_cmap("Spectral")(np.linspace(0, 1, num_labels))
+    legend_elements = [
+        Patch(facecolor=color_key[i], label=unique_labels[i])
+        for i, k in enumerate(unique_labels)
+    ]
+    f, ax = plt.subplots(figsize=(8,8))
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=dataset.target, cmap='Spectral', s=0.5)
+    ax.legend(handles=legend_elements)
+    ax.set_xticks(())
+    ax.set_yticks(())
+```
+
+And finally visualize the UMAP embedding:
+
+
+```python
+plot_20k_newsgroups(umap_embedding.embedding_, figsize=(8,8))
 ```
 
 
     
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_16_0.png)
+![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_19_0.png)
     
 
 
@@ -196,175 +198,48 @@ f = umap.plot.points(embedding, labels=hover_df['category'])
 
 ## Using TopOMetry
 
-Just like in the digits tutorial, we'll create a TopOGraph object to start our analysis. Parameters can be set at this time but also easily set later.
+Just like in the digits tutorial, we'll create a TopOGraph object to start our analysis. Parameters can be set at this time but also easily changed later.
 
 
 ```python
 import topo as tp
 
 # Start up the TopOGraph
-tg = tp.TopOGraph(n_jobs=12, n_eigs=30, # set parameters at start
-                         backend='nmslib')
-tg.verbosity=1     # set parameter later
-tg.fit(word_doc_matrix)     # feed the bag-of-words matrix
+tg = tp.TopOGraph(n_jobs=-1)
 
-db_diff_graph = tg.transform() # learns a similarity graph
+# easily change parameters after initialisatio
+tg.verbosity=1     
 
-# Minimize divergence between the diffusion basis and diffusion graph
-emb_db_diff_map = tg.MAP() # by default computes a spectral initialisation
+# feed the bag-of-words matrix to the TopOGraph
+tg.fit(word_doc_matrix)     
+tg.transform() # learns a topological graph
+
+# Project for visualization
+topo_MAP = tg.project(projection_method='MAP') 
 ```
 
     Computing neighborhood graph...
-     Base kNN graph computed in 8.535140 (sec)
-    Building topological basis...using diffusion model.
-
-
-    /home/davi/.local/lib/python3.9/site-packages/kneed/knee_locator.py:304: UserWarning: No knee/elbow found
-      warnings.warn("No knee/elbow found")
-
-
-     Topological basis fitted with multiscale self-adaptive diffusion maps in 4.803387 (sec)
-        Building topological graph...
-         Topological `diff` graph extracted in = 1.875015 (sec)
-             Spectral layout not stored at TopOGraph.SpecLayout. Trying to compute...
-             Optimized MAP embedding in = 24.982344 (sec)
-
-
-Please note that, for the simplicity of this tutorial, we want to keep the figure style constant. Thus, we'll continue to use the UMAP plotting function, and will only update the coordinates of the points so that they correspond to those we just computed with TopOMetry.
-
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_diff_map
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
-```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_22_0.png)
-    
+     Base kNN graph computed in 3.671462 (sec)
+     Fitted the bw_adaptive kernel in 0.226102 (sec)
+     Fitted eigenbasis with Diffusion Maps from the bw_adaptive kernel in 51.936376 (sec)
+        Building topological graph from eigenbasis...
+            Computing neighborhood graph...
+     Computed in 1.342951 (sec)
+     Fitted the bw_adaptive graph kernel in 0.237367 (sec)
+     Computed MAP in 48.171167 (sec)
 
 
 
 ```python
-
-```
-
-Beyond separating known categories, this plot gives us insights in their relationships (i.g. atheism and religion topics connected at the lower left), this plot tells us more about the poorly separated topics. Apparently, these categories hold defined subcategories within them.
-
- Now let's try with other embedding methods:
-
-
-```python
-emb_db_pacmap = tg.PaCMAP(distance='angular')
-emb_db_trimap = tg.TriMAP()
-emb_db_tsne = tg.tSNE()
-emb_db_ncvis = tg.NCVis()
-emb_db_mde = tg.MDE()
-```
-
-             Obtained PaCMAP embedding in = 90.969480 (sec)
-             Obtained TriMAP embedding in = 78.697911 (sec)
-             Obtained tSNE embedding in = 117.070226 (sec)
-             Obtained NCVis embedding in = 7.062480 (sec)
-             Obtained MDE embedding in = 56.139197 (sec)
-
-
-PaCMAP
-
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_pacmap
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
+plot_20k_newsgroups(topo_MAP, figsize=(12,12))
 ```
 
 
     
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_28_0.png)
+![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_24_0.png)
     
 
 
-TriMAP
+As we can see, with TopOMetry it is possible to uncover a rather more elaborate visualization of the data geometry. In this case, a central root of texts containing mostly common words and distributed across many different topics - as we walk away from this homogenous mass in the geometry of this dataset, neighborhood paths become more specific and restrited to single-topics. Plausably, the edges of these spikes should contain the texts with most heterogeneity across the dataset, rendering them good examples for specific language of a specific field. Similarly, words enriched at the central blob could be striped off the dataset for a downstream, more refined analysis containing heterogeneity-driving words.
 
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_trimap
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
-```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_30_0.png)
-    
-
-
-tSNE
-
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_tsne
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
-```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_32_0.png)
-    
-
-
-NCVis
-
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = emb_db_ncvis
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
-```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_34_0.png)
-    
-
-
-MDE
-
-With MDE, we can also visualize the optimization process of the graph layout.
-
-```python
-db_diff_mde = tg.MDE(snapshot_every=5, mem_size=1,  n_epochs=6000, init=tg.SpecLayout)
-tg.MDE_problem.play(savepath= '20NewsGroups_db_diff_MDE.gif', marker_size=0.5, color_by=hover_df['category'],  figsize_inches=(8,8), axis_limits=[-12, 12])
-```
-
-             Obtained MDE embedding in = 18.463227 (sec)
-
-
-
-      0%|          | 0/6 [00:00<?, ?it/s]
-
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_36_2.png)
-    
-
-
-
-```python
-embedding_topometry = embedding
-embedding_topometry.embedding_ = db_diff_mde
-t = umap.plot.points(embedding_topometry, labels=hover_df['category'])
-```
-
-
-    
-![png](20Newsgroups_Tutorial_files/20Newsgroups_Tutorial_37_0.png)
-    
-
-
-As we can see, with TopOMetry it is possible to uncover a much more elaborate visualization of the data geometry. In this case, a central root of texts containing mostly common words and distributed across many different topics - as we walk away from this homogenous mass in the geometry of this dataset, neighborhood paths become more specific and restrited to single-topics. Plausably, the edges of these spikes should contain the texts with most heterogeneity across the dataset, rendering them good examples for specific language of a specific field. Similarly, words enriched at the central blob could be striped off the dataset for a downstram, more refined analysis containing heterogeneity-driving words.
-We do not claim any of particular model to perform better or worse beforehand - instead, seeing how different algorithms deal with the heterogenous structure of data allows us to elaborate better insights from data. In this case, by using only 1 of 9 available models and exploring 6 different layouts, we could generate several hypotheses. 
-
+We do not claim any particular model performs better or worse beforehand - instead, seeing how different algorithms deal with the heterogenous structure of data allows us to elaborate better insights from data. For details, check the evaluation tutorial.

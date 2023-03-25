@@ -43,7 +43,7 @@ from sklearn.neighbors import NearestNeighbors
 from topo.base import ann
 from topo.base import dists as dist
 from topo.spectral.umap_layouts import optimize_layout_euclidean, optimize_layout_generic, optimize_layout_inverse
-from topo.spectral import _spectral
+from topo.spectral.eigen import spectral_layout
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.utils.umap_utils import ts, fast_knn_indices
 
@@ -197,7 +197,7 @@ def simplicial_set_embedding(
         initialisation = embedding
     elif isinstance(init, str) and init == "spectral":
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = _spectral.spectral_layout(
+        initialisation = spectral_layout( #graph, dim, random_state, laplacian_type='normalized', eigen_tol=10e-4, return_evals=False
             graph,
             dim=n_components,
             random_state=random_state

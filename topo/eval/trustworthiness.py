@@ -4,7 +4,7 @@ from scipy.sparse import csr_matrix, issparse
 from topo.base.ann import kNN
 from sklearn.manifold import trustworthiness as twt
 
-def trustworthiness(X, X_embedded, n_neighbors=5, metric='euclidean', n_jobs=10):
+def trustworthiness(X, X_embedded, n_neighbors=5, metric='euclidean', n_jobs=10, **kwargs):
     try:
         import hnswlib
         _have_hnswlib = True
@@ -32,7 +32,7 @@ def trustworthiness(X, X_embedded, n_neighbors=5, metric='euclidean', n_jobs=10)
             else:
                 backend = 'sklearn'
 
-        knn_graph = kNN(X, n_neighbors=n_neighbors, metric=metric, n_jobs=n_jobs, backend=backend)
+        knn_graph = kNN(X, n_neighbors=n_neighbors, metric=metric, n_jobs=n_jobs, backend=backend, **kwargs)
         return twt(knn_graph, X_embedded, n_neighbors=n_neighbors, metric=metric)
 
     else:

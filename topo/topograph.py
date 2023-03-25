@@ -1,16 +1,18 @@
-# TopOMetry high-level models API
+# TopOMetry high-level API - the TopOGraph class
+#
 # Author: Davi Sidarta-Oliveira <davisidarta(at)gmail(dot)com>
 # School of Medical Sciences, University of Campinas, Brazil
 #
 import time
 import numpy as np
+import gc
 from sklearn.base import BaseEstimator, TransformerMixin
-from scipy.sparse import issparse
-import topo.spectral._spectral as spt
+from scipy.sparse import issparse, csr_matrix
 from topo.base.ann import kNN
-from topo.tpgraph.fuzzy import fuzzy_simplicial_set
-from topo.tpgraph.cknn import cknn_graph
-from topo.tpgraph.diffusion import Diffusor
+from topo.tpgraph.kernels import Kernel
+from topo.spectral.eigen import EigenDecomposition, spectral_layout
+from topo.layouts.projector import Projector
+from topo.tpgraph.fisher import FisherS
 
 try:
     import hnswlib
@@ -36,61 +38,76 @@ except ImportError:
 
 class TopOGraph(BaseEstimator, TransformerMixin):
     """
+    Main TopOMetry class for learning topological similarities, bases, graphs, and layouts from high-dimensional data.
 
-     Main TopOMetry class for learning topological similarities, bases, graphs, and layouts from high-dimensional data.
+    From data, learns topological similarity metrics, from these build orthonormal eigenbases and from these eigenbases learns
+    new topological graphs. Users can choose different adaptive kernels to achieve these topological representations,
+    which can approximate the Laplace-Beltrami Operator via their Laplacian or Diffusion operators.
 
-     From data, learns topological similarity metrics, from these build orthogonal bases and from these bases learns
-     topological graphs. Users can choose
-     different models to achieve these topological representations, combinining either diffusion harmonics,
-     continuous k-nearest-neighbors or fuzzy simplicial sets to approximate the Laplace-Beltrami Operator.
-     The topological graphs can then be visualized with multiple existing layout optimization tools.
+    The eigenbasis or their topological graphs can then be visualized with multiple existing layout optimization tools.
 
     Parameters
     ----------
-    base_knn : int (optional, default 10).
-         Number of k-nearest-neighbors to use when learning topological similarities.
-         Consider this as a calculus discretization threshold (i.e. approaches zero in the limit of large data).
-         For practical purposes, the minimum amount of samples one would
-         expect to constitute a neighborhood of its own. Increasing `k` can generate more globally-comprehensive metrics
-         and maps, to a certain extend, however at the expense of fine-grained resolution. In practice, the default
-         value of 10 performs quite well for almost all cases.
+    base_knn : int (optional, default 30).
+        Number of k-nearest-neighbors to use when learning topological similarities.
 
-    graph_knn : int (optional, default 10).
-         Similar to `base_knn`, but used to learning topological graphs from the orthogonal bases.
+    graph_knn : int (optional, default 30).
+        Similar to `base_knn`, but used to learning topological graphs from the orthogonal bases.
 
-    n_eigs : int (optional, default 100).
-         Number of components to compute. This number can be iterated to get different views
-         from data at distinct spectral resolutions. If `basis` is set to `diffusion`, this is the number of 
-         computed diffusion components. If `basis` is set to `continuous` or `fuzzy`, this is the number of
-         computed eigenvectors of the Laplacian Eigenmaps from the learned topological similarities.
+    n_eigs : int (optional, default 300).
+        Number of eigenpairs to compute. 
 
-    basis : 'diffusion', 'continuous' or 'fuzzy' (optional, default 'diffusion').
-         Which topological basis model to learn from data. If `diffusion`, performs an optimized, anisotropic, adaptive
-         diffusion mapping (default). If `continuous`, computes affinities from continuous k-nearest-neighbors, and a 
-         topological basis with Laplacian Eigenmaps. If `fuzzy`, computes affinities using
-         fuzzy simplicial sets, and a topological basis with Laplacian Eigenmaps.
+    base_kernel : topo.tpgraph.Kernel (optional, default None).
+        An optional Kernel object already fitted with the data. If available, the original input data X is not required.
 
-    graph : 'diff', 'cknn' or 'fuzzy' (optional, default 'diff').
-         Which topological graph model to learn from the built basis. If 'diff', uses a second-order diffusion process
-         to learn similarities and transition probabilities. If 'cknn', uses the continuous k-nearest-neighbors
-         algorithm. If 'fuzzy', builds a fuzzy simplicial set graph from the active basis. All these
-         algorithms learn graph-oriented topological metrics from the learned basis.
+    eigenmap_method : str (optional, default 'DM').
+        Which eigenmap method to use. Defaults to 'DM', which is the diffusion maps method and will use the diffusion
+        operator learned from the used kernel. Options include:
+        * 'DM' - uses the diffusion operator learned from the used kernel (TopOGraph.kernel.P). By default, uses
+        the multiscale Diffusion Maps version, which accounts for all possible diffusion timescales. Finds top eigenpairs (with highest eigenvalues).
+        * 'LE' - uses the graph Laplacian learned from the used kernel (TopOGraph.kernel.L). Finds bottom eigenpairs (with lowest eigenvalues).
+        * 'top' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds top eigenpairs (with highest eigenvalues).
+        * 'bottom' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds bottom eigenpairs (with lowest eigenvalues).
 
-    backend : str 'hnwslib', 'nmslib' or 'sklearn' (optional, default 'nmslib').
-         Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
-         are 'hnwslib'  and 'nmslib' (default). For exact nearest-neighbors, use 'sklearn'.
+    alpha : int or float (optional, default 1).
+         Anisotropy. Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
+         Defaults to 1, which unbiases results from data underlying sampling distribution.
 
-         * If using 'nmslib', a sparse
-            csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
-         * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
-            is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
-            TopOMetry and will automatically convert the input array to csr_matrix for performance.
+    laplacian_type : str (optional, default 'normalized').
+        Which Laplacian to use by default with the kernel. Defaults to 'normalized', which is the most common.
+        Other options include 'unnormalized' (also referred to as the combinatorial Laplacian), 'normalized', 'random_walk' and 'geometric'.
+
+    base_kernel_version : str (optional, default 'bw_adaptive')
+        Which method to use for learning affinities to use in the eigenmap strategy. Defaults to 'bw_adaptive', which  employs an adaptive bandwidth. 
+        There are several other options available to learn affinities, including:
+        * 'fuzzy' - uses fuzzy simplicial sets as per [UMAP](). It is grounded on solid theory.
+        * 'cknn' - uses continuous k-nearest-neighbors as per [Berry et al.](). As 'fuzzy', it is grounded on solid theory, and is guaranteed
+        to approaximate the Laplace-Beltrami Operator on the underlying manifold.
+        * 'bw_adaptive' - uses an adaptive bandwidth without adaptive exponentiation. It is a locally-adaptive kernel similar
+        to that proposed by [Nadler et al.](https://doi.org/10.1016/j.acha.2005.07.004) and implemented in [Setty et al.](https://doi.org/10.1038/s41587-019-0068-4).
+        * 'bw_adaptive_alpha_decaying' - uses an adaptive bandwidth and an adaptive decaying exponentiation (alpha). This is the default.
+        * 'bw_adaptive_nbr_expansion' - first uses a simple adaptive bandwidth and then uses it to learn an adaptive number of neighbors
+        to expand neighborhood search to learn a second adaptive bandwidth kernel. The neighborhood expansion can impact runtime, although
+        this is not usually expressive for datasets under 10e6 samples. The neighborhood expansion was proposed in the TopOMetry paper.
+        * 'bw_adaptive_alpha_decaying_nbr_expansion' - first uses a simple adaptive bandwidth and then uses it to learn an adaptive number of neighbors
+        to expand neighborhood search to learn a second adaptive bandwidth kernel. The neighborhood expansion was proposed in the TopOMetry paper.
+        * 'gaussian' - uses a fixed Gaussian kernel with a fixed bandwidth. This is the most naive approach.
+
+    graph_kernel_version : str (optional, default 'bw_adaptive_alpha_decaying')
+        Which method to use for learning affinities from the eigenbasis. Same as `base_kernel_version`, but for the graph construction
+        after learning an eigenbasis.
+
+    backend : str (optional, default 'nmslib').
+        Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib', 'pynndescent','annoy', 'faiss' and 'sklearn'.
+        By default it will check what you have available, in this order.
 
     base_metric : str (optional, default 'cosine')
         Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
         'cosine'. When using scaled data (zero mean and unit variance) the cosine similarity metric is highly recommended.
-        The 'hamming' and 'jaccard' distances are also available for string vectors.
-        Accepted metrics include NMSLib(*), HNSWlib(**) and sklearn(***) metrics. Some examples are:
+        The 'hamming' and 'jaccard' distances are also available for string vectors. 
+
+        NOTE: not all k-nearest-neighbors backends have the same metrics available! The algorithm will expect you to input a metric compatible with your backend.
+        Example of accepted metrics in NMSLib(*), HNSWlib(**) and sklearn(***):
 
         * 'sqeuclidean' (**, ***)
 
@@ -117,391 +134,361 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         * 'jansen-shan' (*)
 
     graph_metric : str (optional, default 'euclidean').
-         Similar to `base_metric`, but used for building a new topological graph on top of the learned orthogonal basis.
+         Similar to `base_metric`, but used for building a new topological graph on top of the learned orthonormal eigenbasis.
 
-    p : int or float (optional, default 11/16 ).
-         P for the Lp metric, when `metric='lp'`.  Can be fractional. The default 11/16 approximates 2/3, that is,
-         an astroid norm with some computational efficiency (2^n bases are less painstakinly slow to compute).
-
-    n_jobs : int (optional, default -1).
-         Number of threads to use in calculations. Set this to as much as possible for speed. Defaults to all but one.
-
-    eigen_tol : float (optional, default 1e-4).
-        Error tolerance during eigendecomposition. Set to 0 for exact (can be very computationally intensive).
-
-    M : int (optional, default 15).
-        A neighborhood search parameter. Defines the maximum number of neighbors in the zero and above-zero layers
-        during HSNW (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-        of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-        is 5-100. For more information on HSNW, please check its manuscript(https://arxiv.org/abs/1603.09320).
-        HSNW is implemented in python via NMSlib (https://github.com/nmslib/nmslib) and HNWSlib
-        (https://github.com/nmslib/hnswlib).
-
-    efC : int (optional, default 50).
-        A neighborhood search parameter. Increasing this value improves the quality of a constructed graph
-        and leads to higher accuracy of search. However this also leads to longer indexing times.
-        A reasonable range for this parameter is 50-2000.
-
-    efS : int (optional, default 50).
-        A neighborhood search parameter. Similarly to efC, increasing this value improves recall at the
-        expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-
-    alpha : int or float (optional, default 1).
-         Anisotropy. Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
-         Defaults to 1, which unbiases results from data underlying sampling distribution.
-
-    kernel_use : str (optional, default 'simple')
-         A diffusion harmonics parameter. Which type of kernel to use in the diffusion harmonics model. There are four
-         implemented, considering the adaptive decay and the neighborhood expansion,
-         written as 'simple', 'decay', 'simple_adaptive' and 'decay_adaptive'.
-
-             *The first, 'simple', is a locally-adaptive kernel similar to that proposed by Nadler et al.
-             (https://doi.org/10.1016/j.acha.2005.07.004) and implemented in Setty et al.
-             (https://doi.org/10.1038/s41587-019-0068-4). It is the fastest option.
-
-             *The 'decay' option applies an adaptive decay rate, but no neighborhood expansion.
-
-             *Those, followed by '_adaptive', apply the neighborhood expansion process.
-
-         The neighborhood expansion can impact runtime, although this is not usually expressive for datasets under 10e6 samples.
-         If you're not obtaining good separation between expect clusters, consider changing this to 'decay_adaptive' with
-         a small number of neighbors.
+    sigma : float (optional, default None).
+        Scaling factor if using fixed bandwidth kernel (only used if `base_kernel_version` or `graph_kernel_version` is set to `gaussian`).
 
     delta : float (optional, default 1.0).
-        A CkNN parameter to decide the radius for each points. The combination
-        radius increases in proportion to this parameter.
+        A parameter of the 'cknn' kernel version. It is ignored if `graph_kernel_version` or `base_kernel_version` are not set to 'cknn'.
+        It is used to decide the local radius in the continuous kNN algorithm. The combination radius increases in proportion to this parameter.
 
-    t : 'inf' or float or int, optional, default='inf'
-        A CkNN parameter encoding the decay of the heat kernel. The weights are calculated as:
-        W_{ij} = exp(-(||x_{i}-x_{j}||^2)/t)
+    low_memory : bool (optional, default False).
+        Whether to use a low-memory implementation of the algorithm. Everything will quite much run the same way, but the TopOGraph object will
+        not store the full kernel matrices obtained at each point of the algorithm. A few take-away points:
+
+        * If you are running a single model, you should always keep this set this to `True` unless you have very little memory available.
+        
+        * This parameter is particularly useful when analysing very large datasets, and for cross-validation of algorithmic combinations 
+        (e.g. different `base_kernel_version` and `graph_kernel_version`) when using the `TopOGraph.run_models_layouts()` function.
+        This is because the kernel matrices are stored in memory, and can be quite large. After defining the best algorithmic combination, recomputing only it costs a
+        fraction of the time and memory. 
+        
+
+    n_jobs : int (optional, default 1).
+        Number of threads to use in neighborhood calculations. Set this to as much as possible for speed. Setting to `-1` uses all available threads.
+
+    eigensolver : string (optional, default 'arpack').
+        Method for computing the eigendecomposition. Can be either 'arpack', 'lobpcg', 'amg' or 'dense'.
+        * 'dense' :
+            use standard dense matrix operations for the eigenvalue decomposition.
+            For this method, M must be an array or matrix type.
+            This method should be avoided for large problems.
+        * 'arpack' :
+            use arnoldi iteration in shift-invert mode. For this method,
+            M may be a dense matrix, sparse matrix, or general linear operator.
+        * 'lobpcg' :
+            Locally Optimal Block Preconditioned Conjugate Gradient Method.
+            A preconditioned eigensolver for large symmetric positive definite
+            (SPD) generalized eigenproblems.
+        * 'amg' :
+            Algebraic Multigrid solver (requires ``pyamg`` to be installed)
+            It can be faster on very large, sparse problems, but requires
+            setting a random seed for better reproducibility.
+
+    eigen_tol : float (optional, default 0.0).
+        Error tolerance for the eigenvalue solver. If 0, machine precision is used.
+
+    diff_t : int (optional, default 1).
+        Time parameter for the diffusion operator, if `eigenmap_method` is 'DM' and `multiscale` is False. Also works with 'eigenmap_method' being 'LE'. 
+        The diffusion operator or the graph Laplacian will be powered by t steps (a diffusion process). Ignored for other methods.
+
+    multiscale : bool (optional, default False).
+        Whether to use multiscale diffusion, if `eigenmap_method` is 'DM'. Ignored for other methods. Setting this to
+        True will make the `diff_t` parameter be ignored.
+
+    semi_aniso : bool (optional, default False).
+        Whether to use semi-anisotropic diffusion, if `eigenmap_method` is 'DM'. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
+
+    projection_method : str (optional, default 'MAP').
+        Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box without need to import packages.
+        't-SNE' uses scikit-learn if the user does not have multicore-tsne and 'MAP' relies on code that is adapted from UMAP for efficiency.
+        Current options are:
+            * ['Isomap']() - one of the first manifold learning methods
+            * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
+            * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
+            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
+            * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations (requires installing `pacmap`)
+            * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets (requires installing `trimap`)
+            * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors (requires installing `pymde`)
+            * 'IsometricMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of pairwise distances (requires installing `pymde`)
+            * ['NCVis'](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - a UMAP-like method with blazing fast performance (requires installing `ncvis`)
+        These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
 
     verbosity : int (optional, default 1).
         Controls verbosity. 0 for no verbosity, 1 for minimal (prints warnings and runtimes of major steps), 2 for
         medium (also prints layout optimization messages) and 3 for full (down to neighborhood search, useful for debugging).
 
-    cache_base : bool (optional, default True).
-        Whether to cache intermediate matrices used in computing orthogonal bases
-        (k-nearest-neighbors, diffusion harmonics etc).
+    cache :  bool (optional, default True).
+        Whether to cache kernel and eigendecomposition classes in the results dictionaries.
+        Set to `False` to avoid unnecessary duplications if you're using a single model with large data.
 
-    cache_graph : bool (optional, default True).
-        Whether to cache intermediate matrices used in computing topological graphs
-        (k-nearest-neighbors, diffusion harmonics etc).
+    random_state : int or numpy.random.RandomState() (optional, default None).
+        A pseudo random number generator. Used in eigendecomposition when `eigensolver` is 'amg',
 
-    plot_spectrum : bool (optional, default False).
-        Whether to plot the informational decay spectrum obtained during eigendecomposition of similarity matrices.
+    Attributes
+    ----------
+        BaseKernelDict : dict
+            A dictionary of base kernel classes, with keys being the kernel version and values being the kernel class.
 
-    eigen_expansion : bool (optional, default False).
-        Whether to try to find a discrete eigengap during eigendecomposition. This can *severely* impact runtime,
-        as it can take numerous eigendecompositions to do so.
+        EigenbasisDict : dict
+            A dictionary of eigendecomposition classes, with keys referring to the kernel version and eigenmap method
+            and values being the eigendecomposition class.
+
+        GraphKernelDict : dict  
+            A dictionary of graph kernel classes, with keys referring to the base kernel, eigendecomposition method,
+            and graph kernel version used, and and values being the kernel class.
+
+        self.SpecLayout : np.ndarray (n_samples, n_components)
+            The spectral layout of the data.
+
+        self.ProjectionDict : dict
+            A dictionary of graph projection coordinates, with keys referring to the projection method and values being the projection class.
+
+        ClustersDict : dict
+            A dictionary of cluster labels, with keys referring to the eigenbasis used and values being the cluster labels.
+
+        current_basekernel : `topo.tpgraph.Kernel` object
+            The current base kernel class. 
+
+        current_eigenbasis : `topo.eigen.EigenDecomposition` object
+            The current eigendecomposition class.
+
+        current_graphkernel : `topo.tpgraph.Kernel` object
+            The current graph kernel class (Kernel class fitted on the eigendecomposition results).
+
+        global_dimensionality : float or None
+            The global dimensionality of the data, if it has been estimated.
+
+        local_dimensionality : np.ndarray (n_samples,)
+            The local pairwise dimensionality of the data, if it has been estimated.
+
 
     """
 
     def __init__(self,
-                 base_knn=10,
-                 graph_knn=10,
-                 n_eigs=100,
-                 basis='diffusion',
-                 graph='diff',
+                 base_knn=30,
+                 graph_knn=30,
+                 n_eigs=300,
+                 base_kernel=None,
+                 base_kernel_version='bw_adaptive',
+                 eigenmap_method='DM',
+                 laplacian_type='normalized',
+                 projection_method='MAP',
+                 graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
-                 graph_metric='cosine',
-                 n_jobs=-1,
-                 eigen_tol=1e-4,
-                 backend='nmslib',
-                 M=15,
-                 efC=50,
-                 efS=50,
-                 verbosity=1,
-                 cache_base=True,
-                 cache_graph=True,
-                 kernel_use='decay',
-                 alpha=1,
-                 diff_t=5,
-                 multiscale=True,
-                 plot_spectrum=False,
+                 graph_metric='euclidean',
+                 alpha=1.0,
+                 diff_t=1,
+                 multiscale=False,
+                 semi_aniso=False,
                  delta=1.0,
-                 t='inf',
-                 p=11 / 16,
+                 sigma=0.1,
+                 n_jobs=1,
+                 low_memory=False,
+                 eigen_tol=1e-4,
+                 eigensolver='arpack',
+                 backend='nmslib',
+                 cache=True,
+                 verbosity=1,
                  random_state=None,
                  ):
+        self.projection_method = projection_method
         self.diff_t = diff_t
         self.multiscale = multiscale
-        self.graph = graph
-        self.basis = basis
         self.n_eigs = n_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
         self.alpha = alpha
         self.n_jobs = n_jobs
+        self.low_memory = low_memory
         self.backend = backend
         self.base_metric = base_metric
         self.graph_metric = graph_metric
         self.eigen_tol = eigen_tol
-        self.p = p
-        self.M = M
-        self.efC = efC
-        self.efS = efS
-        self.kernel_use = kernel_use
+        self.eigensolver = eigensolver
+        self.base_kernel = base_kernel
+        self.base_kernel_version = base_kernel_version
+        self.eigenmap_method = eigenmap_method
+        self.graph_kernel_version = graph_kernel_version
+        self.laplacian_type = laplacian_type
+        self.semi_aniso = semi_aniso
+        self.eigenbasis = None
+        self.graph_kernel = None
         self.verbosity = verbosity
+        self.sigma = sigma
         self.bases_graph_verbose = False
         self.layout_verbose = False
-        self.plot_spectrum = plot_spectrum
         self.delta = delta
-        self.t = t
-        self.cache_base = cache_base
-        self.cache_graph = cache_graph
         self.random_state = random_state
+        self.eigenbasis_knn_graph = None
         self.base_nbrs_class = None
         self.base_knn_graph = None
-        self.graph_nbrs_class = None
-        self.graph_knn_graph = None
-        self.DiffBasis = None
-        self.computed_LapGraph = False
-        self.MSDiffMap = None
-        self.MSDiffMap_evals = None
-        self.ContBasis = None
-        self.CLapMap = None
-        self.CLapMap_evals = None
-        self.FuzzyBasis = None
-        self.FuzzyBasisResults = None
-        self.FuzzyLapMap = None
-        self.FuzzyLapMap_evals = None
+        self.cache = cache
+        self.BaseKernelDict = {}
+        self.EigenbasisDict = {}
+        self.GraphKernelDict = {}
+        self.ProjectionDict = {}
+        self.ClustersDict = {}
         self.n = None
         self.m = None
-        self.MDE_problem = None
         self.SpecLayout = None
-        self.db_fuzzy_graph = None
-        self.db_cknn_graph = None
-        self.db_diff_graph = None
-        self.fb_fuzzy_graph = None
-        self.fb_cknn_graph = None
-        self.fb_diff_graph = None
-        self.cb_fuzzy_graph = None
-        self.cb_cknn_graph = None
-        self.cb_diff_graph = None
-        self.db_fuzzy_clusters = None
-        self.db_cknn_clusters = None
-        self.db_diff_clusters = None
-        self.fb_fuzzy_clusters = None
-        self.fb_cknn_clusters = None
-        self.fb_diff_clusters = None
-        self.cb_fuzzy_clusters = None
-        self.cb_cknn_clusters = None
-        self.cb_diff_clusters = None
-        self.db_diff_MAP = None
-        self.db_fuzzy_MAP = None
-        self.db_cknn_MAP = None
-        self.db_diff_MDE = None
-        self.db_fuzzy_MDE = None
-        self.db_cknn_MDE = None
-        self.db_PaCMAP = None
-        self.db_TriMAP = None
-        self.db_tSNE = None
-        self.fb_diff_MAP = None
-        self.fb_fuzzy_MAP = None
-        self.fb_cknn_MAP = None
-        self.fb_diff_MDE = None
-        self.fb_fuzzy_MDE = None
-        self.fb_cknn_MDE = None
-        self.fb_PaCMAP = None
-        self.fb_TriMAP = None
-        self.fb_tSNE = None
-        self.cb_diff_MAP = None
-        self.cb_fuzzy_MAP = None
-        self.cb_cknn_MAP = None
-        self.cb_diff_MDE = None
-        self.cb_fuzzy_MDE = None
-        self.cb_cknn_MDE = None
-        self.cb_PaCMAP = None
-        self.cb_TriMAP = None
-        self.cb_tSNE = None
-        self.db_TriMAP = None
-        self.cb_TriMAP = None
-        self.fb_TriMAP = None
-        self.db_NCVis = None
-        self.cb_NCVis = None
-        self.fb_NCVis = None
         self.runtimes = {}
+        self.current_eigenbasis = None
+        self.current_graphkernel = None
+        self.global_dimensionality = None
+        self.local_dimensionality = None
+        self.dimensionality_estimator = None
+        self.RiemannMetricDict = {}
+        self.LocalScoresDict = {}
 
     def __repr__(self):
-        if (self.n is not None) and (self.m is not None):
+        if self.base_metric == 'precomputed':
+            msg = "TopOGraph object with precomputed distances from %i samples" % (
+                self.n) + " and:"
+        elif (self.n is not None) and (self.m is not None):
             msg = "TopOGraph object with %i samples and %i observations" % (
                 self.n, self.m) + " and:"
         else:
             msg = "TopOGraph object without any fitted data."
-        msg = msg + "\n . Orthogonal bases:"
-        if self.MSDiffMap is not None:
-            msg = msg + " \n .. Multiscale Diffusion Maps fitted - .MSDiffMap"
-            msg = msg + " \n    With similarity metrics stored at - .DiffBasis.K and .DiffBasis.T"
-            if (self.db_PaCMAP is not None) or (self.db_TriMAP is not None) or \
-                    (self.db_tSNE is not None) or (self.db_NCVis is not None):
-                msg = msg + " \n    With layouts:"
-            if self.db_PaCMAP is not None:
-                msg = msg + " \n         PaCMAP - .db_PaCMAP"
-            if self.db_TriMAP is not None:
-                msg = msg + " \n         TriMAP - .db_TriMAP"
-            if self.db_tSNE is not None:
-                msg = msg + " \n         tSNE - .db_tSNE"
-            if self.db_NCVis is not None:
-                msg = msg + " \n         NCVis - .db_NCVis"
-            msg = msg + "\n     And the downstream topological graphs:"
-            if self.db_diff_graph is not None:
-                msg = msg + " \n       Diffusion graph - .db_diff_graph"
-                msg = msg + "\n          Graph layouts:"
-                if self.db_diff_MAP is not None:
-                    msg = msg + " \n         MAP - .db_diff_MAP"
-                if self.db_diff_MDE is not None:
-                    msg = msg + " \n         MDE - .db_diff_MDE"
-                if (self.db_diff_MAP is None) and (self.db_diff_MDE is None):
-                    msg = msg + " none fitted."
-            if self.db_fuzzy_graph is not None:
-                msg = msg + " \n       Fuzzy graph - .db_fuzzy_graph"
-                msg = msg + " \n         Graph layouts:"
-                if self.db_fuzzy_MAP is not None:
-                    msg = msg + " \n         MAP - .db_fuzzy_MAP"
-                if self.db_fuzzy_MDE is not None:
-                    msg = msg + " \n         MDE - .db_fuzzy_MDE"
-                if (self.db_fuzzy_MAP is None) and (self.db_fuzzy_MDE is None):
-                    msg = msg + " none fitted."
-            if self.db_cknn_graph is not None:
-                msg = msg + " \n       CkNN graph - .db_cknn_graph"
-                msg = msg + " \n         Graph layouts:"
-                if self.db_cknn_MAP is not None:
-                    msg = msg + " \n         MAP - .db_cknn_MAP"
-                if self.db_cknn_MDE is not None:
-                    msg = msg + " \n         MDE - .db_cknn_MDE"
-                if (self.db_cknn_MAP is None) and (self.db_cknn_MDE is None):
-                    msg = msg + " none fitted."
-            if (self.db_diff_graph is None) and (self.db_fuzzy_graph is None) and (self.db_cknn_graph is None):
-                msg = msg + " none fitted."
-            msg = msg + "\n"
+        msg = msg + "\n . Base Kernels:"
+        for keys in self.BaseKernelDict.keys():
+            msg = msg + " \n    %s - .BaseKernelDict['%s']" % (keys, keys)
+        msg = msg + "\n . Eigenbases:"
+        for keys in self.EigenbasisDict.keys():
+            msg = msg + " \n    %s - .EigenbasisDict['%s']" % (keys, keys)
+        msg = msg + "\n . Graph Kernels:"
+        for keys in self.GraphKernelDict.keys():
+            msg = msg + " \n    %s - .GraphKernelDict['%s']" % (keys, keys)
+        msg = msg + "\n . Projections:"
+        for keys in self.ProjectionDict.keys():
+            msg = msg + " \n    %s - .ProjectionDict['%s']" % (keys, keys)
 
-        if self.CLapMap is not None:
-            msg = msg + \
-                " \n .. Continuous (CkNN) Laplacian Eigenmaps fitted - .CLapMap"
-            msg = msg + " \n    With similarity metrics stored at - .ContBasis"
-            if (self.cb_PaCMAP is not None) or (self.cb_TriMAP is not None) or \
-                    (self.cb_tSNE is not None) or (self.cb_NCVis is not None):
-                msg = msg + " \n    With layouts:"
-            if self.cb_PaCMAP is not None:
-                msg = msg + " \n         PaCMAP - .cb_PaCMAP"
-            if self.cb_TriMAP is not None:
-                msg = msg + " \n         TriMAP - .cb_TriMAP"
-            if self.cb_tSNE is not None:
-                msg = msg + " \n         tSNE - .cb_tSNE"
-            if self.cb_NCVis is not None:
-                msg = msg + " \n         NCVis - .cb_NCVis"
-            msg = msg + "\n     And the downstream topological graphs:"
-            if self.cb_diff_graph is not None:
-                msg = msg + " \n      Diffusion graph - .cb_diff_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.cb_diff_MAP is not None:
-                    msg = msg + " \n         MAP - .cb_diff_MAP"
-                if self.cb_diff_MDE is not None:
-                    msg = msg + " \n         MDE - .cb_diff_MDE"
-                if (self.cb_diff_MAP is None) and (self.cb_diff_MDE is None):
-                    msg = msg + " none fitted."
-            if self.cb_fuzzy_graph is not None:
-                msg = msg + " \n      Fuzzy graph - .cb_fuzzy_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.cb_fuzzy_MAP is not None:
-                    msg = msg + " \n         MAP - .cb_fuzzy_MAP"
-                if self.cb_fuzzy_MDE is not None:
-                    msg = msg + " \n         MDE - .cb_fuzzy_MDE"
-                if (self.cb_fuzzy_MAP is None) and (self.cb_fuzzy_MDE is None):
-                    msg = msg + " none fitted."
-            if self.cb_cknn_graph is not None:
-                msg = msg + " \n      CkNN graph - .cb_cknn_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.cb_cknn_MAP is not None:
-                    msg = msg + " \n         MAP - .cb_cknn_MAP"
-                if self.cb_cknn_MDE is not None:
-                    msg = msg + " \n         MDE - .cb_cknn_MDE"
-                if (self.cb_cknn_MAP is None) and (self.cb_cknn_MDE is None):
-                    msg = msg + " none fitted."
-            if (self.cb_fuzzy_graph is None) and (self.cb_cknn_graph is None):
-                msg = msg + " none fitted."
-            msg = msg + "\n"
+        msg = msg + " \n Active base kernel  -  .base_kernel"
+        msg = msg + " \n Active eigenbasis  -  .eigenbasis"
+        msg = msg + " \n Active graph kernel  -  .graph_kernel"
 
-        if self.FuzzyLapMap is not None:
-            msg = msg + \
-                "\n .. Fuzzy (simplicial sets) Laplacian Eigenmaps fitted - .FuzzyLapMap"
-            msg = msg + "\n    With similarity metrics stored at - .FuzzyBasis"
-            if (self.fb_PaCMAP is not None) or (self.fb_TriMAP is not None) or \
-                    (self.fb_tSNE is not None) or (self.fb_NCVis is not None):
-                msg = msg + " \n    With layouts:"
-            if self.fb_PaCMAP is not None:
-                msg = msg + " \n         PaCMAP - .fb_PaCMAP"
-            if self.fb_TriMAP is not None:
-                msg = msg + " \n         TriMAP - .fb_TriMAP"
-            if self.fb_tSNE is not None:
-                msg = msg + " \n         tSNE - .fb_tSNE"
-            if self.fb_NCVis is not None:
-                msg = msg + " \n         NCVis - .fb_NCVis"
-            msg = msg + "\n     And the downstream topological graphs:"
-            if self.fb_diff_graph is not None:
-                msg = msg + " \n      Diffusion graph - .fb_diff_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.fb_diff_MAP is not None:
-                    msg = msg + " \n         MAP - .fb_diff_MAP"
-                if self.fb_diff_MDE is not None:
-                    msg = msg + " \n         MDE - .fb_diff_MDE"
-                if (self.fb_diff_MAP is None) and (self.fb_diff_MDE is None):
-                    msg = msg + " none fitted."
-            if self.fb_fuzzy_graph is not None:
-                msg = msg + " \n      Fuzzy graph - .fb_fuzzy_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.fb_fuzzy_MAP is not None:
-                    msg = msg + " \n         MAP - .fb_fuzzy_MAP"
-                if self.fb_fuzzy_MDE is not None:
-                    msg = msg + " \n         MDE - .fb_fuzzy_MDE"
-                if (self.fb_fuzzy_MAP is None) and (self.fb_fuzzy_MDE is None):
-                    msg = msg + " none fitted."
-            if self.fb_cknn_graph is not None:
-                msg = msg + " \n      CkNN graph - .fb_cknn_graph"
-                msg = msg + " \n        Graph layouts:"
-                if self.fb_cknn_MAP is not None:
-                    msg = msg + " \n         MAP - .fb_cknn_MAP"
-                if self.fb_cknn_MDE is not None:
-                    msg = msg + " \n         MDE - .fb_cknn_MDE"
-                if (self.fb_cknn_MAP is None) and (self.fb_cknn_MDE is None):
-                    msg = msg + " none fitted."
-            if (self.fb_fuzzy_graph is None) and (self.fb_cknn_graph is None):
-                msg = msg + " none fitted."
-            msg = msg + "\n"
-
-        if (self.MSDiffMap is None) and (self.CLapMap is None) and (self.FuzzyLapMap is None):
-            msg = msg + " none fitted."
-        msg = msg + " \n "
-        msg = msg + " \n Active basis: " + str(self.basis) + ' basis.'
-        msg = msg + " \n Active graph: " + str(self.graph) + ' graph.'
         return msg
 
-    def fit(self, X):
+    def _parse_backend(self):
+        if self.backend == 'hnswlib':
+            if not _have_hnswlib:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                elif _have_faiss:
+                    self.backend == 'faiss'
+                else:
+                    self.backend == 'sklearn'
+        elif self.backend == 'nmslib':
+            if not _have_nmslib:
+                if _have_hnswlib:
+                    self.backend == 'hnswlib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                elif _have_faiss:
+                    self.backend == 'faiss'
+                else:
+                    self.backend == 'sklearn'
+        elif self.backend == 'annoy':
+            if not _have_annoy:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                elif _have_hnswlib:
+                    self.backend == 'hnswlib'
+                elif _have_faiss:
+                    self.backend == 'faiss'
+                else:
+                    self.backend == 'sklearn'
+        elif self.backend == 'faiss':
+            if not _have_faiss:
+                if _have_nmslib:
+                    self.backend == 'nmslib'
+                elif _have_hnswlib:
+                    self.backend == 'hnswlib'
+                elif _have_annoy:
+                    self.backend == 'annoy'
+                else:
+                    self.backend == 'sklearn'
+        else:
+            print(
+                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+            self.backend == 'sklearn'
+
+    def _parse_random_state(self):
+        if self.random_state is None:
+            self.random_state = np.random.RandomState()
+        elif isinstance(self.random_state, np.random.RandomState):
+            pass
+        elif isinstance(self.random_state, int):
+            self.random_state = np.random.RandomState(self.random_state)
+        else:
+            print('RandomState error! No random state was defined!')
+
+    def fit(self, X=None, **kwargs):
         """
-        Learn topological distances with diffusion harmonics and continuous metrics. Computes affinity operators
-        that approximate the Laplace-Beltrami operator
+        Learn distances, computes similarities with various kernels and applies eigendecompositions to them or their Laplacian or diffusion operators.
+        The learned operators approximate the Laplace-Beltrami Operator and learn the topology of the underlying manifold. The eigenbasis learned from
+        such eigendecomposition represents the data in a lower-dimensional space (with up to some hundreds dimensions),
+        where the euclidean distances between points are approximated by the geodesic distances on the manifold. Because the eigenbasis is equivalent
+        to a Fourier basis, one needs at least `n+1` to eigenvectors to represent a dataset that can be optimically divided into `n` clusters.
+
 
         Parameters
         ----------
-        X :
-            High-dimensional data matrix. Currently, supports only data from similar type (i.e. all bool, all float)
+        X : High-dimensional data matrix.
+             Currently, supports only data from similar type (i.e. all bool, all float).
+             Not required if the `base_kernel` parameter is specified and corresponds to a fitted `topo.tpgraph.Kernel()` object.
 
         Returns
         -------
 
         TopoGraph instance with several slots, populated as per user settings.
-        If `basis='diffusion'`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
+        If `eigenbasis='diffusion'`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
                 `TopoGraph.DiffBasis` with a fitted `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics
                 and transition probabilities, respectively stored in TopoGraph.DiffBasis.K and TopoGraph.DiffBasis.T
 
-        If `basis='continuous'`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
+        If `eigenbasis='continuous'`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
                 `TopoGraph.ContBasis` with a continuous-k-nearest-neighbors model, containing continuous metrics and
                 adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
 
-        If `basis='fuzzy'`, populates `TopoGraph.FuzzyLapMap` with a fuzzy Laplacian Eigenmapping of data, and
+        If `eigenbasis='fuzzy'`, populates `TopoGraph.FuzzyLapMap` with a fuzzy Laplacian Eigenmapping of data, and
                 `TopoGraph.FuzzyBasis` with a fuzzy simplicial set model, containing continuous metrics.
 
         """
+        if self.base_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
+            raise ValueError(
+                "base_kernel_version must be one of ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']")
+        if self.graph_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
+            raise ValueError(
+                "graph_kernel_version must be one of ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']")
+        if self.eigenmap_method not in ['DM', 'LE', 'top', 'bottom']:
+            raise ValueError(
+                "eigenmap_method must be one of ['DM', 'LE', 'top', 'bottom']")
+        if (self.n_eigs > X.shape[0]) or (self.n_eigs > X.shape[1]):
+            raise ValueError(
+                "n_eigs must be less than the number of samples and observations in X")
+        if not isinstance(self.n_eigs, int):
+            raise ValueError("n_eigs must be an integer")
+        if not isinstance(self.base_knn, int):
+            raise ValueError("base_knn must be an integer")
+        if not isinstance(self.graph_knn, int):
+            raise ValueError("graph_knn must be an integer")
+
+        self._parse_backend()
+        self._parse_random_state()
+
+        if X is None:
+            if self.base_kernel is None:
+                raise ValueError('X was not passed!')
+            elif not isinstance(self.base_kernel, Kernel):
+                raise ValueError(
+                    'The specified base kernel is not a topo.tpgraph.Kernel object!')
+            else:
+                if self.base_kernel.knn_ is None:
+                    raise ValueError(
+                        'The specified base kernel has not been fitted!')
+                else:
+                    self.n = self.base_kernel.knn_.shape[0]
+                    self.m = self.base_kernel.knn_.shape[1]
+        else:
+            if self.base_metric == 'precomputed':
+                self.base_knn_graph = X.copy()
+            self.n = X.shape[0]
+            self.m = X.shape[1]
+
+        # parse other inputs
         if self.n_jobs == -1:
             from joblib import cpu_count
             self.n_jobs = cpu_count()
@@ -515,59 +502,14 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         else:
             self.layout_verbose = False
 
-        if self.backend == 'hnswlib':
-            if not _have_hnswlib:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
-                elif _have_faiss:
-                    self.backend == 'faiss'
-                else:
-                    self.backend == 'sklearn'
-        if self.backend == 'nmslib':
-            if not _have_nmslib:
-                if _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
-                elif _have_faiss:
-                    self.backend == 'faiss'
-                else:
-                    self.backend == 'sklearn'
-        if self.backend == 'annoy':
-            if not _have_annoy:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_faiss:
-                    self.backend == 'faiss'
-                else:
-                    self.backend == 'sklearn'
-        if self.backend == 'faiss':
-            if not _have_faiss:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
-                else:
-                    self.backend == 'sklearn'
+        if self.base_kernel is not None:
+            if not isinstance(self.base_kernel, Kernel):
+                print(
+                    "WARNING: kernel must be an instance of the Kernel class. Creating a default kernel...")
+                self.base_kernel = None
+            if self.base_kernel.knn_ is not None:
+                self.base_knn_graph = self.base_kernel.knn_
 
-        self.n = X.shape[0]
-        self.m = X.shape[1]
-        if self.random_state is None:
-            self.random_state = np.random.RandomState()
-        elif isinstance(self.random_state, np.random.RandomState):
-            pass
-        elif isinstance(self.random_state, int):
-            self.random_state = np.random.RandomState(self.random_state)
-        else:
-            print('RandomState error! No random state was defined!')
-
-        # First build a kNN graph:
         if self.base_knn_graph is None:
             if self.verbosity >= 1:
                 print('Computing neighborhood graph...')
@@ -576,188 +518,224 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                             metric=self.base_metric,
                                                             n_jobs=self.n_jobs,
                                                             backend=self.backend,
-                                                            M=self.M,
-                                                            efC=self.efC,
-                                                            efS=self.efS,
+                                                            symmetrize=True,
                                                             return_instance=True,
-                                                            verbose=self.bases_graph_verbose)
+                                                            verbose=self.bases_graph_verbose, **kwargs)
             end = time.time()
+            gc.collect()
             self.runtimes['kNN'] = end - start
-
             if self.verbosity >= 1:
-                print(' Base kNN graph computed in %f (sec)' % (
-                    end - start))
+                print(' Base kNN graph computed in %f (sec)' % (end - start))
+
+        if self.base_kernel_version in self.BaseKernelDict.keys():
+            self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
+        else:
+            start = time.time()
+            self.base_kernel, self.BaseKernelDict = self._compute_kernel_from_version_knn(self.base_knn_graph,
+                                                                                          self.base_knn,
+                                                                                          self.base_kernel_version,
+                                                                                          self.BaseKernelDict,
+                                                                                          suffix='',
+                                                                                          low_memory=self.low_memory)
+            end = time.time()
+            gc.collect()
+            if self.verbosity >= 1:
+                print(' Fitted the ' + (self.base_kernel_version) +
+                      ' kernel in %f (sec)' % (end - start))
 
         if self.verbosity >= 1:
-            print('Building topological basis...' +
-                  'using ' + str(self.basis) + ' model.')
+            print('Computing eigenbasis...')
 
-        # Next use the kNN graph to build kernels that converge to the LBO
-        # at the limit of large data (diffusion operator, fuzzy simplicial sets or CkNN)
-
-        if self.basis == 'diffusion':
-            self.DiffBasis = Diffusor(n_eigs=self.n_eigs,
-                                      n_neighbors=self.base_knn,
-                                      alpha=self.alpha,
-                                      n_jobs=self.n_jobs,
-                                      backend=self.backend,
-                                      metric=self.base_metric,
-                                      t=self.diff_t,
-                                      multiscale=self.multiscale,
-                                      tol=self.eigen_tol,
-                                      p=self.p,
-                                      M=self.M,
-                                      efC=self.efC,
-                                      efS=self.efS,
-                                      kernel_use=self.kernel_use,
-                                      verbose=self.bases_graph_verbose,
-                                      plot_spectrum=False,
-                                      cache=self.cache_base)
-            if self.kernel_use == 'simple' or self.kernel_use == 'decay':
-                self.DiffBasis.metric = 'precomputed'
-                start = time.time()
-                self.MSDiffMap = self.DiffBasis.fit_transform(
-                    self.base_knn_graph)
+        if self.eigenmap_method == 'DM':
+            basis_key = 'DM with ' + str(self.base_kernel_version)
+            if basis_key in self.EigenbasisDict.keys():
+                self.eigenbasis = self.EigenbasisDict[basis_key]
+                self.current_eigenbasis = basis_key
             else:
                 start = time.time()
-                self.MSDiffMap = self.DiffBasis.fit_transform(X)
-            self.MSDiffMap_evals = self.DiffBasis.res['EigenValues']
-            end = time.time()
-            self.runtimes['DB'] = end - start
-            if self.verbosity >= 1:
-                print(' Topological basis fitted with multiscale self-adaptive diffusion maps in %f (sec)' %
-                      (end - start))
+                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
+                                                     method=self.eigenmap_method,
+                                                     eigensolver=self.eigensolver,
+                                                     eigen_tol=self.eigen_tol,
+                                                     drop_first=True,
+                                                     normalize=True,
+                                                     weight=True,
+                                                     multiscale=self.multiscale,
+                                                     t=self.diff_t,
+                                                     random_state=self.random_state,
+                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
+                self.EigenbasisDict[basis_key] = self.eigenbasis
+                self.current_eigenbasis = basis_key
+                end = time.time()
+                gc.collect()
+                self.runtimes[basis_key] = end - start
+                if self.verbosity >= 1:
+                    print(' Fitted eigenbasis with Diffusion Maps from the ' +
+                          str(self.base_kernel_version) + ' kernel in %f (sec)' % (end - start))
 
-        elif self.basis == 'continuous':
+        elif self.eigenmap_method == 'LE':
+            basis_key = 'LE with ' + str(self.base_kernel_version)
+            if basis_key in self.EigenbasisDict.keys():
+                self.eigenbasis = self.EigenbasisDict[basis_key]
+                self.current_eigenbasis = basis_key
+            else:
+                start = time.time()
+                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
+                                                     method=self.eigenmap_method,
+                                                     eigensolver=self.eigensolver,
+                                                     eigen_tol=self.eigen_tol,
+                                                     drop_first=True,
+                                                     normalize=True,
+                                                     weight=True,
+                                                     multiscale=self.multiscale,
+                                                     t=self.diff_t,
+                                                     random_state=self.random_state,
+                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
+                self.EigenbasisDict[basis_key] = self.eigenbasis
+                self.current_eigenbasis = basis_key
+                end = time.time()
+                gc.collect()
+                self.runtimes[basis_key] = end - start
+                if self.verbosity >= 1:
+                    print(' Fitted eigenbasis with Laplacian Eigenmaps from the ' +
+                          str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
+
+        elif self.eigenmap_method == 'top':
+            basis_key = 'Top eigenpairs with ' + str(self.base_kernel_version)
+            if basis_key in self.EigenbasisDict.keys():
+                self.eigenbasis = self.EigenbasisDict[basis_key]
+                self.current_eigenbasis = basis_key
+            else:
+                start = time.time()
+                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
+                                                     method=self.eigenmap_method,
+                                                     eigensolver=self.eigensolver,
+                                                     eigen_tol=self.eigen_tol,
+                                                     drop_first=True,
+                                                     normalize=True,
+                                                     weight=True,
+                                                     multiscale=self.multiscale,
+                                                     t=self.diff_t,
+                                                     random_state=self.random_state,
+                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
+                self.EigenbasisDict[basis_key] = self.eigenbasis
+                self.current_eigenbasis = basis_key
+                end = time.time()
+                gc.collect()
+                self.runtimes[basis_key] = end - start
+                if self.verbosity >= 1:
+                    print(' Fitted eigenbasis with top eigenpairs from the ' +
+                          str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
+
+        elif self.eigenmap_method == 'bottom':
+            if basis_key in self.EigenbasisDict.keys():
+                self.eigenbasis = self.EigenbasisDict[basis_key]
+                self.current_eigenbasis = basis_key
+            else:
+                basis_key = 'Bottom eigenpairs with ' + \
+                    str(self.base_kernel_version)
             start = time.time()
-            self.ContBasis = cknn_graph(self.base_knn_graph,
-                                        n_neighbors=self.base_knn,
-                                        delta=self.delta,
-                                        metric='precomputed',
-                                        include_self=True,
-                                        verbose=self.bases_graph_verbose
-                                        )
-            self.ContBasis = (self.ContBasis + self.ContBasis.T) / 2
-            self.ContBasis[(np.arange(self.ContBasis.shape[0]),
-                            np.arange(self.ContBasis.shape[0]))] = 0
+            self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
+                                                 method=self.eigenmap_method,
+                                                 eigensolver=self.eigensolver,
+                                                 eigen_tol=self.eigen_tol,
+                                                 drop_first=True,
+                                                 normalize=True,
+                                                 weight=True,
+                                                 multiscale=self.multiscale,
+                                                 t=self.diff_t,
+                                                 random_state=self.random_state,
+                                                 verbose=self.bases_graph_verbose).fit(self.base_kernel)
+            basis_key = 'Bottom eigenpairs with ' + \
+                str(self.base_kernel_version)
+            self.EigenbasisDict[basis_key] = self.eigenbasis
+            self.current_eigenbasis = basis_key
             end = time.time()
-
-            print('  Computed CkNN graph in %f (sec)' % (end - start))
-
-            del data_use
-            import gc
             gc.collect()
-
-            self.CLapMap, self.CLapMap_evals = spt.LE(
-                self.ContBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
-
-            # self.CLapMap, self.CLapMap_evals = spt.LapEigenmap(
-            #    self.ContBasis,
-            #    self.n_eigs,
-            #    norm_laplacian=True,
-            #    eigen_tol=self.eigen_tol,
-            #    return_evals=True,
-            #    random_state=self.random_state
-            # )
-            end = time.time()
-            self.runtimes['CB'] = end - start
+            self.runtimes[basis_key] = end - start
             if self.verbosity >= 1:
-                print(
-                    ' Topological basis fitted with Laplacian Eigenmaps from Continuous-k-Nearest-Neighbors in %f (sec)' % (
-                        end - start))
-
-        elif self.basis == 'fuzzy':
-            start = time.time()
-            fuzzy_results = fuzzy_simplicial_set(self.base_knn_graph,
-                                                 n_neighbors=self.base_knn,
-                                                 backend=self.backend,
-                                                 metric=self.base_metric,
-                                                 n_jobs=self.n_jobs,
-                                                 efC=self.efC,
-                                                 efS=self.efS,
-                                                 M=self.M,
-                                                 set_op_mix_ratio=1.0,
-                                                 local_connectivity=1.0,
-                                                 apply_set_operations=True,
-                                                 return_dists=True,
-                                                 verbose=self.bases_graph_verbose)
-
-            self.FuzzyConnectivities = {
-                'rho': fuzzy_results[2], 'sigma': fuzzy_results[1]}
-            self.FuzzyBasis = fuzzy_results[0]
-            self.FuzzyBasis = (self.FuzzyBasis + self.FuzzyBasis.T) / 2
-            self.FuzzyBasis[(np.arange(self.FuzzyBasis.shape[0]),
-                             np.arange(self.FuzzyBasis.shape[0]))] = 0
-            self.FuzzyLapMap, self.FuzzyLapMap_evals = spt.LE(
-                self.FuzzyBasis, n_eigs=self.n_eigs, return_evals=True, eigen_tol=self.eigen_tol)
-            end = time.time()
-            self.runtimes['FB'] = end - start
-            if self.verbosity >= 1:
-                print(' Topological basis fitted with Laplacian Eigenmaps from fuzzy simplicial sets in %f (sec)' % (
-                    end - start))
-
-        else:
-            return print(
-                ' Error: \'basis\' must be either \'diffusion\', \'continuous\' or \'fuzzy\'! Returning empty TopOGraph.')
-
-        if self.plot_spectrum:
-            self.eigenspectrum()
+                print(' Fitted eigenbasis with bottom eigenpairs from from the ' +
+                      str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
 
         return self
 
-    def eigenspectrum(self, basis=None, verbose=False):
+    def fit_transform(self, X=None):
+        self.fit(X)
+        gc.collect()
+        return self.transform()
+
+
+
+    def eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
         Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
         Useful to indirectly estimate the intrinsic dimensionality of a dataset.
 
         Parameters
         ----------
-        `basis` : str (optional, default None).
-            If `None`, will use the default basis. Otherwise, uses the specified basis
-            (must be 'diffusion', 'continuous' or 'fuzzy').
-
-        verbose : bool (optional, default False).
-            Controls verbosity
+        `eigenbasis_key` : str (optional, default None).
+            If `None`, will use the default eigenbasis at `TopOGraph.eigenbasis`. Otherwise, uses the specified eigenbasis.
 
         Returns
         -------
         A nice eigenspectrum decay plot ('scree plot').
 
         """
-        if basis is not None:
-            if isinstance(basis, str):
-                self.basis = basis
-        if self.basis == 'diffusion':
-            return self.DiffBasis.spectrum_plot()
+        if eigenbasis_key is not None:
+            if isinstance(eigenbasis_key, str):
+                if eigenbasis_key in self.EigenbasisDict.keys():
+                    eigenbasis = self.EigenbasisDict[eigenbasis_key]
+                else:
+                    raise ValueError(
+                        'Eigenbasis key not in TopOGraph.EigenbasisDict.')
         else:
-            if self.basis == 'continuous':
-                use_evals = self.CLapMap_evals
-            elif self.basis == 'fuzzy':
-                use_evals = self.FuzzyLapMap_evals
-            else:
-                return print(
-                    'Error: No computed basis available!')
+            eigenbasis = self.eigenbasis
         try:
             import matplotlib.pyplot as plt
         except ImportError:
             return print('Error: Matplotlib not found!')
         from topo.plot import decay_plot
-        return decay_plot(evals=use_evals)
-
-    def scree_plot(self):
-        # Backwards compability
-        return self.eigenspectrum()
-
-    def transform(self, basis=None):
+        return decay_plot(evals=eigenbasis.eigenvalues, title=eigenbasis_key, **kwargs)
+    
+    def plot_eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
-        Learns new affinity, topological operators from chosen basis.
+        An anlias for `TopOGraph.eigenspectrum`. Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
+        Useful to indirectly estimate the intrinsic dimensionality of a dataset.
 
         Parameters
         ----------
+        `eigenbasis_key` : str (optional, default None).
+            If `None`, will use the default eigenbasis at `TopOGraph.eigenbasis`. Otherwise, uses the specified eigenbasis.
 
-        basis : str, optional.
-            Base to use when building the topological graph. Defaults to the active base ( `TopOGraph.basis`).
-            Setting this updates the active base.
+        Returns
+        -------
+        A nice eigenspectrum decay plot ('scree plot').
+
+        """
+        return self.eigenspectrum(eigenbasis_key=eigenbasis_key, **kwargs)
+
+
+    def list_eigenbases(self):
+        """
+        List the eigenbases in the `TopOGraph.EigenbasisDict`.
+
+        Returns
+        -------
+        A list of eigenbasis keys in the `TopOGraph.EigenbasisDict`.
+
+        """
+        return list(self.EigenbasisDict.keys())
+
+    def transform(self, X=None, **kwargs):
+        """
+        Learns new affinity, topological operators from chosen eigenbasis. This does not strictly follow scikit-learn's API,
+        no new data can be transformed with this method. Instead, this method is used to learn new topological operators
+        on top of the learned eigenbasis, analagous to spectral clustering methods.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features), optional
+            New data to transform. This is not used in this method, but is included for compatibility with scikit-learn's API.
 
 
         Returns
@@ -765,2144 +743,306 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.
 
         """
-        if basis is not None:
-            if isinstance(basis, str):
-                self.basis = basis
-            elif isinstance(basis, np.ndarray):
-                if self.verbosity >= 1:
-                    print('    Using provided data...')
+        if self.eigenbasis is not None:
+            eigenbasis = self.eigenbasis
+        else:
+            raise ValueError('No eigenbasis computed. Call .fit() first.')
         if self.verbosity >= 1:
-            print('    Building topological graph...')
-        if isinstance(basis, np.ndarray):
-            use_basis = basis
-        else:
-            if self.basis == 'continuous':
-                use_basis = self.CLapMap
-            elif self.basis == 'diffusion':
-                use_basis = self.MSDiffMap
-            elif self.basis == 'fuzzy':
-                use_basis = self.FuzzyLapMap
-            else:
-                return print(
-                    'Error: No computed basis available! Compute a topological basis before fitting a topological graph.')
-
-        if self.graph == 'diff':
-            start = time.time()
-            DiffGraph = Diffusor(n_neighbors=self.graph_knn,
-                                 alpha=self.alpha,
-                                 n_jobs=self.n_jobs,
-                                 backend=self.backend,
-                                 metric=self.graph_metric,
-                                 t=self.diff_t,
-                                 multiscale=self.multiscale,
-                                 p=self.p,
-                                 M=self.M,
-                                 efC=self.efC,
-                                 efS=self.efS,
-                                 kernel_use=self.kernel_use,
-                                 verbose=self.bases_graph_verbose,
-                                 plot_spectrum=self.plot_spectrum,
-                                 cache=False
-                                 ).fit(use_basis)
-            end = time.time()
-            if self.basis == 'diffusion':
-                self.runtimes['db_diff_graph'] = end - start
-            if self.basis == 'fuzzy':
-                self.runtimes['fb_diff_graph'] = end - start
-            if self.basis == 'continuous':
-                self.runtimes['fb_diff_graph'] = end - start
-            if self.cache_graph:
-                if self.basis == 'diffusion':
-                    self.db_diff_graph = DiffGraph.P
-                if self.basis == 'continuous':
-                    self.cb_diff_graph = DiffGraph.P
-                if self.basis == 'fuzzy':
-                    self.fb_diff_graph = DiffGraph.P
-
-        elif self.graph == 'cknn':
-            start = time.time()
-            base_nbrs_class, graph_knn_graph = kNN(use_basis, n_neighbors=self.graph_knn,
-                                                   metric=self.graph_metric,
-                                                   n_jobs=self.n_jobs,
-                                                   backend=self.backend,
-                                                   M=self.M,
-                                                   efC=self.efC,
-                                                   efS=self.efS,
-                                                   return_instance=True,
-                                                   verbose=self.bases_graph_verbose)
-            # Enforce symmetry
-            knn = graph_knn_graph.toarray()
-            knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-            knn = (knn + knn.T) / 2
-            CknnGraph = cknn_graph(knn,
-                                   n_neighbors=self.graph_knn,
-                                   delta=self.delta,
-                                   metric='precomputed',
-                                   t=self.t,
-                                   include_self=True,
-                                   is_sparse=True)
-            end = time.time()
-            if self.basis == 'diffusion':
-                self.runtimes['db_cknn_graph'] = end - start
-            if self.basis == 'fuzzy':
-                self.runtimes['cb_cknn_graph'] = end - start
-            if self.basis == 'continuous':
-                self.runtimes['fb_cknn_graph'] = end - start
-            if self.cache_graph:
-                if self.basis == 'diffusion':
-                    self.db_cknn_graph = CknnGraph
-                if self.basis == 'continuous':
-                    self.cb_cknn_graph = CknnGraph
-                if self.basis == 'fuzzy':
-                    self.fb_cknn_graph = CknnGraph
-
-        elif self.graph == 'fuzzy':
-            start = time.time()
-            FuzzyGraph = fuzzy_simplicial_set(use_basis,
-                                                  n_neighbors=self.graph_knn,
-                                                  backend=self.backend,
-                                                  metric=self.graph_metric,
-                                                  n_jobs=self.n_jobs,
-                                                  efC=self.efC,
-                                                  efS=self.efS,
-                                                  M=self.M,
-                                                  set_op_mix_ratio=1.0,
-                                                  local_connectivity=1.0,
-                                                  apply_set_operations=True,
-                                                  return_dists=False,
-                                                  verbose=self.bases_graph_verbose)
-            end = time.time()
-            if self.basis == 'diffusion':
-                self.runtimes['db_fuzzy_graph'] = end - start
-            if self.basis == 'fuzzy':
-                self.runtimes['cb_fuzzy_graph'] = end - start
-            if self.basis == 'continuous':
-                self.runtimes['fb_fuzzy_graph'] = end - start
-            FuzzyGraph = FuzzyGraph[0]
-            if self.cache_graph:
-                if self.basis == 'diffusion':
-                    self.db_fuzzy_graph = FuzzyGraph
-                if self.basis == 'continuous':
-                    self.cb_fuzzy_graph = FuzzyGraph
-                if self.basis == 'fuzzy':
-                    self.fb_fuzzy_graph = FuzzyGraph
-        else:
-            return print('Error: \'graph\' must be \'diff\', \'cknn\' or \'fuzzy\'!')
-
+            print('    Building topological graph from eigenbasis...')
         if self.verbosity >= 1:
-            print('     Topological `' + str(self.graph) +
-                  '` graph extracted in = %f (sec)' % (end - start))
-        if self.graph == 'diff':
-            return DiffGraph.P
-        elif self.graph == 'cknn':
-            return CknnGraph
-        elif self.graph == 'fuzzy':
-            return FuzzyGraph
-        else:
-            return self
+            print('        Computing neighborhood graph...')
+        start = time.time()
+        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(X=None), n_neighbors=self.graph_knn,
+                                        metric=self.graph_metric,
+                                        n_jobs=self.n_jobs,
+                                        backend=self.backend,
+                                        return_instance=False,
+                                        verbose=self.bases_graph_verbose, **kwargs)
+        end = time.time()
+        gc.collect()
+        self.runtimes['Graph kNN'] = end - start
+        if self.verbosity >= 1:
+            print(' Computed in %f (sec)' % (end - start))
+        start = time.time()
+        self.graph_kernel, self.GraphKernelDict = self._compute_kernel_from_version_knn(self.eigenbasis_knn_graph,
+                                                                                        self.graph_knn,
+                                                                                        self.graph_kernel_version,
+                                                                                        self.GraphKernelDict,
+                                                                                        suffix=' from ' + self.current_eigenbasis,
+                                                                                        low_memory=self.low_memory)
+        
+        end = time.time()
+        gc.collect()
+        self.current_graphkernel = self.graph_kernel_version + \
+            ' from ' + self.current_eigenbasis
+        if self.verbosity >= 1:
+            print(' Fitted the ' + str(self.graph_kernel_version) +
+                  ' graph kernel in %f (sec)' % (end - start))
 
-    def spectral_layout(self, graph=None, n_components=2, cache=True):
+    def spectral_layout(self, graph=None, n_components=2):
         """
 
         Performs a multicomponent spectral layout of the data and the target similarity matrix.
 
         Parameters
         ----------
-        graph : scipy.sparse.csr.csr_matrix.
-            affinity matrix (i.e. topological graph). If None (default), uses the default graph from the default basis.
+        graph : str indicating a `TopOGraph.EigenbasisDict` key or or array-like, optional.
+            Graph kernel to use for the spectral layout. Defaults to the active graph kernel (`TopOGraph.graph_kernel`).
+
         n_components : int (optional, default 2).
-            number of dimensions to embed into.
-        cache : bool (optional, default True).
-            Whether to cache the embedding to the `TopOGraph` object.
+            Number of dimensions to embed into.
+
         Returns
         -------
         np.ndarray containing the resulting embedding.
 
         """
         if graph is None:
-            if self.basis == 'diffusion':
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.db_diff_graph is None:
-                            self.transform()
-                        graph = self.db_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.db_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.db_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.db_cknn_graph is None:
-                            self.transform()
-                        graph = self.db_cknn_graph
-
-            elif self.basis == 'continuous':
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.cb_diff_graph is None:
-                            self.transform()
-                        graph = self.cb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.cb_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.cb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.cb_cknn_graph is None:
-                            self.transform()
-                        graph = self.cb_cknn_graph
-
-            elif self.basis == 'fuzzy':
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.fb_diff_graph is None:
-                            self.transform()
-                        graph = self.fb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.fb_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.fb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.fb_cknn_graph is None:
-                            self.transform()
-                        graph = self.fb_cknn_graph
-
+            if self.graph_kernel is None:
+                raise ValueError(
+                    'No graph kernel computed. Call .fit() first.')
+            graph = self.graph_kernel
         start = time.time()
-        spt_layout = spt.spectral_layout(
-            graph, n_components, self.random_state, self.eigen_tol)
+        spt_layout = spectral_layout(graph.P, n_components, self.random_state,
+                                     laplacian_type=self.laplacian_type, eigen_tol=self.eigen_tol, return_evals=False)
         expansion = 10.0 / np.abs(spt_layout).max()
         spt_layout = (spt_layout * expansion).astype(
             np.float32
         ) + self.random_state.normal(
-            scale=0.0001, size=[graph.shape[0], n_components]
+            scale=0.0001, size=[graph.P.shape[0], n_components]
         ).astype(np.float32)
         end = time.time()
         self.runtimes['Spectral'] = end - start
-        if cache:
-            self.SpecLayout = spt_layout
-
+        self.SpecLayout = spt_layout
+        gc.collect()
         return spt_layout
 
-    def fuzzy_graph(self,
-                    X=None,
-                    basis=None,
-                    knn_indices=None,
-                    knn_dists=None,
-                    cache=True):
+    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', num_iters=1000, **kwargs):
         """
-
-        Given a topological basis, a neighborhood size, and a measure of distance
-        compute the fuzzy simplicial set (here represented as a fuzzy graph in
-        the form of a sparse matrix) associated to the data. This is done by
-        locally approximating geodesic distance at each point, creating a fuzzy
-        simplicial set for each such point, and then combining all the local
-        fuzzy simplicial sets into a global one via a fuzzy union.
+        Projects the data into a lower dimensional space using the specified projection method. Calls topo.layout.Projector().
 
         Parameters
         ----------
-        X : np.ndarray, scipy.sparse.csr_matrix or str, 'diffusion' or 'continuous' (optional, default None).
-            The data to be modelled as a fuzzy simplicial set. If None, defaults to the active orthogonal basis.
-
-        knn_indices : array of shape (n_samples, n_neighbors) (optional).
-            If the k-nearest neighbors of each point has already been calculated
-            you can pass them in here to save computation time. This should be
-            an array with the indices of the k-nearest neighbors as a row for
-            each data point.
-
-        knn_dists : array of shape (n_samples, n_neighbors) (optional).
-            If the k-nearest neighbors of each point has already been calculated
-            you can pass them in here to save computation time. This should be
-            an array with the distances of the k-nearest neighbors as a row for
-            each data point.
-
-        cache : bool, optional (default True)
-            Whether to store the fuzzy simplicial set graph in the TopOGraph object.
-
-        Returns
-        -------
-        fuzzy_simplicial_set : coo_matrix
-            A fuzzy simplicial set represented as a sparse matrix. The (i, j) entry of the matrix represents
-            the membership strength of the 1-simplex between the ith and jth sample points.
-
-        """
-
-        if X is None:
-            if basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    X = self.MSDiffMap
-            elif basis == 'continuous':
-                if self.CLapMap is None:
-                    return print('Error: Basis set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    X = self.CLapMap
-            elif basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    X = self.FuzzyLapMap
-
-        fuzzy_set = fuzzy_simplicial_set(X,
-                                             n_neighbors=self.graph_knn,
-                                             knn_indices=knn_indices,
-                                             knn_dists=knn_dists,
-                                             backend=self.backend,
-                                             metric=self.graph_metric,
-                                             n_jobs=self.n_jobs,
-                                             efC=self.efC,
-                                             efS=self.efS,
-                                             M=self.M,
-                                             set_op_mix_ratio=1.0,
-                                             local_connectivity=1.0,
-                                             apply_set_operations=True,
-                                             return_dists=False,
-                                             verbose=self.bases_graph_verbose)
-        if cache:
-            if self.basis == 'diffusion':
-                self.db_fuzzy_graph = fuzzy_set[0]
-            if self.basis == 'continuous':
-                self.cb_fuzzy_graph = fuzzy_set[0]
-            if self.basis == 'fuzzy':
-                self.fb_fuzzy_graph = fuzzy_set[0]
-        return fuzzy_set[0]
-
-    def MDE(self,
-            basis=None,
-            graph=None,
-            n_components=2,
-            n_neighbors=None,
-            type='isomorphic',
-            n_epochs=500,
-            snapshot_every=30,
-            constraint=None,
-            init='quadratic',
-            repulsive_fraction=None,
-            max_distance=None,
-            device='cpu',
-            eps=10e-4,
-            mem_size=1):
-        """
-
-            This function constructs a Minimum Distortion Embedding (MDE) problem for preserving the
-        structure of original data. This MDE problem is well-suited for
-        visualization (using ``dim`` 2 or 3), but can also be used to
-        generate features for machine learning tasks (with ``dim`` = 10,
-        50, or 100, for example). It yields embeddings in which similar items
-        are near each other, and dissimilar items are not near each other.
-        The original data can either be a data matrix, or a graph.
-        Data matrices should be torch Tensors, NumPy arrays, or scipy sparse
-        matrices; graphs should be instances of ``pymde.Graph``.
-        The MDE problem uses distortion functions derived from weights (i.e.,
-        penalties).
-        To obtain an embedding, call the ``embed`` method on the returned ``MDE``
-        object. To plot it, use ``pymde.plot``.
-
-        Parameters
-        ----------
-        basis :  str ('diffusion', 'continuous' or 'fuzzy').
-            Which basis to use when computing the embedding. Defaults to the active basis.
-
-        graph : scipy.sparse matrix.
-            The affinity matrix to embedd with. Defaults to the active graph. If init = 'spectral',
-            a fuzzy simplicial set is used, and this argument is ignored.
-
         n_components : int (optional, default 2).
-            The embedding dimension. Use 2 or 3 for visualization.
+            Number of dimensions to optimize the layout to. Usually 2 or 3 if you're into visualizing data.
 
-        constraint : str (optional, default 'standardized').
-            Constraint to use when optimizing the embedding. Options are 'standardized',
-            'centered', `None` or a `pymde.constraints.Constraint()` function.
+        init : str or np.ndarray (optional, default None).
+            If passed as `str`, will use the specified layout as initialization. If passed as `np.ndarray`, will use the array as initialization.
 
-        n_neighbors : int (optional).
-            The number of nearest neighbors to compute for each row (item) of
-            ``data``. A sensible value is chosen by default, depending on the
-            number of items.
+        projection_method : str (optional, default 'MAP').
+            Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses scikit-learn implementation
+            and 'MAP' relies on code that is adapted from UMAP. Current options are:
+            * 'Isomap'
+            * 't-SNE'
+            * 'MAP'
+            * 'UMAP'
+            * 'PaCMAP'
+            * 'TriMAP'
+            * 'IsomorphicMDE' - MDE with preservation of nearest neighbors
+            * 'IsometricMDE' - MDE with preservation of pairwise distances
+            * 'NCVis'
+            These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
 
-        repulsive_fraction : float (optional).
-            How many repulsive edges to include, relative to the number
-            of attractive edges. ``1`` means as many repulsive edges as attractive
-            edges. The higher this number, the more uniformly spread out the
-            embedding will be. Defaults to ``0.5`` for standardized embeddings, and
-            ``1`` otherwise. (If ``repulsive_penalty`` is ``None``, this argument
-            is ignored.)
+        landmarks : int or np.ndarray (optional, default None).
+            If passed as `int`, will obtain the number of landmarks. If passed as `np.ndarray`, will use the specified indexes in the array.
+            Any value other than `None` will result in only the specified landmarks being used in the layout optimization, and will
+            populate the Projector.landmarks_ slot.
 
-        max_distance : float (optional).
-            If not None, neighborhoods are restricted to have a radius
-            no greater than ``max_distance``.
+        landmark_method : str (optional, default 'kmeans').
+            The method to use for selecting landmarks. If `landmarks` is passed as an `int`, this will be used to select the landmarks.
+            Can be either 'kmeans' or 'random'.
 
-        init : str or np.ndarray (optional, default 'quadratic')
-            Initialization strategy; np.ndarray, 'quadratic' or 'random'.
+        num_iters : int (optional, default 1000).
+            Most (if not all) methods optimize the layout up to a limit number of iterations. Use this parameter to set this number.
 
-        device : str (optional).
-            Device for the embedding (eg, 'cpu', 'cuda').
-
-        Returns
-        -------
-        torch.tensor
-            A ``pymde.MDE`` object, based on the original data.
-
-        """
-        try:
-            from pymde.functions import penalties, losses
-            from pymde.preprocess import Graph
-            from topo.layouts import mde
-        except ImportError:
-            return print("pyMDE is required for this. Install it with `pip install pymde`")
-        attractive_penalty = penalties.Log1p
-        repulsive_penalty = penalties.Log
-        loss = losses.Absolute
-
-        if n_neighbors is None:
-            n_neighbors = self.graph_knn
-
-        if basis is not None:
-            if isinstance(basis, str):
-                self.basis = basis
-            else:
-                return print('Error: `basis` must be \'diffusion\', \'continuous\' or \'fuzzy\'!')
-        if self.basis == 'diffusion':
-            if self.MSDiffMap is None:
-                return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
-            else:
-                data = self.MSDiffMap
-            if graph is None:
-                if self.graph == 'diff':
-                    if self.db_diff_graph is None:
-                        self.transform()
-                    graph = self.db_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.db_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.db_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.db_cknn_graph is None:
-                        self.transform()
-                    graph = self.db_cknn_graph
-
-        elif self.basis == 'continuous':
-            if self.CLapMap is None:
-                return print(
-                    'Error: Basis set to \'continuous\', but the continuous basis is not computed!')
-            else:
-                data = self.CLapMap
-            if graph is None:
-                if self.graph == 'diff':
-                    if self.cb_diff_graph is None:
-                        self.transform()
-                    graph = self.cb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.cb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.cb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.cb_cknn_graph is None:
-                        self.transform()
-                    graph = self.cb_cknn_graph
-
-        elif self.basis == 'fuzzy':
-            if self.FuzzyLapMap is None:
-                return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-            else:
-                data = self.FuzzyLapMap
-            if graph is None:
-                if self.graph == 'diff':
-                    if self.fb_diff_graph is None:
-                        self.transform()
-                    graph = self.fb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.fb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.fb_cknn_graph is None:
-                        self.transform()
-                    graph = self.fb_cknn_graph
-
-        start = time.time()
-        graph = Graph(graph)
-        if type == 'isomorphic':
-            emb = mde.IsomorphicMDE(graph,
-                                    attractive_penalty=attractive_penalty,
-                                    repulsive_penalty=repulsive_penalty,
-                                    embedding_dim=n_components,
-                                    constraint=constraint,
-                                    n_neighbors=n_neighbors,
-                                    repulsive_fraction=repulsive_fraction,
-                                    max_distance=max_distance,
-                                    init=init,
-                                    device=device,
-                                    verbose=self.layout_verbose)
-
-        elif type == 'isometric':
-            if max_distance is None:
-                max_distance = 5e7
-            emb = mde.IsometricMDE(graph,
-                                   embedding_dim=n_components,
-                                   loss=loss,
-                                   constraint=constraint,
-                                   max_distances=max_distance,
-                                   device=device,
-                                   verbose=self.layout_verbose)
-        else:
-            return print(
-                'Error: The tg.MDE problem must be \'isomorphic\' or \'isometric\'. Alternatively, build your custom '
-                'MDE problem with `pyMDE` (i.g. pymde.MDE())')
-        self.MDE_problem = emb
-
-        emb_Y = emb.embed(max_iter=n_epochs,
-                          memory_size=mem_size,
-                          snapshot_every=snapshot_every,
-                          eps=eps,
-                          verbose=self.layout_verbose)
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Obtained MDE embedding in = %f (sec)' %
-                  (end - start))
-
-        MDE_Y = np.array(emb_Y)
-
-        if self.basis == 'diffusion':
-            if self.graph == 'diff':
-                self.db_diff_MDE = MDE_Y
-                self.runtimes['db_diff_MDE'] = end - start
-            if self.graph == 'cknn':
-                self.db_cknn_MDE = MDE_Y
-                self.runtimes['db_cknn_MDE'] = end - start
-            if self.graph == 'fuzzy':
-                self.db_fuzzy_MDE = MDE_Y
-                self.runtimes['db_fuzzy_MDE'] = end - start
-        if self.basis == 'continuous':
-            if self.graph == 'diff':
-                self.cb_diff_MDE = MDE_Y
-                self.runtimes['cb_diff_MDE'] = end - start
-            if self.graph == 'cknn':
-                self.cb_cknn_MDE = MDE_Y
-                self.runtimes['cb_cknn_MDE'] = end - start
-            if self.graph == 'fuzzy':
-                self.cb_fuzzy_MDE = MDE_Y
-                self.runtimes['cb_fuzzy_MDE'] = end - start
-        if self.basis == 'fuzzy':
-            if self.graph == 'diff':
-                self.fb_diff_MDE = MDE_Y
-                self.runtimes['fb_diff_MDE'] = end - start
-            if self.graph == 'cknn':
-                self.fb_cknn_MDE = MDE_Y
-                self.runtimes['fb_cknn_MDE'] = end - start
-            if self.graph == 'fuzzy':
-                self.fb_fuzzy_MDE = MDE_Y
-                self.runtimes['fb_fuzzy_MDE'] = end - start
-
-        return MDE_Y
-
-    def MAP(self,
-            data=None,
-            graph=None,
-            n_components=2,
-            min_dist=0.3,
-            spread=1,
-            initial_alpha=1.2,
-            n_epochs=800,
-            metric=None,
-            metric_kwds={},
-            output_metric='euclidean',
-            output_metric_kwds={},
-            gamma=1.2,
-            negative_sample_rate=10,
-            init='spectral',
-            random_state=None,
-            euclidean_output=True,
-            parallel=True,
-            densmap=False,
-            densmap_kwds={},
-            output_dens=False,
-            return_aux=False
-            ):
-        """""
-
-        Manifold Approximation and Projection, as proposed by Leland McInnes with an uniform distribution assumption
-        in the seminal [UMAP algorithm](https://umap-learn.readthedocs.io/en/latest/index.html). Performs a fuzzy
-        simplicial set embedding, using a specified initialisation method and then minimizing the fuzzy set cross 
-        entropy between the 1-skeletons of the high and low dimensional fuzzy simplicial sets. The fuzzy simplicial 
-        set embedding was proposed and implemented by Leland McInnes in UMAP (see `umap-learn
-        <https://github.com/lmcinnes/umap>`). Here we're using it only for the projection (layout optimization)
-        by minimizing the cross-entropy between a phenotypic map (i.e. data, TopOMetry non-uniform latent mappings) and 
-        its graph topological representation.
-
-        The main parameters controlling the embedding process are `min_dist`, `spread`, `initial_alpha` and `n_epochs`.
-
-
-        Parameters
-        ----------
-        data : array of shape (n_samples, n_features).
-            The source data to be embedded by UMAP. If `None` (default), the active basis will be used.
-
-        graph : scipy.sparse.csr_matrix (n_samples, n_samples).
-            The 1-skeleton of the high dimensional fuzzy simplicial set as
-            represented by a graph for which we require a sparse matrix for the
-            (weighted) adjacency matrix. If `None` (default), a fuzzy simplicial set 
-            is computed with default parameters.
-
-        min_dist : float (optional, default 0.3)
-            The effective minimum distance between embedded points. Smaller values will result in a more
-            clustered/clumped embedding where nearby points on the manifold are drawn closer together,
-            while larger values will result on a more even dispersal of points. The value should be set
-            relative to the spread value, which determines the scale at which embedded points will be spread out.
-
-        spread : float (optional, default 1.0)
-            The effective scale of embedded points. In combination with min_dist this determines
-            how clustered/clumped the embedded points are.
-
-        n_components : int (optional, default 2).
-            The dimensionality of the euclidean space into which to embed the data.
-
-        initial_alpha: float (optional, default 1).
-            Initial learning rate for the SGD.
-
-        gamma : float (optional, default 1.2).
-            Weight to apply to negative samples.
-
-        negative_sample_rate : int (optional, default 5).
-            The number of negative samples to select per positive sample
-            in the optimization process. Increasing this value will result
-            in greater repulsive force being applied, greater optimization
-            cost, but slightly more accuracy.
-
-        n_epochs : int (optional, default 0).
-            The number of training epochs to be used in optimizing the
-            low dimensional embedding. Larger values result in more accurate
-            embeddings. If 0 is specified a value will be selected based on
-            the size of the input dataset (200 for large datasets, 500 for small).
-
-        init : string (optional, default 'spectral').
-        How to initialize the low dimensional embedding. Options are:
-                * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
-                * 'random': assign initial embedding positions at random.
-                * A numpy array of initial embedding positions.
-
-        random_state : numpy RandomState or equivalent.
-            A state capable being used as a numpy random state.
-
-        metric : string or callable.
-            The metric used to measure distance in high dimensional space; used if
-            multiple connected components need to be layed out. Defaults to `TopOGraph.graph_metric`.
-
-        metric_kwds : dict (optional, no default).
-            Key word arguments to be passed to the metric function; used if
-            multiple connected components need to be layed out.
-
-        densmap : bool (optional, default False).
-            Whether to use the density-augmented objective function to optimize
-            the embedding according to the densMAP algorithm.
-
-        densmap_kwds : dict (optional, no default).
-            Key word arguments to be used by the densMAP optimization.
-
-        output_dens : bool (optional, default False).
-            Whether to output local radii in the original data and the embedding.
-
-        output_metric : function (optional, no default).
-            Function returning the distance between two points in embedding space and
-            the gradient of the distance wrt the first argument.
-
-        output_metric_kwds : dict (optional, no default).
-            Key word arguments to be passed to the output_metric function.
-
-        euclidean_output : bool (optional, default True).
-            Whether to use the faster code specialised for euclidean output metrics
-
-        parallel : bool (optional, default True).
-            Whether to run the computation using numba parallel.
-            Running in parallel is non-deterministic, and is not used
-            if a random seed has been set, to ensure reproducibility.
-
-        return_aux : bool , (optional, default False).
-            Whether to also return the auxiliary data, i.e. initialization and local radii.
+        **kwargs : dict (optional).
+            Additional keyword arguments to pass to the projection method during fit.
 
         Returns
         -------
-        * embedding : array of shape (n_samples, n_components)
-            The optimized of ``graph`` into an ``n_components`` dimensional
-            euclidean space.
-
-        *  return_aux is set to True :
-            aux_data : dict
-
-            Auxiliary dictionary output returned with the embedding.
-            ``aux_data['Y_init']``: array of shape (n_samples, n_components)
-            The spectral initialization of ``graph`` into an ``n_components`` dimensional
-            euclidean space.
-
-            When densMAP extension is turned on, this dictionary includes local radii in the original
-            data (``aux_data['rad_orig']``) and in the embedding (``aux_data['rad_emb']``).
-
-
-        """""
-        from topo.layouts import map
-        if output_metric == 'torus':
-            from topo.utils.umap_utils import torus_euclidean_grad
-            output_metric = torus_euclidean_grad
-        if metric is None:
-            metric = self.graph_metric
-        if data is None:
-            if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.db_diff_graph is None:
-                            self.transform()
-                        graph = self.db_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.db_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.db_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.db_cknn_graph is None:
-                            self.transform()
-                        graph = self.db_cknn_graph
-
-            elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print(
-                        'Error: Basis set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.cb_diff_graph is None:
-                            self.transform()
-                        graph = self.cb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.cb_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.cb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.cb_cknn_graph is None:
-                            self.transform()
-                        graph = self.cb_cknn_graph
-
-            elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
-                if graph is None:
-                    if self.graph == 'diff':
-                        if self.fb_diff_graph is None:
-                            self.transform()
-                        graph = self.fb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.fb_fuzzy_graph is None:
-                            self.transform()
-                        graph = self.fb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.fb_cknn_graph is None:
-                            self.transform()
-                        graph = self.fb_cknn_graph
-
-        if isinstance(init, str) and init == 'spectral':
-            if self.SpecLayout is None:
-                if self.verbosity >= 1:
-                    print('         Computing spectral layout...')
-                if self.basis == 'diffusion':
-                    if self.db_fuzzy_graph is None:
-                        self.db_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
-                if self.basis == 'continuous':
-                    if self.cb_fuzzy_graph is None:
-                        self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.cb_fuzzy_graph, n_components=n_components)
-                if self.basis == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.fb_fuzzy_graph, n_components=n_components)
-            else:
-                init = self.SpecLayout
-
-        start = time.time()
-        results = map.fuzzy_embedding(graph,
-                                      n_components=n_components,
-                                      initial_alpha=initial_alpha,
-                                      min_dist=min_dist,
-                                      spread=spread,
-                                      n_epochs=n_epochs,
-                                      metric=metric,
-                                      metric_kwds=metric_kwds,
-                                      output_metric=output_metric,
-                                      output_metric_kwds=output_metric_kwds,
-                                      gamma=gamma,
-                                      negative_sample_rate=negative_sample_rate,
-                                      init=init,
-                                      random_state=random_state,
-                                      euclidean_output=euclidean_output,
-                                      parallel=parallel,
-                                      verbose=self.layout_verbose,
-                                      a=None,
-                                      b=None,
-                                      densmap=densmap,
-                                      densmap_kwds=densmap_kwds,
-                                      output_dens=output_dens)
-
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Optimized MAP embedding in = %f (sec)' %
-                  (end - start))
-
-        if self.basis == 'diffusion':
-            if self.graph == 'diff':
-                self.db_diff_MAP = results[0]
-                self.runtimes['db_diff_MAP'] = end - start
-            if self.graph == 'cknn':
-                self.db_cknn_MAP = results[0]
-                self.runtimes['db_cknn_MAP'] = end - start
-            if self.graph == 'fuzzy':
-                self.db_fuzzy_MAP = results[0]
-                self.runtimes['db_fuzzy_MAP'] = end - start
-        if self.basis == 'continuous':
-            if self.graph == 'diff':
-                self.cb_diff_MAP = results[0]
-                self.runtimes['cb_diff_MAP'] = end - start
-            if self.graph == 'cknn':
-                self.cb_cknn_MAP = results[0]
-                self.runtimes['cb_cknn_MAP'] = end - start
-            if self.graph == 'fuzzy':
-                self.cb_fuzzy_MAP = results[0]
-                self.runtimes['cb_fuzzy_MAP'] = end - start
-        if self.basis == 'fuzzy':
-            if self.graph == 'diff':
-                self.fb_diff_MAP = results[0]
-                self.runtimes['fb_diff_MAP'] = end - start
-            if self.graph == 'cknn':
-                self.fb_cknn_MAP = results[0]
-                self.runtimes['fb_cknn_MAP'] = end - start
-            if self.graph == 'fuzzy':
-                self.fb_fuzzy_MAP = results[0]
-                self.runtimes['fb_fuzzy_MAP'] = end - start
-
-        if return_aux:
-            return results
-        else:
-            return results[0]
-
-    def PaCMAP(self, data=None,
-               init='spectral',
-               n_components=2,
-               n_neighbors=None,
-               MN_ratio=0.5,
-               FP_ratio=2.0,
-               pair_neighbors=None,
-               pair_MN=None,
-               pair_FP=None,
-               distance="euclidean",
-               lr=1.0,
-               num_iters=450,
-               intermediate=False):
-        """
-        Performs Pairwise-Controlled Manifold Approximation and Projection.
-
-        Parameters
-        ----------
-
-        data : np.ndarray or scipy.sparse.csr_matrix (optional, default None).
-            Data to be embedded. If None, will use the active orthogonal basis.
-
-        init : np.ndarray of shape (N,2) or str (optional, default 'spectral').
-            Initialization positions. Defaults to a multicomponent spectral embedding ('spectral').
-            Other options are 'pca' or 'random'.
-
-        n_components : int (optional, default 2).
-            How many components to embedd into.
-
-        n_neighbors : int (optional, default None).
-            How many neighbors to use during embedding. If None, will use `TopOGraph.graph_knn`.
-
-        MN_ratio : float (optional, default 0.5).
-            The ratio of the number of mid-near pairs to the number of neighbors, n_MN = n_neighbors * MN_ratio.
-
-        FP_ratio : float (optional, default 2.0).
-            The ratio of the number of further pairs to the number of neighbors, n_FP = n_neighbors * FP_ratio.
-
-        distance : float (optional, default 'euclidean').
-            Distance metric to use. Options are 'euclidean', 'angular', 'manhattan' and 'hamming'.
-
-        lr : float (optional, default 1.0).
-            Learning rate of the AdaGrad optimizer.
-
-        num_iters : int (optional, default 450).
-            Number of iterations. The default 450 is enough for most dataset to converge.
-
-        intermediate : bool (optional, default False).
-            Whether PaCMAP should also output the intermediate stages of the optimization process of the lower
-            dimension embedding. If True, then the output will be a numpy array of the size (n, n_dims, 13),
-            where each slice is a "screenshot" of the output embedding at a particular number of steps,
-            from [0, 10, 30, 60, 100, 120, 140, 170, 200, 250, 300, 350, 450].
-
-        pair_neighbors : optional, default None.
-            Pre-specified neighbor pairs. Allows user to use their own graphs. Default to None.
-
-        pair_MN : optional, default None.
-            Pre-specified mid-near pairs. Allows user to use their own graphs. Default to None.
-
-        pair_FP : optional, default None.
-            Pre-specified further pairs. Allows user to use their own graphs. Default to None.
-
-        Returns
-        -------
-
-        PaCMAP embedding.
+        np.ndarray containing the resulting embedding. Also stores it in the `TopOGraph.ProjectionDict` slot.
 
         """
-        from topo.layouts import pairwise
-        if data is None:
-            if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
-            elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
-            elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
-            else:
-                return print('No computed basis or data is provided!')
+        if projection_method is None:
+            projection_method = self.projection_method
 
-        if isinstance(init, str) and init == 'spectral':
-            if self.SpecLayout is None:
-                if self.verbosity >= 1:
-                    print('         Computing spectral layout...')
-                if self.basis == 'diffusion':
-                    if self.db_fuzzy_graph is None:
-                        self.db_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
-                if self.basis == 'continuous':
-                    if self.cb_fuzzy_graph is None:
-                        self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.cb_fuzzy_graph, n_components=n_components)
-                if self.basis == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.fb_fuzzy_graph, n_components=n_components)
-            else:
-                init = self.SpecLayout
-
-        start = time.time()
-        results = pairwise.PaCMAP(data=data,
-                                  init=init,
-                                  n_components=n_components,
-                                  n_neighbors=n_neighbors,
-                                  MN_ratio=MN_ratio,
-                                  FP_ratio=FP_ratio,
-                                  pair_neighbors=pair_neighbors,
-                                  pair_MN=pair_MN,
-                                  pair_FP=pair_FP,
-                                  distance=distance,
-                                  lr=lr,
-                                  num_iters=num_iters,
-                                  verbose=self.layout_verbose,
-                                  intermediate=intermediate)
-
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Obtained PaCMAP embedding in = %f (sec)' %
-                  (end - start))
-
-        if self.basis == 'diffusion':
-            self.db_PaCMAP = results
-            self.runtimes['db_PaCMAP'] = end - start
-        if self.basis == 'continuous':
-            self.cb_PaCMAP = results
-            self.runtimes['cb_PaCMAP'] = end - start
-        if self.basis == 'fuzzy':
-            self.fb_PaCMAP = results
-            self.runtimes['fb_PaCMAP'] = end - start
-
-        return results
-
-    def TriMAP(self, basis=None,
-               graph=None,
-               init=None,
-               n_components=2,
-               n_inliers=10,
-               n_outliers=5,
-               n_random=5,
-               use_dist_matrix=False,
-               metric='euclidean',
-               lr=1000.0,
-               n_iters=400,
-               triplets=None,
-               weights=None,
-               knn_tuple=None,
-               weight_adj=500.0,
-               opt_method="dbd",
-               return_seq=False):
-        """
-        Graph layout optimization using triplets.
-
-        Parameters
-        ----------
-        basis : str (optional, default None).
-        graph : str (optional, default None).
-        init : str (optional, default None).
-        n_components : int (optional, default 2).
-            Number of dimensions of the embedding.
-        n_inliers : int (optional, default 10).
-            Number of inlier points for triplet constraints.
-        n_outliers : int (optional, default 5).
-            Number of outlier points for triplet constraints.
-        n_random : int (optional, default 5).
-            Number of random triplet constraints per point.
-        metric : str (optional, default 'euclidean').
-             Distance measure ('euclidean', 'manhattan', 'angular', 'hamming')
-        use_dist_matrix : bool (optional, default False).
-            Use TopOMetry's learned similarities between samples. As of now, this is unstable.
-        lr : int (optional, default 1000).
-            Learning rate.
-        n_iters : int (optional, default 400)
-            Number of iterations.
-        opt_method : str (optional, default 'dbd')
-             Optimization method ('sd': steepest descent,  'momentum': GD with momentum,
-              'dbd': GD with momentum delta-bar-delta).
-        return_seq : bool (optional, default False)
-             Return the sequence of maps recorded every 10 iterations.
-
-        Returns
-        -------
-        TriMAP embedding.
-
-        """
-        if basis is not None:
-            if isinstance(basis, str):
-                self.basis = basis
-            else:
-                return print('Error: `basis` must be \'diffusion\', \'continuous\' or \'fuzzy\'!')
-        if use_dist_matrix:
-            if graph is None:
-                if self.basis == 'diffusion':
-                    if self.graph == 'diff':
-                        if self.db_diff_graph is None:
-                            self.transform()
-                        data = self.db_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.db_fuzzy_graph is None:
-                            self.transform()
-                        data = self.db_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.db_cknn_graph is None:
-                            self.transform()
-                        data = self.db_cknn_graph
-                elif self.basis == 'continuous':
-                    if self.graph == 'diff':
-                        if self.cb_diff_graph is None:
-                            self.transform()
-                        data = self.cb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.cb_fuzzy_graph is None:
-                            self.transform()
-                        data = self.cb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.cb_cknn_graph is None:
-                            self.transform()
-                        data = self.cb_cknn_graph
-                elif self.basis == 'fuzzy':
-                    if self.graph == 'diff':
-                        if self.fb_diff_graph is None:
-                            self.transform()
-                        data = self.fb_diff_graph
-                    if self.graph == 'fuzzy':
-                        if self.fb_fuzzy_graph is None:
-                            self.transform()
-                        data = self.fb_fuzzy_graph
-                    if self.graph == 'cknn':
-                        if self.fb_cknn_graph is None:
-                            self.transform()
-                        data = self.fb_cknn_graph
-            else:
-                data = graph
-            data = data.toarray()
-
-        else:
-            if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: Basis set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
-            elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print(
-                        'Error: Basis set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
-            elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: Basis set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
-
-        if isinstance(init, str) and init == 'spectral':
-            if self.SpecLayout is None:
-                if self.verbosity >= 1:
-                    print('         Computing spectral layout...')
-                if self.basis == 'diffusion':
-                    if self.db_fuzzy_graph is None:
-                        self.db_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
-                if self.basis == 'continuous':
-                    if self.cb_fuzzy_graph is None:
-                        self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.cb_fuzzy_graph, n_components=n_components)
-                if self.basis == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.fb_fuzzy_graph, n_components=n_components)
-            else:
-                init = self.SpecLayout
-
-        from topo.layouts import trimap
-        start = time.time()
-        results = trimap.TriMAP(X=data,
-                                init=init,
-                                n_dims=n_components,
-                                n_inliers=n_inliers,
-                                n_outliers=n_outliers,
-                                n_random=n_random,
-                                distance=metric,
-                                use_dist_matrix=use_dist_matrix,
-                                lr=lr,
-                                n_iters=n_iters,
-                                triplets=triplets,
-                                weights=weights,
-                                knn_tuple=knn_tuple,
-                                verbose=self.layout_verbose,
-                                weight_adj=weight_adj,
-                                opt_method=opt_method,
-                                return_seq=return_seq)
-
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Obtained TriMAP embedding in = %f (sec)' %
-                  (end - start))
-        if self.basis == 'diffusion':
-            if use_dist_matrix:
-                if self.graph == 'diff':
-                    self.db_diff_TriMAP = results
-                    self.runtimes['db_diff_TriMAP'] = end - start
-                if self.graph == 'cknn':
-                    self.db_cknn_TriMAP = results
-                    self.runtimes['db_cknn_TriMAP'] = end - start
-                if self.graph == 'fuzzy':
-                    self.db_fuzzy_TriMAP = results
-                    self.runtimes['db_fuzzy_TriMAP'] = end - start
-            else:
-                self.db_TriMAP = results
-                self.runtimes['db_TriMAP'] = end - start
-
-        if self.basis == 'continuous':
-            if use_dist_matrix:
-                if self.graph == 'diff':
-                    self.cb_diff_TriMAP = results
-                    self.runtimes['cb_diff_TriMAP'] = end - start
-                if self.graph == 'cknn':
-                    self.cb_cknn_TriMAP = results
-                    self.runtimes['cb_cknn_TriMAP'] = end - start
-                if self.graph == 'fuzzy':
-                    self.cb_fuzzy_TriMAP = results
-                    self.runtimes['cb_fuzzy_TriMAP'] = end - start
-            else:
-                self.cb_TriMAP = results
-                self.runtimes['cb_TriMAP'] = end - start
-
-        if self.basis == 'fuzzy':
-            if use_dist_matrix:
-                if self.graph == 'diff':
-                    self.fb_diff_TriMAP = results
-                    self.runtimes['fb_diff_TriMAP'] = end - start
-                if self.graph == 'cknn':
-                    self.fb_cknn_TriMAP = results
-                    self.runtimes['fb_cknn_TriMAP'] = end - start
-                if self.graph == 'fuzzy':
-                    self.fb_fuzzy_TriMAP = results
-                    self.runtimes['fb_fuzzy_TriMAP'] = end - start
-            else:
-                self.fb_TriMAP = results
-                self.runtimes['fb_TriMAP'] = end - start
-
-        return results
-
-    def tSNE(self, data=None,
-             graph=None,
-             n_components=2,
-             early_exaggeration=12,
-             n_iter=1000,
-             n_iter_early_exag=250,
-             n_iter_without_progress=30,
-             min_grad_norm=1e-07,
-             init=None,
-             random_state=None,
-             angle=0.5,
-             cheat_metric=True):
-        """
-
-        The classic t-SNE embedding, usually on top of a TopOMetry topological basis.
-
-        Parameters
-        ----------
-        data : optional, default None)
-        graph : optional, default None)
-        n_components: int (optional, default 2).
-        early_exaggeration : sets exaggeration
-        n_iter : number of iterations to optmizie
-        n_iter_early_exag : number of iterations in early exaggeration
-        init : np.ndarray (optional, defaults to tg.SpecLayout)
-            Initialisation for the optimization problem.
-        random_state : optional, default None
-
-        Returns
-        -------
-
-        """
-        try:
-            from MulticoreTSNE import MulticoreTSNE as TSNE
-            _have_mc_tsne = True
-        except ImportError:
-            _have_mc_tsne = False
-            return print('No MulticoreTSNE installation found. Exiting.')
-        if self.SpecLayout is not None:
-            if init is None:
-                init = self.SpecLayout
-        if data is None:
-            if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
-            elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
-            elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
-            else:
-                return print('Error: no computed basis or data is provided!')
-
-        if isinstance(init, str) and init == 'spectral':
-            if self.SpecLayout is None:
-                if self.verbosity >= 1:
-                    print('         Computing spectral layout...')
-                if self.basis == 'diffusion':
-                    if self.db_fuzzy_graph is None:
-                        self.db_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
-                if self.basis == 'continuous':
-                    if self.cb_fuzzy_graph is None:
-                        self.cb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.cb_fuzzy_graph, n_components=n_components)
-                if self.basis == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.fb_fuzzy_graph = self.fuzzy_graph(data)
-                    init = self.spectral_layout(
-                        graph=self.fb_fuzzy_graph, n_components=n_components)
-            else:
-                init = self.SpecLayout
-
-        if data is None:
-            data = graph.toarray()
+        if projection_method in ['MAP', 'UMAP', 'MDE', 'Isomap']:
             metric = 'precomputed'
+            input = self.graph_kernel.P
+            key = self.current_graphkernel
         else:
             metric = self.graph_metric
-        if self.layout_verbose:
-            verbose = 1
+            input = self.eigenbasis.transform(X=None)
+            key = self.current_eigenbasis
+        if init is not None:
+            if isinstance(init, np.ndarray):
+                if np.shape(init)[1] != n_components:
+                    raise ValueError(
+                        'The specified initialization has the wrong number of dimensions.')
+                else:
+                    init_Y = init
+            elif isinstance(init, str):
+                if init in self.ProjectionDict.keys():
+                    init_Y = self.ProjectionDict[init]
+                else:
+                    raise ValueError(
+                        'No projection found with the name ' + init + '.')
         else:
-            verbose = 0
-        if int(self.n) <= 3000:
-            perplexity = 30
-        else:
-            perplexity = self.n // 1000
-        start = time.time()
-        tsne = TSNE(n_components=n_components,
-                    perplexity=perplexity,
-                    early_exaggeration=early_exaggeration,
-                    learning_rate=self.n // 12,
-                    n_iter=n_iter,
-                    n_iter_early_exag=n_iter_early_exag,
-                    n_iter_without_progress=n_iter_without_progress,
-                    min_grad_norm=min_grad_norm,
-                    metric=metric,
-                    init=init,
-                    verbose=verbose,
-                    random_state=random_state,
-                    method='barnes_hut',
-                    angle=angle,
-                    n_jobs=self.n_jobs,
-                    cheat_metric=cheat_metric)
-        Y = tsne.fit_transform(data)
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Obtained tSNE embedding in = %f (sec)' %
-                  (end - start))
-        tSNE_Y = Y
-
-        if self.basis == 'diffusion':
-            self.db_tSNE = tSNE_Y
-            self.runtimes['db_tSNE'] = end - start
-        if self.basis == 'continuous':
-            self.cb_tSNE = tSNE_Y
-            self.runtimes['cb_tSNE'] = end - start
-        if self.basis == 'fuzzy':
-            self.fb_tSNE = tSNE_Y
-            self.runtimes['fb_tSNE'] = end - start
-
-        return tSNE_Y
-
-    def NCVis(self,
-              data=None,
-              n_components=2,
-              n_jobs=-1,
-              n_neighbors=15,
-              distance="cosine",
-              M=15,
-              efC=30,
-              random_seed=42,
-              n_epochs=600,
-              n_init_epochs=150,
-              spread=1.0,
-              min_dist=0.4,
-              alpha=1.0,
-              a=None,
-              b=None,
-              alpha_Q=1.,
-              n_noise=None):
-        """
-        Noise-Contrastive Visualization (NCVis) - https://github.com/stat-ml/ncvis
-        NCVis is an efficient solution for data visualization and dimensionality reduction.
-        It uses HNSW to quickly construct the nearest neighbors graph and a parallel (batched) 
-        approach to build its embedding. Efficient random sampling is achieved via PCGRandom.
-        Please note NCVis uses a custom initialization scheme, in which it first optimizes a random
-        initialization for a certain number of epochs. Other than that, it is very conceptually similar to UMAP,
-        with major computational advantages.
-
-        Parameters
-        ----------
-        data : np.ndarray (optional, default None).
-            The input data.
-        n_components: int (optional, default 2).
-
-        metric : str (optional, default 'cosine').
-            Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
-            -'sqeuclidean'
-            -'euclidean'
-            -'l1'
-            -'lp' - requires setting the parameter `p` - equivalent to minkowski distance
-            -'cosine'
-            -'angular'
-            -'negdotprod'
-            -'levenshtein'
-            -'hamming'
-            -'jaccard'
-            -'jansen-shan'
-
-        n_jobs : int (optional, default 1).
-            number of threads to be used in computation. Defaults to 1. The algorithm is highly
-            scalable to multi-threading.
-
-        M : int (optional, default 30).
-            defines the maximum number of neighbors in the zero and above-zero layers during HSNW
-            (Hierarchical Navigable Small World Graph). However, the actual default maximum number
-            of neighbors for the zero layer is 2*M.  A reasonable range for this parameter
-            is 5-100. For more information on HSNW, please check https://arxiv.org/abs/1603.09320.
-            HSNW is implemented in python via NMSlib. Please check more about NMSlib at https://github.com/nmslib/nmslib.
-
-        efC : int (optional, default 100).
-            A 'hnsw' parameter. Increasing this value improves the quality of a constructed graph
-            and leads to higher accuracy of search. However this also leads to longer indexing times.
-            A reasonable range for this parameter is 50-2000.
-
-        efS : int (optional, default 100).
-            A 'hnsw' parameter. Similarly to efC, increasing this value improves recall at the
-            expense of longer retrieval time. A reasonable range for this parameter is 100-2000.
-
-        random_seed: int (optional, default 42).
-            Seed for the NCVis algorithm.
-
-        n_epochs : int (optional, default 200).
-            Number of iterations to use during optimization.
-
-        n_init_epochs: int (optional, default 50).
-            Number of iterations to use during initialisation optimization.
-
-        min_dist : float (optional, default 0.4)
-            The effective minimum distance between embedded points. Smaller values will result in a more
-            clustered/clumped embedding where nearby points on the manifold are drawn closer together,
-            while larger values will result on a more even dispersal of points. The value should be set
-            relative to the spread value, which determines the scale at which embedded points will be spread out.
-
-        spread : float (optional, default 1.0)
-            The effective scale of embedded points. In combination with min_dist this determines
-            how clustered/clumped the embedded points are.
-
-        alpha : float (optional, default 1).
-            Learning rate for the SGD.
-
-        Returns
-        -------
-        NCVis embedding.
-
-        """
-
-        from topo.layouts import NCVis as ncvis
-        if data is None:
-            if self.basis == 'diffusion':
-                if self.MSDiffMap is None:
-                    return print('Error: `basis` set to \'diffusion\', but the diffusion basis is not computed!')
-                else:
-                    data = self.MSDiffMap
-            elif self.basis == 'continuous':
-                if self.CLapMap is None:
-                    return print('Error: `basis` set to \'continuous\', but the continuous basis is not computed!')
-                else:
-                    data = self.CLapMap
-            elif self.basis == 'fuzzy':
-                if self.FuzzyLapMap is None:
-                    return print('Error: `basis` set to \'fuzzy\', but the fuzzy basis is not computed!')
-                else:
-                    data = self.FuzzyLapMap
+            if self.SpecLayout is not None:
+                if np.shape(self.SpecLayout)[1] != n_components:
+                    try:
+                        self.SpecLayout = self.spectral_layout(
+                            n_components=n_components)
+                    except:
+                        print(
+                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
+                        self.SpecLayout = EigenDecomposition(
+                            n_components=n_components+1).fit_transform(self.graph_kernel)
             else:
-                return print('Error: no computed basis or data is provided!')
-
-        start = time.time()
-        NCVis_Y = ncvis(data, n_components=n_components, n_jobs=n_jobs, n_neighbors=n_neighbors, distance=distance,
-                        M=M, efC=efC, random_seed=random_seed, n_epochs=n_epochs, n_init_epochs=n_init_epochs,
-                        spread=spread, min_dist=min_dist, alpha=alpha, alpha_Q=alpha_Q, a=a, b=b, n_noise=n_noise)
-
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Obtained NCVis embedding in = %f (sec)' %
-                  (end - start))
-
-        if self.basis == 'diffusion':
-            self.db_NCVis = NCVis_Y
-            self.runtimes['db_NCVis'] = end - start
-        if self.basis == 'continuous':
-            self.cb_NCVis = NCVis_Y
-            self.runtimes['cb_NCVis'] = end - start
-        if self.basis == 'fuzzy':
-            self.fb_NCVis = NCVis_Y
-            self.runtimes['fb_NCVis'] = end - start
-        return NCVis_Y
-
-    def affinity_clustering(self, graph=None, damping=0.5, max_iter=200, convergence_iter=15):
-        from sklearn.cluster import AffinityPropagation
-        if self.layout_verbose:
-            verbose = True
-        else:
-            verbose = False
-        if graph is None:
-            if self.basis == 'diffusion':
-                if self.graph == 'diff':
-                    if self.db_diff_graph is None:
-                        self.transform()
-                    graph = self.db_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.db_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.db_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.db_cknn_graph is None:
-                        self.transform()
-                    graph = self.db_cknn_graph
-            elif self.basis == 'continuous':
-                if self.graph == 'diff':
-                    if self.cb_diff_graph is None:
-                        self.transform()
-                    graph = self.cb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.cb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.cb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.cb_cknn_graph is None:
-                        self.transform()
-                    graph = self.cb_cknn_graph
-            elif self.basis == 'fuzzy':
-                if self.graph == 'diff':
-                    if self.fb_diff_graph is None:
-                        self.transform()
-                    graph = self.fb_diff_graph
-                if self.graph == 'fuzzy':
-                    if self.fb_fuzzy_graph is None:
-                        self.transform()
-                    graph = self.fb_fuzzy_graph
-                if self.graph == 'cknn':
-                    if self.fb_cknn_graph is None:
-                        self.transform()
-                    graph = self.fb_cknn_graph
-
-        start = time.time()
-        labels = AffinityPropagation(damping=damping, max_iter=max_iter,
-                                     convergence_iter=convergence_iter,
-                                     copy=False, preference=None, verbose=verbose,
-                                     affinity='precomputed', random_state=self.random_state).fit_predict(
-            graph.toarray())
-
-        end = time.time()
-        if self.verbosity >= 1:
-            print('         Affinity clustering performed in = %f (sec)' %
-                  (end - start))
-
-        if self.basis == 'diffusion':
-            if self.graph == 'diff':
-                self.db_diff_clusters = labels
-            if self.graph == 'cknn':
-                self.db_cknn_clusters = labels
-            if self.graph == 'fuzzy':
-                self.db_fuzzy_clusters = labels
-        if self.basis == 'continuous':
-            if self.graph == 'diff':
-                self.cb_diff_clusters = labels
-            if self.graph == 'cknn':
-                self.cb_cknn_clusters = labels
-            if self.graph == 'fuzzy':
-                self.cb_fuzzy_clusters = labels
-        if self.basis == 'fuzzy':
-            if self.graph == 'diff':
-                self.fb_diff_clusters = labels
-            if self.graph == 'cknn':
-                self.fb_cknn_clusters = labels
-            if self.graph == 'fuzzy':
-                self.fb_fuzzy_clusters = labels
-
-        return labels
-
-    def plot(self,
-             target=None,
-             space='2D',
-             dims_gauss=None,
-             labels=None,
-             pt_size=1,
-             marker='o',
-             opacity=1,
-             cmap='Spectral'
-             ):
-        """
-
-        Utility function for plotting TopOGraph layouts. This is independent from the model
-        and can be used to plot arbitrary layouts. Wraps around [Leland McInnes non-euclidean space
-        embeddings](https://umap-learn.readthedocs.io/en/latest/embedding_space.html).
-
-        Parameters,
-        ----------
-        target : np.ndarray (optional, default `None`).
-            np.ndarray containing the layout to be plotted. If `None` (default), looks for
-            available MDE and the MAP embedding, in this order.
-
-        space : str (optional, default '2D').
-            Projection space. Defaults to 2D space ('2D'). Options are:
-                - '2D' (default);
-                - '3D' ;
-                - 'hyperboloid_2d' (2D hyperboloid space, 'hyperboloid' );
-                - 'hyperboloid_3d' (3D hyperboloid space - note this uses a 2D input);
-                - 'poincare' (Poincare disk - note this uses a 2D input);
-                - 'spherical' (haversine-derived spherical space - note this uses a 2D input);
-                - 'sphere_projection' (haversine-derived spherical space, projected to 2D);
-                - 'toroid' (custom toroidal space);
-                - 'gauss_potential' (gaussian potential, expects at least 5 dimensions, uses
-                  the additional parameter `dims_gauss`);
-
-        dims_gauss : list (optional, default [2,3,4]).
-            Which dimensions to use when plotting gaussian potential.
-
-        labels : np.ndarray of int categories (optional).
-
-        kwargs : additional kwargs for matplotlib
-
-        Returns
-        -------
-
-        2D or 3D visualizations, depending on `space`.
-
-        """
-        import topo.plot as pt
-        if space == '2d' or space == '3d':
-            if space == '2d':
-                return pt.scatter(target,
-                                  labels=labels,
-                                  pt_size=pt_size,
-                                  marker=marker,
-                                  opacity=opacity,
-                                  cmap=cmap
-                                  )
-            else:
-                return pt.scatter_3d(target,
-                                     labels=labels,
-                                     pt_size=pt_size,
-                                     marker=marker,
-                                     opacity=opacity,
-                                     cmap=cmap
-                                     )
-        elif space == 'hyperboloid':
-            return pt.hyperboloid_3d(target,
-                                     labels=labels,
-                                     pt_size=pt_size,
-                                     marker=marker,
-                                     opacity=opacity
-                                     )
-
-        elif space == 'poincare':
-            return pt.poincare_disk(target,
-                                    labels=labels,
-                                    pt_size=pt_size,
-                                    marker=marker,
-                                    opacity=opacity,
-                                    cmap=cmap
-                                    )
-        elif space == 'sphere':
-            return pt.sphere_3d(target,
-                                labels=labels,
-                                pt_size=pt_size,
-                                marker=marker,
-                                opacity=opacity,
-                                cmap=cmap
-                                )
-
-        elif space == 'sphere_projection':
-            return pt.sphere_projection(target,
-                                        labels=labels,
-                                        pt_size=pt_size,
-                                        marker=marker,
-                                        opacity=opacity,
-                                        cmap=cmap
-                                        )
-
-        elif space == 'toroid':
-            return pt.toroid_3d(target,
-                                labels=labels,
-                                pt_size=pt_size,
-                                marker=marker,
-                                opacity=opacity,
-                                cmap=cmap
-                                )
-
-        elif space == 'gauss_potential':
-            if dims_gauss is None:
-                if target.shape[1] >= 5:
-                    dims_gauss = [2, 3, 4]
+                if self.n < 100000:
+                    try:
+                        self.SpecLayout = self.spectral_layout(
+                            n_components=n_components)
+                    except:
+                        print(
+                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
+                        self.SpecLayout = EigenDecomposition(
+                            n_components=n_components+1).fit_transform(self.graph_kernel)
                 else:
-                    return print('Error: could not find at least 5 dimensions.')
+                    self.SpecLayout = EigenDecomposition(
+                        n_components=n_components+1).fit_transform(self.graph_kernel)
+            init_Y = self.SpecLayout
 
-            return pt.gaussian_potential(target,
-                                         dims=dims_gauss,
-                                         labels=labels,
-                                         pt_size=pt_size,
-                                         marker=marker,
-                                         opacity=opacity
-                                         )
+        projection_key = projection_method + ' of ' + key
+        start = time.time()
+        Y = Projector(n_components=n_components,
+                      projection_method=projection_method,
+                      metric=metric,
+                      n_neighbors=self.graph_knn,
+                      n_jobs=self.n_jobs,
+                      landmarks=landmarks,
+                      landmark_method=landmark_method,
+                      num_iters=num_iters,
+                      init=init_Y,
+                      nbrs_backend=self.backend,
+                      keep_estimator=False,
+                      random_state=self.random_state,
+                      verbose=self.layout_verbose).fit_transform(input, **kwargs)
+        end = time.time()
+        gc.collect()
+        self.runtimes[projection_key] = end - start
+        if self.verbosity >= 1:
+            print(' Computed ' + projection_method +
+                  ' in %f (sec)' % (end - start))
+        self.ProjectionDict[projection_key] = Y
+        return Y
 
     def run_models(self, X,
-                   bases=['diffusion', 'fuzzy', 'continuous'],
-                   graphs=['diff', 'cknn', 'fuzzy']):
-        if ('diffusion' in bases) and (self.MSDiffMap is None):
-            run_db = True
-        else:
-            run_db = False
-        if ('continuous' in bases) and (self.MSDiffMap is None):
-            run_cb = True
-        else:
-            run_cb = False
-        if ('fuzzy' in bases) and (self.MSDiffMap is None):
-            run_fb = True
-        else:
-            run_fb = False
-        if 'diff' in graphs:
-            run_diff = True
-        else:
-            run_diff = False
-        if 'cknn' in graphs:
-            run_cknn = True
-        else:
-            run_cknn = False
-        if 'fuzzy' in graphs:
-            run_fuzzy = True
-        else:
-            run_fuzzy = False
-        if run_db:
-            self.basis = 'diffusion'
-            self.fit(X)
-            if run_diff:
-                self.graph = 'diff'
-            if run_cknn:
-                self.graph = 'cknn'
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-            self.transform(X)
-        if run_cb:
-            self.basis = 'continuous'
-            self.fit(X)
-            if run_diff:
-                self.graph = 'diff'
-            if run_cknn:
-                self.graph = 'cknn'
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-            self.transform(X)
-        if run_fb:
-            self.basis = 'fuzzy'
-            self.fit(X)
-            if run_diff:
-                self.graph = 'diff'
-            if run_cknn:
-                self.graph = 'cknn'
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-            self.transform(X)
-
-        return self
-
-    def run_layouts(self, X, n_components=2,
-                    bases=['diffusion', 'fuzzy', 'continuous'],
-                    graphs=['diff', 'cknn', 'fuzzy'],
-                    layouts=['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']):
+                   kernels=['fuzzy', 'cknn', 'bw_adaptive'],
+                   eigenmap_methods=['DM', 'LE', 'top'],
+                   projections=['Isomap', 'MAP']):
         """
-
-        Master function to easily run all combinations of possible bases and graphs that approximate the
-        [Laplace-Beltrami Operator](), and the 6 layout options within TopOMetry: tSNE, MAP, MDE, PaCMAP, TriMAP,
-        and NCVis.
+        Power function that runs all models in TopOMetry.
+        It iterates through the specified kernel versions, eigenmap methods and projection methods.
+        As expected, it can take a while to run, depending on how many kernels and methods you specify.
+        At least one kernel, one eigenmap method and one projection *must* be specified.
 
         Parameters
         ----------
-        X : np.ndarray or scipy.sparse.csr_matrix
-             Data matrix.
+        X : array-like, shape (n_samples, n_features)
+            The input data. Use a sparse matrix for efficiency.
 
-        n_components : int (optional, default 2).
-             Number of components for visualization.
+        kernels : list of str (optional, default ['fuzzy', 'cknn', 'bw_adaptive']).
+            List of kernel versions to run. These will be used to learn an eigenbasis and to learn a new graph kernel from it.
+            Options are:
+            * 'fuzzy'
+            * 'cknn'
+            * 'bw_adaptive'
+            * 'bw_adaptive_alpha_decaying'
+            * 'bw_adaptive_nbr_expansion'
+            * 'bw_adaptive_alpha_decaying_nbr_expansion'
+            * 'gaussian'
+            Will not run all by default to avoid long waiting times in reckless calls.
 
-        bases : str (optional, default ['diffusion', 'continuous','fuzzy']).
-             Which bases to compute. Defaults to all. To run only one or two bases, set it to
-             ['fuzzy', 'diffusion'] or ['continuous'], for exemple.
+        eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
+            List of eigenmap methods to run. Options are:
+            * 'DM'
+            * 'LE'
+            * 'top'
+            * 'bottom'
 
-        graphs : str (optional, default ['diff', 'cknn','fuzzy']).
-             Which graphs to compute. Defaults to all. To run only one or two graphs, set it to
-             ['fuzzy', 'diff'] or ['cknn'], for exemple.
-
-        layouts : str (optional, default all ['tSNE', 'MAP', 'MDE', 'PaCMAP', 'TriMAP', 'NCVis']).
-             Which layouts to compute. Defaults to all 6 options within TopOMetry: tSNE, MAP, MDE, PaCMAP,
-             TriMAP and NCVis. To run only one or two layouts, set it to
-             ['tSNE', 'MAP'] or ['PaCMAP'], for example.
+        projections : list of str (optional, default ['Isomap', 'MAP']).
+            List of projection methods to run. Options are the same of the `topo.layouts.Projector()` object:
+            * ['(L)Isomap']() - one of the first manifold learning methods
+            * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
+            * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
+            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
+            * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations
+            * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets
+            * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors
+            * 'IsometricMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of pairwise distances
+            * ['NCVis'](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - a UMAP-like method with blazing fast performance
 
         Returns
         -------
-
-        Populates the TopOMetry object slots.
-
+        A `TopOGraph` object with results stored at different slots.
+            * Base kernel results are stored at `TopOGraph.BaseKernelDict`.
+            * Eigenbases results are stored at `TopOGraph.EigenbasisDict`.
+            * Graph kernel results learned from eigenbases are stored at `TopOGraph.GraphKernelDict`.
+            * Projection results are stored at `TopOGraph.ProjectionDict`.
         """
-        if str('diffusion') in bases:
-            run_db = True
-        else:
-            run_db = False
-        if str('continuous') in bases:
-            run_cb = True
-        else:
-            run_cb = False
-        if str('fuzzy') in bases:
-            run_fb = True
-        else:
-            run_fb = False
-        if str('diff') in graphs:
-            run_diff = True
-        else:
-            run_diff = False
-        if str('cknn') in graphs:
-            run_cknn = True
-        else:
-            run_cknn = False
-        if str('fuzzy') in graphs:
-            run_fuzzy = True
-        else:
-            run_fuzzy = False
-        if str('tSNE') in layouts:
-            run_tSNE = True
-        else:
-            run_tSNE = False
-        if str('MAP') in layouts:
-            run_MAP = True
-        else:
-            run_MAP = False
-        if str('MDE') in layouts:
-            run_MDE = True
-        else:
-            run_MDE = False
-        if str('PaCMAP') in layouts:
-            run_PaCMAP = True
-        else:
-            run_PaCMAP = False
-        if str('TriMAP') in layouts:
-            run_TriMAP = True
-        else:
-            run_TriMAP = False
-        if str('NCVis') in layouts:
-            run_NCVis = True
-        else:
-            run_NCVis = False
-        # Run all models and layouts
-        if run_db:
-            self.basis = 'diffusion'
-            if self.MSDiffMap is None:
-                self.fit(X=X)
-            if run_PaCMAP:
-                if self.db_PaCMAP is None:
-                    self.db_PaCMAP = self.PaCMAP(n_components=n_components)
-            if run_TriMAP:
-                if self.db_TriMAP is None:
-                    self.db_TriMAP = self.TriMAP(n_components=n_components)
-            if run_tSNE:
-                if self.db_tSNE is None:
-                    self.db_tSNE = self.tSNE(n_components=n_components)
-            if run_NCVis:
-                if self.db_NCVis is None:
-                    self.db_NCVis = self.NCVis(n_components=n_components)
-            if run_diff:
-                self.graph = 'diff'
-                if self.db_diff_graph is None:
-                    self.db_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_diff_graph, n_components=n_components)
-                if run_MAP:
-                    if self.db_diff_MAP is None:
-                        self.db_diff_MAP = self.MAP()
-                if run_MDE:
-                    if self.db_diff_MDE is None:
-                        self.db_diff_MDE = self.MDE(n_components=n_components)
-            if run_cknn:
-                self.graph = 'cknn'
-                if self.db_cknn_graph is None:
-                    self.db_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_cknn_graph, n_components=n_components)
-                if run_MAP:
-                    if self.db_cknn_MAP is None:
-                        self.db_cknn_MAP = self.MAP()
-                if run_MDE:
-                    if self.db_cknn_MDE is None:
-                        self.db_cknn_MDE = self.MDE(n_components=n_components)
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-                if self.db_fuzzy_graph is None:
-                    self.db_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.db_fuzzy_graph, n_components=n_components)
-                if run_MAP:
-                    if self.db_fuzzy_MAP is None:
-                        self.db_fuzzy_MAP = self.MAP()
-                if run_MDE:
-                    if self.db_fuzzy_MDE is None:
-                        self.db_fuzzy_MDE = self.MDE(n_components=n_components)
-        if run_cb:
-            self.basis = 'continuous'
-            if self.CLapMap is None:
+        for kernel in kernels:
+            self.base_kernel_version = kernel
+            for eig_method in eigenmap_methods:
+                self.eigenmap_method = eig_method
                 self.fit(X)
-            if run_PaCMAP:
-                if self.cb_PaCMAP is None:
-                    self.cb_PaCMAP = self.PaCMAP(n_components=n_components)
-            if run_TriMAP:
-                if self.cb_TriMAP is None:
-                    self.cb_TriMAP = self.TriMAP(n_components=n_components)
-            if run_tSNE:
-                if self.cb_tSNE is None:
-                    self.cb_tSNE = self.tSNE(n_components=n_components)
-            if run_NCVis:
-                if self.cb_NCVis is None:
-                    self.cb_NCVis = self.NCVis(n_components=n_components)
-            if run_diff:
-                self.graph = 'diff'
-                if self.cb_diff_graph is None:
-                    self.cb_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.cb_diff_graph, n_components=n_components)
-                if run_MAP:
-                    if self.cb_diff_MAP is None:
-                        self.cb_diff_MAP = self.MAP()
-                if run_MDE:
-                    if self.cb_diff_MDE is None:
-                        self.cb_diff_MDE = self.MDE(n_components=n_components)
-            if run_cknn:
-                self.graph = 'cknn'
-                if self.cb_cknn_graph is None:
-                    self.cb_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.cb_cknn_graph, n_components=n_components)
-                if run_MAP:
-                    if self.cb_cknn_MAP is None:
-                        self.cb_cknn_MAP = self.MAP()
-                if run_MDE:
-                    if self.cb_cknn_MDE is None:
-                        self.cb_cknn_MDE = self.MDE(n_components=n_components)
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-                if self.cb_fuzzy_graph is None:
-                    self.cb_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.cb_fuzzy_graph, n_components=n_components)
-                if run_MAP:
-                    if self.cb_fuzzy_MAP is None:
-                        self.cb_fuzzy_MAP = self.MAP()
-                if run_MDE:
-                    if self.cb_fuzzy_MDE is None:
-                        self.cb_fuzzy_MDE = self.MDE(n_components=n_components)
-        if run_fb:
-            self.basis = 'fuzzy'
-            if self.FuzzyLapMap is None:
-                self.fit(X)
-            if run_PaCMAP:
-                if self.fb_PaCMAP is None:
-                    self.fb_PaCMAP = self.PaCMAP(n_components=n_components)
-            if run_TriMAP:
-                if self.fb_TriMAP is None:
-                    self.fb_TriMAP = self.TriMAP(n_components=n_components)
-            if run_tSNE:
-                if self.fb_tSNE is None:
-                    self.fb_tSNE = self.tSNE(n_components=n_components)
-            if run_NCVis:
-                if self.fb_NCVis is None:
-                    self.fb_NCVis = self.NCVis(n_components=n_components)
-            if run_diff:
-                self.graph = 'diff'
-                if self.fb_diff_graph is None:
-                    self.fb_diff_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.fb_diff_graph, n_components=n_components)
-                if run_MAP:
-                    if self.fb_diff_MAP is None:
-                        self.fb_diff_MAP = self.MAP()
-                if run_MDE:
-                    if self.fb_diff_MDE is None:
-                        self.fb_diff_MDE = self.MDE(n_components=n_components)
-            if run_cknn:
-                self.graph = 'cknn'
-                if self.fb_cknn_graph is None:
-                    self.fb_cknn_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.fb_cknn_graph, n_components=n_components)
-                if run_MAP:
-                    if self.fb_cknn_MAP is None:
-                        self.fb_cknn_MAP = self.MAP()
-                if run_MDE:
-                    if self.fb_cknn_MDE is None:
-                        self.fb_cknn_MDE = self.MDE(n_components=n_components)
-            if run_fuzzy:
-                self.graph = 'fuzzy'
-                if self.fb_fuzzy_graph is None:
-                    self.fb_fuzzy_graph = self.transform()
-                    self.SpecLayout = self.spectral_layout(
-                        graph=self.fb_fuzzy_graph, n_components=n_components)
-                if run_MAP:
-                    if self.fb_fuzzy_MAP is None:
-                        self.fb_fuzzy_MAP = self.MAP()
-                if run_MDE:
-                    if self.fb_fuzzy_MDE is None:
-                        self.fb_fuzzy_MDE = self.MDE(n_components=n_components)
+                gc.collect()
+                for kernel in kernels:
+                    self.graph_kernel_version = kernel
+                    self.transform(X)
+                    gc.collect()
+                    for projection in projections:
+                        self.project(projection_method=projection)
+                        gc.collect()
 
-        return self
+    def estimate_global_dimensionality(self, X, scaled=True):
+        if issparse(X):
+            X = X.toarray()
+        if self.verbosity >= 1:
+            print('   Estimating global dimensionality...')
+        dimensionality_estimator = FisherS(scaled=scaled,
+                                                        verbose=self.bases_graph_verbose).fit(X,
+                                                                                                n_jobs=self.n_jobs,
+                                                                                                metric=self.base_metric,
+                                                                                                n_neighbors=self.base_knn,
+                                                                                                backend=self.backend)
+        self.global_dimensionality = dimensionality_estimator.transform()
+        gc.collect()
+        if self.verbosity >= 1:
+            print('   Global dimensionality is %f' %
+                  self.global_dimensionality)
+        return self.global_dimensionality
 
-    # def plot_all_layouts(self, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
-    #     """
-    #
-    #     Convenience function to plotting all computed layouts.
-    #
-    #     Parameters
-    #     ----------
-    #     labels : list of colors or int encoding groups, clusters or values to color by.
-    #
-    #     pt_size : int (default 5). Controls point size.
-    #
-    #     marker : str (default 'o'). Controls shape.
-    #
-    #     opacity : int or float (default 1). Controls opacity.
-    #
-    #     cmap : str (default 'Spectral'). Any of matplotlib colormaps. 'tab20' can be a good choice if you have
-    #     lots of clusters.
-    #
-    #     Returns
-    #     -------
-    #     A matplotlib.pyplot with all layouts.
-    #
-    #     """
-    #
-    #     n_bases = 0
-    #     n_graphs = 0
-    #     n_layouts = 0
-    #     embeddings = list()
-    #     if self.MSDiffMap is not None:
-    #         n_bases = n_bases + 1
-    #     if self.CLapMap is not None:
-    #         n_bases = n_bases + 1
-    #     if self.FuzzyLapMap is not None:
-    #         n_bases = n_bases + 1
-    #     if self.DiffGraph is not None:
-    #         n_graphs = n_graphs + 1
-    #     if self.FuzzyGraph is not None:
-    #         n_graphs = n_graphs + 1
-    #     if self.CknnGraph is not None:
-    #         n_graphs = n_graphs + 1
-    #     if self.tSNE_Y is not None:
-    #         n_layouts = n_layouts + 1
-    #     if self.MAP_Y is not None:
-    #         n_layouts = n_layouts + 1
-    #     if self.TriMAP_Y is not None:
-    #         n_layouts = n_layouts + 1
-    #     if self.PaCMAP_Y is not None:
-    #         n_layouts = n_layouts + 1
-    #     if self.MDE_Y is not None:
-    #         n_layouts = n_layouts + 1
-    #     if self.db_diff_MAP is not None:
-    #         embeddings.append(self.db_diff_MAP)
-    #     if self.db_diff_tSNE is not None:
-    #         embeddings.append(self.db_diff_tSNE)
-    #     if self.db_diff_PaCMAP is not None:
-    #         embeddings.append(self.db_diff_PaCMAP)
-    #     if self.db_diff_TriMAP is not None:
-    #         embeddings.append(self.db_diff_TriMAP)
-    #     if self.db_diff_MDE is not None:
-    #         embeddings.append(self.db_diff_MDE)
-    #     if self.db_fuzzy_MAP is not None:
-    #         embeddings.append(self.db_fuzzy_MAP)
-    #     if self.db_fuzzy_tSNE is not None:
-    #         embeddings.append(self.db_fuzzy_tSNE)
-    #     if self.db_fuzzy_PaCMAP is not None:
-    #         embeddings.append(self.db_fuzzy_PaCMAP)
-    #     if self.db_fuzzy_TriMAP is not None:
-    #         embeddings.append(self.db_fuzzy_TriMAP)
-    #     if self.db_fuzzy_MDE is not None:
-    #         embeddings.append(self.db_fuzzy_MDE)
-    #     if self.db_cknn_MAP is not None:
-    #         embeddings.append(self.db_cknn_MAP)
-    #     if self.db_cknn_tSNE is not None:
-    #         embeddings.append(self.db_cknn_tSNE)
-    #     if self.db_cknn_PaCMAP is not None:
-    #         embeddings.append(self.db_cknn_PaCMAP)
-    #     if self.db_cknn_TriMAP is not None:
-    #         embeddings.append(self.db_cknn_TriMAP)
-    #     if self.db_cknn_MDE is not None:
-    #         embeddings.append(self.db_cknn_MDE)
-    #     if self.fb_diff_MAP is not None:
-    #         embeddings.append(self.fb_diff_MAP)
-    #     if self.fb_diff_tSNE is not None:
-    #         embeddings.append(self.fb_diff_tSNE)
-    #     if self.fb_diff_PaCMAP is not None:
-    #         embeddings.append(self.fb_diff_PaCMAP)
-    #     if self.fb_diff_TriMAP is not None:
-    #         embeddings.append(self.fb_diff_TriMAP)
-    #     if self.fb_diff_MDE is not None:
-    #         embeddings.append(self.fb_diff_MDE)
-    #     if self.fb_fuzzy_MAP is not None:
-    #         embeddings.append(self.fb_fuzzy_MAP)
-    #     if self.fb_fuzzy_tSNE is not None:
-    #         embeddings.append(self.fb_fuzzy_tSNE)
-    #     if self.fb_fuzzy_PaCMAP is not None:
-    #         embeddings.append(self.fb_fuzzy_PaCMAP)
-    #     if self.fb_fuzzy_TriMAP is not None:
-    #         embeddings.append(self.fb_fuzzy_TriMAP)
-    #     if self.fb_fuzzy_MDE is not None:
-    #         embeddings.append(self.fb_fuzzy_MDE)
-    #     if self.fb_cknn_MAP is not None:
-    #         embeddings.append(self.fb_cknn_MAP)
-    #     if self.fb_cknn_tSNE is not None:
-    #         embeddings.append(self.fb_cknn_tSNE)
-    #     if self.fb_cknn_PaCMAP is not None:
-    #         embeddings.append(self.fb_cknn_PaCMAP)
-    #     if self.fb_cknn_TriMAP is not None:
-    #         embeddings.append(self.fb_cknn_TriMAP)
-    #     if self.fb_cknn_MDE is not None:
-    #         embeddings.append(self.fb_cknn_MDE)
-    #     if self.cb_diff_MAP is not None:
-    #         embeddings.append(self.cb_diff_MAP)
-    #     if self.cb_diff_tSNE is not None:
-    #         embeddings.append(self.cb_diff_tSNE)
-    #     if self.cb_diff_PaCMAP is not None:
-    #         embeddings.append(self.cb_diff_PaCMAP)
-    #     if self.cb_diff_TriMAP is not None:
-    #         embeddings.append(self.cb_diff_TriMAP)
-    #     if self.cb_diff_MDE is not None:
-    #         embeddings.append(self.cb_diff_MDE)
-    #     if self.cb_fuzzy_MAP is not None:
-    #         embeddings.append(self.cb_fuzzy_MAP)
-    #     if self.cb_fuzzy_tSNE is not None:
-    #         embeddings.append(self.cb_fuzzy_tSNE)
-    #     if self.cb_fuzzy_PaCMAP is not None:
-    #         embeddings.append(self.cb_fuzzy_PaCMAP)
-    #     if self.cb_fuzzy_TriMAP is not None:
-    #         embeddings.append(self.cb_fuzzy_TriMAP)
-    #     if self.cb_fuzzy_MDE is not None:
-    #         embeddings.append(self.cb_fuzzy_MDE)
-    #     if self.cb_cknn_MAP is not None:
-    #         embeddings.append(self.cb_cknn_MAP)
-    #     if self.cb_cknn_tSNE is not None:
-    #         embeddings.append(self.cb_cknn_tSNE)
-    #     if self.cb_cknn_PaCMAP is not None:
-    #         embeddings.append(self.cb_cknn_PaCMAP)
-    #     if self.cb_cknn_TriMAP is not None:
-    #         embeddings.append(self.cb_cknn_TriMAP)
-    #     if self.cb_cknn_MDE is not None:
-    #         embeddings.append(self.cb_cknn_MDE)
-    #
-    #     emb_number = len(embeddings)
-    #
-    #     fig, axes_tuple = plt.subplots(n_graphs, n_layouts)
-    #
-    #     if n_graphs > 1:
-    #         def row_range(emb_number, n_graphs, nrow):
-    #             rr = range((emb_number // n_graphs) * nrow, emb_number)
-    #             return rr
-    #
-    #         for i in range(n_graphs):
-    #             axs_tuple = axes_tuple[i]
-    #             for e in range(n_layouts):
-    #                 j = row_range(emb_number, n_graphs, i)
-    #                 j = j[e]
-    #                 axs_tuple[e].scatter(
-    #                     embeddings[j][:, 0],
-    #                     embeddings[j][:, 1],
-    #                     cmap=cmap,
-    #                     c=labels,
-    #                     s=pt_size,
-    #                     marker=marker,
-    #                     alpha=opacity)
-    #
-    #
-    #     else:
-    #         for i in range(emb_number):
-    #             axes_tuple[i].scatter(
-    #                 embeddings[i][:, 0],
-    #                 embeddings[i][:, 1],
-    #                 cmap=cmap,
-    #                 c=labels,
-    #                 s=pt_size,
-    #                 marker=marker,
-    #                 alpha=opacity)
-    #
-    #     return plt.show()
-    # def plot_runtime_comparison(self):
+    def estimate_local_dimensionality(self, X, scaled=True, smooth=False):
+        if issparse(X):
+            X = X.toarray()
+        if self.verbosity >= 1:
+            print('   Estimating local dimensionality...')
+        if self.base_knn_graph is None:
+            self.fit(X)
+        dimensionality_estimator = FisherS(scaled=scaled,
+                                                        verbose=self.bases_graph_verbose).fit_pw(X,
+                                                                                                n_jobs=self.n_jobs,
+                                                                                                metric=self.base_metric,
+                                                                                                n_neighbors=self.base_knn,
+                                                                                                smooth=smooth,
+                                                                                                backend=self.backend)
+        self.global_dimensionality = dimensionality_estimator.transform()
+        self.local_dimensionality = dimensionality_estimator.transform_pw()
+        gc.collect()
+        return self.local_dimensionality
 
-    def write_pkl(self, wd=None, filename='topograph.pkl', remove_base_class=True):
+    def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:
             import pickle
         except ImportError:
@@ -2912,11 +1052,468 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if remove_base_class:
                 self.base_nbrs_class = None
             else:
-                return (print('TopOGraph cannot be pickled with the NMSlib base class.'))
+                raise ValueError(
+                    'TopOGraph cannot be pickled with the NMSlib base class.')
 
-        if wd is None:
-            import os
-            wd = os.getcwd()
-        with open(wd + filename, 'wb') as output:
+        with open(filename, 'wb') as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-        return print('TopOGraph saved at ' + wd + filename)
+        gc.collect()
+        return print('TopOGraph saved at ' + filename)
+
+    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False):
+        import gc
+        gc.collect()
+        kernel_key = kernel_version
+        if prefix is not None:
+            kernel_key = prefix + kernel_key
+        if suffix is not None:
+            kernel_key = kernel_key + suffix
+        if kernel_key in results_dict.keys():
+            kernel = results_dict[kernel_key]
+            return kernel, results_dict
+        else:
+            if kernel_version == 'cknn':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=True,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=False,
+                                alpha_decaying=False,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'fuzzy':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=True,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=False,
+                                alpha_decaying=False,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'bw_adaptive':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=False,
+                                alpha_decaying=False,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'bw_adaptive_alpha_decaying':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=False,
+                                alpha_decaying=True,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'bw_adaptive_nbr_expansion':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=True,
+                                alpha_decaying=False,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'bw_adaptive_alpha_decaying_nbr_expansion':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=None,
+                                adaptive_bw=True,
+                                expand_nbr_search=True,
+                                alpha_decaying=True,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+
+            elif kernel_version == 'gaussian':
+                kernel = Kernel(metric="precomputed",
+                                n_neighbors=n_neighbors,
+                                fuzzy=False,
+                                cknn=False,
+                                pairwise=False,
+                                sigma=self.sigma,
+                                adaptive_bw=False,
+                                expand_nbr_search=False,
+                                alpha_decaying=False,
+                                symmetrize=True,
+                                backend=self.backend,
+                                n_jobs=self.n_jobs,
+                                laplacian_type=self.laplacian_type,
+                                semi_aniso=self.semi_aniso,
+                                anisotropy=self.alpha,
+                                cache_input=False,
+                                verbose=self.bases_graph_verbose).fit(knn)
+                gc.collect()
+                results_dict[kernel_key] = kernel
+            if low_memory:
+                import gc
+                del results_dict[kernel_key]
+                gc.collect()
+
+        return kernel, results_dict
+
+
+    def eval_models_layouts(self, X,
+                            landmarks=None,
+                            kernels=['cknn', 'bw_adaptive'],
+                            eigenmap_methods=['DM', 'LE'],
+                            projections=['MAP'],
+                            additional_eigenbases=None,
+                            additional_projections=None,
+                            landmark_method='random',
+                            n_neighbors=5, n_jobs=-1,
+                            cor_method='spearman', **kwargs):
+        """
+        Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
+        Compares results with PCA and PCA-derived layouts (i.e. t-SNE, UMAP etc).
+
+        Parameters
+        --------------
+
+        X : data matrix. Expects either numpy.ndarray or scipy.sparse.csr_matrix.
+
+        landmarks : optional (int, default None).
+            If specified, subsamples the TopOGraph object and/or data matrix X to a number of landmark samples
+            before computing results and scores. Useful if dealing with large datasets (>30,000 samples).
+
+        kernels : list of str (optional, default ['fuzzy', 'cknn', 'bw_adaptive_alpha_decaying']).
+            List of kernel versions to run and evaluate. These will be used to learn an eigenbasis and to learn a new graph kernel from it.
+            Options are:
+            * 'fuzzy'
+            * 'cknn'
+            * 'bw_adaptive'
+            * 'bw_adaptive_alpha_decaying'
+            * 'bw_adaptive_nbr_expansion'
+            * 'bw_adaptive_alpha_decaying_nbr_expansion'
+            * 'gaussian'
+            Will not run all by default to avoid long waiting times in reckless calls.
+
+        eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
+            List of eigenmap methods to run and evaluate. Options are:
+            * 'DM'
+            * 'LE'
+            * 'top'
+            * 'bottom'
+
+        projections : list of str (optional, default ['Isomap', 'MAP']).
+            List of projection methods to run and evaluate. Options are the same of the `topo.layouts.Projector()` object:
+            * '(L)Isomap'
+            * 't-SNE'
+            * 'MAP'
+            * 'UMAP'
+            * 'PaCMAP'
+            * 'TriMAP'
+            * 'IsomorphicMDE' - MDE with preservation of nearest neighbors
+            * 'IsometricMDE' - MDE with preservation of pairwise distances
+            * 'NCVis'
+
+        additional_eigenbases : dict (optional, default None).
+            Dictionary containing named additional eigenbases (e.g. factor analysis, VAEs, ICA, etc) to be evaluated.
+
+        additional_projections : dict (optional, default None).
+            Dictionary containing named additional projections (e.g. t-SNE, UMAP, etc) to be evaluated.
+
+        n_neighbors : int (optional, default 5).
+            Number of nearest neighbors to use for the kNN graph.
+
+        n_jobs : int (optional, default -1).
+            Number of jobs to use for parallelization. If -1, uses all available cores.
+
+        cor_method : str (optional, default 'spearman').
+            Correlation method to use for local scores. Options are 'spearman' and 'kendall'.
+
+        landmark_method : str (optional, default 'random').
+            Method to use for landmark selection. Options are 'random' and 'kmeans'.
+
+        kwargs : dict (optional, default {}).
+            Additional keyword arguments to pass to the `topo.base.ann.kNN()` function.
+
+
+        Returns
+        -------
+
+        Populates the TopOGraph object and returns a dictionary of dictionaries with the results
+
+
+        """
+        from scipy.stats import spearmanr, kendalltau
+        from scipy.spatial.distance import squareform
+        from topo.utils._utils import get_landmark_indices
+        from topo.eval.global_scores import global_score_pca
+        from topo.eval.local_scores import geodesic_distance
+        # Run modselfels
+        if self.verbosity > 0:
+            print('Running specified models...')
+        self.run_models(X, kernels, eigenmap_methods, projections)
+        gc.collect()
+        # Define landmarks if applicable
+        if landmarks is not None:
+            if isinstance(landmarks, int):
+                landmark_indices = get_landmark_indices(
+                    self.base_knn_graph, n_landmarks=landmarks, method=landmark_method, random_state=self.random_state)
+                if landmark_indices.shape[0] == self.base_knn_graph.shape[0]:
+                    landmark_indices = None
+            elif isinstance(landmarks, np.ndarray):
+                landmark_indices = landmarks
+            else:
+                raise ValueError(
+                    '\'landmarks\' must be either an integer or a numpy array.')
+
+        # Compute geodesics
+        gc.collect()
+        EigenbasisLocalResults = {}
+        EigenbasisGlobalResults = {}
+        if self.verbosity > 0:
+            print('Computing base geodesics...')
+        if landmarks is not None:
+            base_graph = self.base_knn_graph[landmark_indices, :][:, landmark_indices]
+        else:
+            base_graph = self.base_knn_graph
+        base_geodesics = squareform(geodesic_distance(
+            base_graph, directed=False, n_jobs=n_jobs))
+        gc.collect()
+        for key in self.EigenbasisDict.keys():
+            if self.verbosity > 0:
+                print('Computing geodesics for eigenbasis \'{}...\''.format(key))
+            emb_graph = kNN(self.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
+                            metric=self.base_metric,
+                            n_jobs=n_jobs,
+                            backend=self.backend,
+                            return_instance=False,
+                            verbose=False, **kwargs)
+            if landmarks is not None:
+                emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(
+                emb_graph, directed=False, n_jobs=n_jobs))
+            gc.collect()
+            if cor_method == 'spearman':
+                if self.verbosity > 0:
+                    print('Computing Spearman R for eigenbasis \'{}...\''.format(key))
+                EigenbasisLocalResults[key], _ = spearmanr(
+                    base_geodesics, embedding_geodesics)
+            else:
+                if self.verbosity > 0:
+                    print('Computing Kendall Tau for eigenbasis \'{}...\''.format(key))
+                EigenbasisLocalResults[key], _ = kendalltau(
+                    base_geodesics, embedding_geodesics)
+            gc.collect()
+            EigenbasisGlobalResults[key] = global_score_pca(
+                X, self.EigenbasisDict[key].results())
+            if self.verbosity > 0:
+                print('Finished for eigenbasis {}'.format(key))
+            gc.collect()
+        ProjectionLocalResults = {}
+        ProjectionGlobalResults = {}
+        for key in self.ProjectionDict.keys():
+            if self.verbosity > 0:
+                print('Computing geodesics for projection \' {}...\''.format(key))
+            emb_graph = kNN(self.ProjectionDict[key],
+                            n_neighbors=n_neighbors,
+                            metric=self.graph_metric,
+                            n_jobs=n_jobs,
+                            backend=self.backend,
+                            return_instance=False,
+                            verbose=False, **kwargs)
+            if landmarks is not None:
+                emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(
+                emb_graph, directed=False, n_jobs=n_jobs))
+            gc.collect()
+            if cor_method == 'spearman':
+                if self.verbosity > 0:
+                    print('Computing Spearman R for projection \'{}...\''.format(key))
+                ProjectionLocalResults[key], _ = spearmanr(
+                    base_geodesics, embedding_geodesics)
+            else:
+                if self.verbosity > 0:
+                    print('Computing Kendall Tau for projection \'{}...\''.format(key))
+                ProjectionLocalResults[key], _ = kendalltau(
+                    base_geodesics, embedding_geodesics)
+            gc.collect()
+            ProjectionGlobalResults[key] = global_score_pca(
+                X, self.ProjectionDict[key])
+            gc.collect()
+        from sklearn.decomposition import PCA
+        if self.verbosity >= 1:
+            print('Computing PCA for comparison...')
+        import numpy as np
+        if issparse(X) == True:
+            if isinstance(X, csr_matrix):
+                data = X.todense()
+        if issparse(X) == False:
+            if not isinstance(X, np.ndarray):
+                import pandas as pd
+                if isinstance(X, pd.DataFrame):
+                    data = np.asarray(X.values.T)
+                else:
+                    return print('Uknown data format.')
+            else:
+                data = X
+        pca_emb = PCA(n_components=self.n_eigs).fit_transform(data)
+        gc.collect()
+        emb_graph = kNN(pca_emb,
+                        n_neighbors=n_neighbors,
+                        metric=self.graph_metric,
+                        n_jobs=n_jobs,
+                        backend=self.backend,
+                        return_instance=False,
+                        verbose=False, **kwargs)
+        gc.collect()
+        if landmarks is not None:
+            emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+            gc.collect()
+        embedding_geodesics = squareform(geodesic_distance(
+            emb_graph, directed=False, n_jobs=n_jobs))
+        gc.collect()
+        if self.verbosity > 0:
+            print('Computing Spearman R for PCA...')
+        EigenbasisLocalResults['PCA'], _ = spearmanr(
+            base_geodesics, embedding_geodesics)
+        gc.collect()
+        ProjectionGlobalResults['PCA'] = global_score_pca(X, pca_emb)
+        gc.collect()
+        if additional_eigenbases is not None:
+            for key in additional_eigenbases.keys():
+                if self.verbosity > 0:
+                    print('Computing geodesics for additional eigenbasis \'{}...\''.format(key))
+                emb_graph = kNN(additional_eigenbases[key],
+                                n_neighbors=n_neighbors,
+                                metric=self.base_metric,
+                                n_jobs=n_jobs,
+                                backend=self.backend,
+                                return_instance=False,
+                                verbose=False, **kwargs)
+                gc.collect()
+                if landmarks is not None:
+                    emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                    gc.collect()
+                embedding_geodesics = squareform(geodesic_distance(
+                    emb_graph, directed=False, n_jobs=n_jobs))
+                gc.collect()
+                if cor_method == 'spearman':
+                    if self.verbosity > 0:
+                        print('Computing Spearman R for additional eigenbasis \'{}...\''.format(key))
+                    EigenbasisLocalResults[key], _ = spearmanr(
+                        base_geodesics, embedding_geodesics)
+                else:
+                    if self.verbosity > 0:
+                        print('Computing Kendall Tau for additional eigenbasis \'{}...\''.format(key))
+                    EigenbasisLocalResults[key], _ = kendalltau(
+                        base_geodesics, embedding_geodesics)
+                gc.collect()
+                EigenbasisGlobalResults[key] = global_score_pca(
+                    X, additional_eigenbases[key])
+                if self.verbosity > 0:
+                    print('Finished for eigenbasis {}'.format(key))
+                gc.collect()
+        if additional_projections is not None:
+            for key in additional_projections.keys():
+                if self.verbosity > 0:
+                    print('Computing geodesics for additional projection \' {}...\''.format(key))
+                emb_graph = kNN(additional_projections[key],
+                                n_neighbors=n_neighbors,
+                                metric=self.graph_metric,
+                                n_jobs=n_jobs,
+                                backend=self.backend,
+                                return_instance=False,
+                                verbose=False, **kwargs)
+                if landmarks is not None:
+                    emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                embedding_geodesics = squareform(geodesic_distance(
+                    emb_graph, directed=False, n_jobs=n_jobs))
+                gc.collect()
+                if cor_method == 'spearman':
+                    if self.verbosity > 0:
+                        print('Computing Spearman R for additional projection \'{}...\''.format(key))
+                    ProjectionLocalResults[key], _ = spearmanr(
+                        base_geodesics, embedding_geodesics)
+                else:
+                    if self.verbosity > 0:
+                        print('Computing Kendall Tau for additional projection \'{}...\''.format(key))
+                    ProjectionLocalResults[key], _ = kendalltau(
+                        base_geodesics, embedding_geodesics)
+                gc.collect()
+                ProjectionGlobalResults[key] = global_score_pca(
+                    X, additional_projections[key])
+                gc.collect()
+        res_dict = {'EigenbasisLocal': EigenbasisLocalResults,
+                    'EigenbasisGlobal': EigenbasisGlobalResults,
+                    'ProjectionLocal': ProjectionLocalResults,
+                    'ProjectionGlobal': ProjectionGlobalResults}
+
+        return res_dict
