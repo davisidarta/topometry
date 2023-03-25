@@ -102,8 +102,8 @@ def local_score(data, emb, landmarks=None,
     else:
         print('Computing Kendall Tau for eigenbasis...')
         results = kendalltau(
-            base_geodesics, embedding_geodesics)
-    return results.correlation
+            base_geodesics, embedding_geodesics).correlation
+    return results
 
 def global_score(data, emb):
     global_scores_pca = global_score_pca(data, emb)
