@@ -536,7 +536,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                                                           self.base_kernel_version,
                                                                                           self.BaseKernelDict,
                                                                                           suffix='',
-                                                                                          low_memory=self.low_memory)
+                                                                                          low_memory=self.low_memory,
+                                                                                          data_for_expansion=X,
+                                                                                          base=True)
             end = time.time()
             gc.collect()
             if self.verbosity >= 1:
@@ -769,7 +771,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                                                         self.graph_kernel_version,
                                                                                         self.GraphKernelDict,
                                                                                         suffix=' from ' + self.current_eigenbasis,
-                                                                                        low_memory=self.low_memory)
+                                                                                        low_memory=self.low_memory,
+                                                                                        data_for_expansion=eigenbasis.transform(X=None),
+                                                                                        base=False)
         
         end = time.time()
         gc.collect()
@@ -1060,7 +1064,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         gc.collect()
         return print('TopOGraph saved at ' + filename)
 
-    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False):
+    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False, data_for_expansion=None, base=False):
         import gc
         gc.collect()
         kernel_key = kernel_version
@@ -1157,7 +1161,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_nbr_expansion':
-                kernel = Kernel(metric="precomputed",
+                if data_for_expansion is None:
+                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
+                if base:
+                    use_metric = self.base_metric
+                else:
+                    use_metric = self.graph_metric
+                kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
                                 cknn=False,
@@ -1178,7 +1188,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_alpha_decaying_nbr_expansion':
-                kernel = Kernel(metric="precomputed",
+                if data_for_expansion is None:
+                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
+                if base:
+                    use_metric = self.base_metric
+                else:
+                    use_metric = self.graph_metric
+                kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
                                 cknn=False,
