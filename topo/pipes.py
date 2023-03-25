@@ -13,7 +13,7 @@ from topo.eval.local_scores import geodesic_distance
 def local_score(data, emb, landmarks=None,
                         landmark_method='random',
                         metric='euclidean',
-                        n_neighbors=3, n_jobs=-1,
+                        n_neighbors=5, n_jobs=-1,
                         cor_method='spearman', random_state=None, **kwargs):
     
     if random_state is None:

@@ -231,7 +231,7 @@ def compute_kernel(X, metric='cosine',
                 dens_dict['adaptive_bw'] = adap_sd
             if expand_nbr_search:
                 new_k = int(k + (k - pm.max()))
-                new_K = kNN(X, metric=metric, k=new_k,
+                new_K = kNN(X, metric=metric, n_neighbors=new_k,
                             backend=backend, n_jobs=n_jobs, **kwargs)
                 adap_sd_new = _adap_bw(new_K, new_k)
                 x_new, y_new, dists_new = find(new_K)
