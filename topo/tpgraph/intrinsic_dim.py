@@ -56,43 +56,17 @@ def estimate_local_dim_fsa(K, n_neighbors=10):
     d = - np.log(2) / np.log(dist_to_median_k / dist_to_k)
     return d
 
-def estimate_local_dim_fsa_test(X, n_neighbors=10):
-    """
-    Measure local dimensionality using the Farahmand-Szepesvári-Audibert (FSA) dimension estimator
-    
-    Parameters
-    ----------
-    K: sparse matrix
-        Sparse matrix of distances between points
-
-    n_neighbors: int
-        Number of neighbors to consider for the kNN graph. 
-        Note this is actually half the number of neighbors used in the FSA estimator, for efficiency.
-
-    Returns
-    -------
-    local_dim: array
-        Local dimensionality estimate for each point
-    """
-    from sklearn.neighbors import NearestNeighbors
-    nbrs = NearestNeighbors(n_neighbors=2 * n_neighbors).fit(X)
-    K = nbrs.kneighbors_graph(X, mode='distance')
-    dist_to_k = _get_dist_to_k_nearest_neighbor(K, n_neighbors=n_neighbors)
-    dist_to_median_k = _get_dist_to_median_nearest_neighbor(K, n_neighbors=n_neighbors)
-    d = - np.log(2) / np.log(dist_to_median_k / dist_to_k)
-    return d
 
 # From https://github.com/phrenico/cmfsapy/
 def ml_estimator(normed_dists):
     return -1./ np.nanmean(np.log(normed_dists), axis=1)
 
 # From https://github.com/phrenico/cmfsapy/
-# def ml_dims(X, k2, k1=1):
-#     """Maximum likelihood estimator af intrinsic dimension (Levina-Bickel)"""
-#     dists, inds = get_dists_inds_ck(X, k2+1, boxsize=None)
-#     norm_dists = dists / dists[:, -1:]
-#     dims = ml_estimator(norm_dists[:, k1:-1])
-#     return dims, dists, inds
+def ml_dims(K, n_neighbors=10):
+    """Maximum likelihood estimator af intrinsic dimension (Levina-Bickel)"""
+    norm_dists = dists / _get_dist_to_k_nearest_neighbor(K, n_neighbors=n_neighbors)
+    dims = ml_estimator(norm_dists.toarray()[:, 1:-1])
+    return dims
 
 # From https://github.com/phrenico/cmfsapy/
 def szepes_ml(local_d):
@@ -103,8 +77,34 @@ def szepes_ml(local_d):
     """
     return  hmean(local_d) / np.log(2)
 
-
-
+def local_eigengap_experimental(K, max_n_components=30, verbose=False):
+    from scipy.sparse.linalg import eigsh
+    from topo.spectral import diffusion_operator
+    from topo.base.ann import kNN
+    # Construct neighborhood graph
+    graph = kNN(X, n_neighbors=30)
+    # Compute graph Laplacian
+    diff_op = diffusion_operator(graph)
+    if verbose:
+        print('Started evaluating locally...')
+    # Compute local intrinsic dimensionality
+    n_components = 50  # number of eigenvalues to compute
+    local_dim = np.zeros((X.shape[0], n_components))
+    for i in range(X.shape[0]):
+        indices = graph.indices[graph.indptr[i]:graph.indptr[i+1]]
+        P = diff_op[indices][:, indices]
+        evals, evecs = eigsh(diff_op, k=n_components, which='LM')
+        max_eigs = int(np.sum(evals > 0, axis=0))
+        first_diff = np.diff(evals)
+        eigengap = np.argmax(first_diff) + 1
+        if max_eigs == len(evals):
+            # Could not find a discrete eigengap crossing 0
+            use_eigengap = eigengap
+        else:
+            # Found a discrete eigengap crossing 0
+            use_eigengap = max_eigs
+        local_dim[i] = use_eigengap
+    return local_dim
 
 
 
@@ -167,7 +167,6 @@ def estimate_dim_twoNN(X, discard_fraction = 0.1,
         Estimated local intrinsic dimension of each sample
 
     """
-    X = check_array(X, ensure_min_samples=n_neighbors + 1, ensure_min_features=2)
     if not precomputed_knn:
         K = kNN(X, n_neighbors=n_neighbors,
                     metric=metric,

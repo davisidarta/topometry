@@ -385,11 +385,11 @@ def get_ellipse_eccentricity(emb, L=None, G=None):
         vals, vecs = eigsorted(cov)
         # a is radius of major axis, b is radius minor axis
         a, b = np.sqrt(np.absolute(vals))
-        result.append(np.sqrt(1+ (b**2 / a**2)) + np.e)
+        result.append(np.sqrt(np.abs(1 - (b**2 / a**2))))
     return result
     
 
-def plot_riemann_metric(emb, L=None, G=None, n_plot=50, std=0.1, alpha=0.1, title=None, ax=None,
+def plot_riemann_metric(emb, L=None, H=None, n_plot=50, std=0.1, alpha=0.1, title=None, ax=None,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
@@ -403,8 +403,9 @@ def plot_riemann_metric(emb, L=None, G=None, n_plot=50, std=0.1, alpha=0.1, titl
     L: numpy.ndarray
        Graph Laplacian matrix. Should be provided if H_emb is not provided.
     
-    G : Riemann metric, shape = (n, n_dim, n_dim)
-        The Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
+    H : Dual Riemann metric, shape = (n, n_dim, n_dim)
+        The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
+        Computed with the class `topo.eval.rmetric.RiemannMetric`.
 
     n_plot: int (optional, default 50)
         Number of ellipses to plot.
@@ -438,10 +439,10 @@ def plot_riemann_metric(emb, L=None, G=None, n_plot=50, std=0.1, alpha=0.1, titl
 
 
     """
-    if G is None:
+    if H is None:
         from topo.eval import RiemannMetric
         rmetric = RiemannMetric(emb, L)
-        G = rmetric.get_rmetric()
+        H = rmetric.get_dual_rmetric()
 
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
@@ -459,7 +460,7 @@ def plot_riemann_metric(emb, L=None, G=None, n_plot=50, std=0.1, alpha=0.1, titl
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, **kwargs)
     for i in range(n_plot):
         ii = sample_points[i]
-        cov = G[ii, :, :]
+        cov = H[ii, :, :]
         if labels is not None:
             plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None, color=colors[labels[ii]],
                              alpha=alpha)
@@ -519,3 +520,38 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
         plt.xticks(())
         plt.yticks(())
     return plt.show()
+
+
+def plot_dimensionality_histograms_single(id_list, bins=50, histtype='step', stacked=True, density=True, log=False, title='I.D. estimates'):
+    fig, ax = plt.subplots(1,1)
+    n, bins, patches  = ax.hist(id_list, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log)
+    sigma = np.std(id_list)
+    mu = np.mean(id_list)
+    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+        np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+    ax.set_title(title)
+    ax.legend(prop={'size': 10})
+    fig.tight_layout()
+    plt.show()
+
+def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
+    fig, ax = plt.subplots(1,1)
+    # data
+    for key in id_dict.keys():
+        i=0
+        x = id_dict[key]
+        #
+        # Make a multiple-histogram of data-sets with different length.
+        n, bins, patches  = ax.hist(x, bins=bins, histtype=histtype, stacked=stacked, density=True, log=log, label=key)
+        sigma = np.std(x)
+        mu = np.mean(x)
+        y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+            np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+        i= i+1
+    ax.set_title(title)
+    ax.legend(prop={'size': 10})
+    fig.tight_layout()
+    plt.show()
+
+
+
