@@ -129,7 +129,7 @@ def eval_models_layouts(TopOGraph, X,
         base_graph, directed=False, n_jobs=n_jobs)
     if use_k_geodesics:
         base_geodesics = subset_geodesic_distances(base_graph, base_geodesics).toarray()
-        base_geodesics = squareform(base_geodesics)
+    base_geodesics = squareform(base_geodesics)
     gc.collect()
     for key in TopOGraph.EigenbasisDict.keys():
         if TopOGraph.verbosity > 0:

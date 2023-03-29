@@ -232,6 +232,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.D_inv_sqrt_ = None
         self.multiscaled_evecs = None
         self.return_evals = False
+        self.eigengap = None
 
     def __repr__(self):
         if self.eigenvectors is not None:
@@ -351,6 +352,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                     evecs = evecs * np.sqrt(evals + 1e-10)
         self.eigenvectors = evecs
         self.eigenvalues = evals
+        max_eigs = int(np.sum(self.eigenvalues > 0, axis=0))
+        first_diff = np.diff(self.eigenvalues)
+        eigengap = np.argmax(first_diff) + 1
+        if max_eigs == len(evals):
+            # Could not find a discrete eigengap crossing 0
+            self.eigengap = eigengap
+        else:
+            # Found a discrete eigengap crossing 0
+            self.eigengap = max_eigs
         return self
 
     def rescale(self, use_eigs=50):

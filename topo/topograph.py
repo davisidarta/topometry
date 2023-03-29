@@ -751,8 +751,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             print('    Building topological graph from eigenbasis...')
         if self.verbosity >= 1:
             print('        Computing neighborhood graph...')
+        target = eigenbasis.transform(X=None)[:, 0:eigenbasis.eigengap]
         start = time.time()
-        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(X=None), n_neighbors=self.graph_knn,
+        self.eigenbasis_knn_graph = kNN(target, n_neighbors=self.graph_knn,
                                         metric=self.graph_metric,
                                         n_jobs=self.n_jobs,
                                         backend=self.backend,
@@ -1024,7 +1025,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         return dist_to_median_k
 
 
-    def estimate_dimensionalities(self, X, K=None, method='adaptive', n_neighbors=None, res_dict=None, scaled=True, **kwargs):
+    def estimate_dimensionalities(self, X, K=None, method='adaptive', n_neighbors=None, res_dict=None, force_recompute=True, **kwargs):
         """
         This function allows estimating local and global dimensionalities with different methods.
         `scikit-dim` is used for the Fischer Separability Analysis and the TwoNN methods.
@@ -1071,6 +1072,15 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if (n_neighbors is None) or not isinstance(n_neighbors, int) or (n_neighbors != self.base_knn):
             n_neighbors = self.base_knn
             median_k = np.floor(n_neighbors/2).astype(int)
+        if force_recompute:
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
+                                                            metric=self.base_metric,
+                                                            n_jobs=self.n_jobs,
+                                                            backend=self.backend,
+                                                            return_instance=True,
+                                                            verbose=self.bases_graph_verbose, **kwargs)
+            K = self.base_knn_graph
+        else:
             if K is None:
                 if X is None:
                     if self.base_knn_graph is None:
@@ -1085,19 +1095,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                                     return_instance=True,
                                                                     verbose=self.bases_graph_verbose, **kwargs)
                     K = self.base_knn_graph
-            else:
-                n,m = np.shape(K)
-                if n != m:
-                    raise ValueError('base_knn_graph must be a square matrix')
-        else:
-            median_k = np.floor(n_neighbors/2).astype(int)
-            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
-                                                                    metric=self.base_metric,
-                                                                    n_jobs=self.n_jobs,
-                                                                    backend=self.backend,
-                                                                    return_instance=True,
-                                                                    verbose=self.bases_graph_verbose, **kwargs)
-            K = self.base_knn_graph
     
         res_dict['Distance to k-neighbor'] = self._get_dist_to_k_nearest_neighbor(K, n_neighbors)
         res_dict['Distance to median neighbor']= self._get_dist_to_median_nearest_neighbor(K, n_neighbors)
@@ -1112,10 +1109,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             return print('method not implemented')
         return res_dict
     
-    def estimate_k_dimensionalities(self, X, K=None, k_vals=[5, 10, 30, 50], method='adaptive', res_dict=None, scaled=True, **kwargs):
+    def estimate_k_dimensionalities(self, X, k_vals=[5, 10, 30, 50], method='adaptive', res_dict=None, **kwargs):
         all_res_dict = {}
         for k in k_vals:
-            all_res_dict['k = ' + str(k)] = self.estimate_dimensionalities(X, K=K, method=method, n_neighbors=k, res_dict=res_dict, scaled=scaled, **kwargs)
+            all_res_dict['k = ' + str(k)] = self.estimate_dimensionalities(X, K=None, method=method, n_neighbors=k, res_dict=res_dict, **kwargs)
         return all_res_dict
 
     # Previous version used FSA - im planning to maybe remove it because it often fails.

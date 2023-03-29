@@ -124,7 +124,7 @@ def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=N
     return G
 
 
-def local_score(data, emb, n_neighbors=5, metric='cosine', n_jobs=-1, landmarks=None, landmark_method='random', use_k_geodesics=True, random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', path_method='D', indices=None, unweighted=False, **kwargs):
+def local_score(data, emb, n_neighbors=5, metric='euclidean', n_jobs=-1, landmarks=None, landmark_method='random', use_k_geodesics=False, random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', path_method='D', indices=None, unweighted=False, **kwargs):
     random_state = check_random_state(random_state)
     if landmarks is not None:
         if isinstance(landmarks, int):
