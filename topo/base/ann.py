@@ -14,12 +14,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from joblib import cpu_count
 
+
 def kNN(X, Y=None,
         n_neighbors=5,
         metric='euclidean',
         backend='nmslib',
         n_jobs=-1,
-        symmetrize=True,
         return_instance=False,
         verbose=False,
          **kwargs):
@@ -62,10 +62,6 @@ def kNN(X, Y=None,
     n_jobs : int (optional, default 1).
         Number of threads to be used in computation. Defaults to 1. Set to -1 to use all available CPUs.
         Most algorithms are highly scalable to multithreading.
-
-    symmetrize : bool (optional, default True).
-        Whether to symmetrize the output of approximate nearest neighbors search. The default is True
-        and uses additive symmetrization, i.e. knn = ( knn + knn.T ) / 2 .
 
     return_instance : bool (optional, default False).
         Whether to also return the backend instance (i.e. the nearest-neighbors class). The default is False.
@@ -153,13 +149,6 @@ def kNN(X, Y=None,
         # distances must be monotonically decreasing, needs to be inverted with angular metrics
         # otherwise, we'll have a similarity metric, not a distance metric
         knn.data = 1 - knn.data 
-    if symmetrize:
-        if Y is None:
-            knn = ( knn + knn.T ) / 2
-            knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-            knn.data = np.where(np.isnan(knn.data), 1, knn.data)
-        else:
-            warn('Symmetrization not performed when Y is provided.')
     if return_instance:
         return nbrs, knn
     else:
@@ -269,9 +258,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
                  method='hnsw',
                  n_jobs=-1,
                  p=None,
-                 M=15,
-                 efC=50,
-                 efS=50,
+                 M=30,
+                 efC=100,
+                 efS=100,
                  dense=False,
                  verbose=False
                  ):

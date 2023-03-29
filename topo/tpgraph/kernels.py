@@ -193,7 +193,7 @@ def compute_kernel(X, metric='cosine',
             metric_fun = _get_metric_function(metric)
             K = matrix_pairwise_distance(X, metric_fun)
         else:
-            K = kNN(X, metric=metric, n_neighbors=k, symmetrize=True,
+            K = kNN(X, metric=metric, n_neighbors=k,
                     backend=backend, n_jobs=n_jobs, **kwargs)
         if return_densities:
             dens_dict['knn'] = K
@@ -265,10 +265,11 @@ def compute_kernel(X, metric='cosine',
                 if sigma == 0:
                     sigma = 1e-10
                 dists = (dists / sigma) ** 2
-        W = csr_matrix((np.exp(-dists), (x, y)), shape=[N, N])
+        W = csr_matrix((np.abs(np.exp(-dists)), (x, y)), shape=[N, N])
     if symmetrize:
         W = (W + W.T) / 2
     W[(np.arange(N), np.arange(N))] = 0
+
     # handle nan
     W.data = np.where(np.isnan(W.data), 1, W.data)
     if not return_densities:

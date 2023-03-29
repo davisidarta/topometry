@@ -373,7 +373,23 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, title=None, ax=None,
+def get_ellipse_eccentricity(emb, L=None, G=None):
+    if G is None:
+        from topo.eval import RiemannMetric
+        rmetric = RiemannMetric(emb, L)
+        G = rmetric.get_rmetric()
+    N = np.shape(emb)[0]
+    result = []
+    for i in range(N):
+        cov = G[i, :, :] 
+        vals, vecs = eigsorted(cov)
+        # a is radius of major axis, b is radius minor axis
+        a, b = np.sqrt(np.absolute(vals))
+        result.append(np.sqrt(1+ (b**2 / a**2)) + np.e)
+    return result
+    
+
+def plot_riemann_metric(emb, L=None, G=None, n_plot=50, std=0.1, alpha=0.1, title=None, ax=None,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
@@ -381,14 +397,14 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
     Parameters
     ----------
     
-    emb: numpy.ndarray
+    emb: numpy.ndarray, shape = (n, n_dim)
         Embedding matrix.
     
-    laplacian: numpy.ndarray
+    L: numpy.ndarray
        Graph Laplacian matrix. Should be provided if H_emb is not provided.
     
-    H_emb: numpy.ndarray
-        Embedding matrix of the H. Should be provided if laplacian is not provided.
+    G : Riemann metric, shape = (n, n_dim, n_dim)
+        The Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
 
     n_plot: int (optional, default 50)
         Number of ellipses to plot.
@@ -407,7 +423,7 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
 
     figsize: tuple (optional, default (8,8))
         Figure size.
-    
+
     random_state: int (optional, default None)
         Random state for sampling points to plot ellipses of.
 
@@ -422,10 +438,10 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
 
 
     """
-    if H_emb is None:
+    if G is None:
         from topo.eval import RiemannMetric
-        rmetric = RiemannMetric(emb, laplacian)
-        H_emb = rmetric.get_dual_rmetric()
+        rmetric = RiemannMetric(emb, L)
+        G = rmetric.get_rmetric()
 
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
@@ -443,7 +459,7 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, **kwargs)
     for i in range(n_plot):
         ii = sample_points[i]
-        cov = H_emb[ii, :, :]
+        cov = G[ii, :, :]
         if labels is not None:
             plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None, color=colors[labels[ii]],
                              alpha=alpha)
@@ -464,7 +480,7 @@ def draw_edges(ax, data, kernel, color='black', **kwargs):
     
 
 
-def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15, title='Eigenbasis local scores'):
+def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, title='Scores'):
     keys = scores.keys()
     values = scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -484,7 +500,22 @@ def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15
     else:
         return fig
 
-def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
+def plot_all_scores(evaluation_dict, log=True, figsize=(8,8), fontsize=20):
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
+
+def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), title='DC', **kwargs):
+    plt.figure(figsize=figsize)
+    plt.subplots_adjust(
+        left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
+    )
+    plot_num = 1
+    for i in range(0, n_eigenvectors):
+        plt.subplot(1, n_eigenvectors, plot_num)
+        plt.title(title+ ' ' + str(plot_num))
+        plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
+        plot_num += 1
+        plt.xticks(())
+        plt.yticks(())
+    return plt.show()

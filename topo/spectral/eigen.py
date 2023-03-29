@@ -344,8 +344,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 use_eigs = int(np.sum(evals > 0, axis=0))
                 eigs_idx = list(range(1, int(use_eigs)))
                 eig_vals = np.ravel(evals[eigs_idx])
-                self.multiscaled_evecs = evecs[:,
-                                               eigs_idx] * (eig_vals / (1 - eig_vals))
+                self.multiscaled_evecs = evecs[:,eigs_idx] * (eig_vals / (1 - eig_vals))
             else:
                 if self.weight:
                     # weight by eigenvalues
