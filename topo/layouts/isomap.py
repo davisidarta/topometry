@@ -56,7 +56,7 @@ def Isomap(X, n_components=2,  n_neighbors=50, metric='cosine', landmarks=None, 
             landmarks = get_landmark_indices(X, n_landmarks=landmarks, method=landmark_method)
     # kNN
     if metric != 'precomputed':
-        K = kNN(X, metric=metric, n_neighbors=n_neighbors, symmetrize=True, n_jobs=n_jobs, **kwargs)
+        K = kNN(X, metric=metric, n_neighbors=n_neighbors, n_jobs=n_jobs, **kwargs)
     else:
         K = X.copy()
     # Pairwise geodesics

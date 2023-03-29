@@ -172,8 +172,6 @@ def fuzzy_simplicial_set(
                   metric=metric,
                   n_jobs=n_jobs,
                   backend=backend,
-                  low_memory=True,
-                  symmetrize=True,
                   return_instance=False,
                   verbose=verbose,
                   **kwargs)

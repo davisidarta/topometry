@@ -12,7 +12,6 @@ from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
-from topo.tpgraph.fisher import FisherS
 
 try:
     import hnswlib
@@ -518,7 +517,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                             metric=self.base_metric,
                                                             n_jobs=self.n_jobs,
                                                             backend=self.backend,
-                                                            symmetrize=True,
                                                             return_instance=True,
                                                             verbose=self.bases_graph_verbose, **kwargs)
             end = time.time()
@@ -1009,42 +1007,149 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                         self.project(projection_method=projection)
                         gc.collect()
 
-    def estimate_global_dimensionality(self, X, scaled=True):
-        if issparse(X):
-            X = X.toarray()
-        if self.verbosity >= 1:
-            print('   Estimating global dimensionality...')
-        dimensionality_estimator = FisherS(scaled=scaled,
-                                                        verbose=self.bases_graph_verbose).fit(X,
-                                                                                                n_jobs=self.n_jobs,
-                                                                                                metric=self.base_metric,
-                                                                                                n_neighbors=self.base_knn,
-                                                                                                backend=self.backend)
-        self.global_dimensionality = dimensionality_estimator.transform()
-        gc.collect()
-        if self.verbosity >= 1:
-            print('   Global dimensionality is %f' %
-                  self.global_dimensionality)
-        return self.global_dimensionality
+    def _get_dist_to_k_nearest_neighbor(self, K, n_neighbors=10):
+        dist_to_k = np.zeros(K.shape[0])
+        for i in np.arange(len(dist_to_k)):
+            dist_to_k[i] = np.sort(
+                K.data[K.indptr[i]: K.indptr[i + 1]])[n_neighbors - 1]
+        return dist_to_k
 
-    def estimate_local_dimensionality(self, X, scaled=True, smooth=False):
-        if issparse(X):
-            X = X.toarray()
-        if self.verbosity >= 1:
-            print('   Estimating local dimensionality...')
-        if self.base_knn_graph is None:
-            self.fit(X)
-        dimensionality_estimator = FisherS(scaled=scaled,
-                                                        verbose=self.bases_graph_verbose).fit_pw(X,
-                                                                                                n_jobs=self.n_jobs,
-                                                                                                metric=self.base_metric,
-                                                                                                n_neighbors=self.base_knn,
-                                                                                                smooth=smooth,
-                                                                                                backend=self.backend)
-        self.global_dimensionality = dimensionality_estimator.transform()
-        self.local_dimensionality = dimensionality_estimator.transform_pw()
-        gc.collect()
-        return self.local_dimensionality
+
+    def _get_dist_to_median_nearest_neighbor(self, K, n_neighbors=10):
+        median_k = np.floor(n_neighbors/2).astype(int)
+        dist_to_median_k = np.zeros(K.shape[0])
+        for i in np.arange(len(dist_to_median_k)):
+            dist_to_median_k[i] = np.sort(
+                K.data[K.indptr[i]: K.indptr[i + 1]])[median_k - 1]
+        return dist_to_median_k
+
+
+    def estimate_dimensionalities(self, X, K=None, method='adaptive', n_neighbors=None, res_dict=None, scaled=True, **kwargs):
+        """
+        This function allows estimating local and global dimensionalities with different methods.
+        `scikit-dim` is used for the Fischer Separability Analysis and the TwoNN methods.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            The input data. 
+
+        K : array-like, shape (optional, n_samples, n_samples)
+            The input k-nearest-neighbors distances, untransformed, as outputed by a kNN algorithm.            
+        
+        method : str (optional, default 'adaptive')
+            The method to use for estimating local intrinsic dimensionality (local ID) of the data. Options are:
+         
+            * `'adaptive'` : The default `'adaptive'` method is an implementation of Farahmand-Szepesvári-Audibert (FSA) dimension estimator. 
+            We named it 'adaptive' to  avoid confusion with Fischer Separability Analysis (also FSA).
+            Interestingly, we found that there is an explicit connection between these adaptive estimates of local intrinsic dimensionality
+            (local ID) of the data and the manifold-adaptive similarity kernel introduced in TopOMetry. 
+
+            * `'FSA'` : The `'FSA'` method is the Fischer Separability Analysis estimator, adapted from the scikit-dim package for computational efficiency.
+            
+            * `'TwoNN'` : The `'TwoNN'` method is the Two Nearest Neighbors estimator, also adapted from the scikit-dim package for computational efficiency.
+        
+        n_neighbors : int (optional, default None)
+            Number of neighbors to use for the local ID estimation. If not provided, will use the `base_knn` value given to `TopOGraph` at initialization.
+
+        res_dict : dict (optional, default None)
+            A dictionary used to store the results. If not provided, will create a new one. 
+            This is useful if you want to run multiple estimations and store the results in the same dictionary.
+
+        scaled : bool (optional, default True)
+            Whether the data is already scaled. FSA requires it to be so, and will scale it if it is not.
+
+
+        Returns
+        -------
+        res_dict : dict
+            A dictionary with the results.
+            
+        """
+        if res_dict is None or not isinstance(res_dict, dict):
+            res_dict = {}
+        if (n_neighbors is None) or not isinstance(n_neighbors, int) or (n_neighbors != self.base_knn):
+            n_neighbors = self.base_knn
+            median_k = np.floor(n_neighbors/2).astype(int)
+            if K is None:
+                if X is None:
+                    if self.base_knn_graph is None:
+                        raise ValueError('Either X or K must be provided')
+                    else:
+                        K = self.base_knn_graph
+                else:
+                    self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
+                                                                    metric=self.base_metric,
+                                                                    n_jobs=self.n_jobs,
+                                                                    backend=self.backend,
+                                                                    return_instance=True,
+                                                                    verbose=self.bases_graph_verbose, **kwargs)
+                    K = self.base_knn_graph
+            else:
+                n,m = np.shape(K)
+                if n != m:
+                    raise ValueError('base_knn_graph must be a square matrix')
+        else:
+            median_k = np.floor(n_neighbors/2).astype(int)
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
+                                                                    metric=self.base_metric,
+                                                                    n_jobs=self.n_jobs,
+                                                                    backend=self.backend,
+                                                                    return_instance=True,
+                                                                    verbose=self.bases_graph_verbose, **kwargs)
+            K = self.base_knn_graph
+    
+        res_dict['Distance to k-neighbor'] = self._get_dist_to_k_nearest_neighbor(K, n_neighbors)
+        res_dict['Distance to median neighbor']= self._get_dist_to_median_nearest_neighbor(K, n_neighbors)
+        res_dict['Locality Ratio'] = res_dict['Distance to k-neighbor']/res_dict['Distance to median neighbor']
+        if method == 'adaptive':
+            import statistics    
+            res_dict['Adaptive - estimated local ID'] = np.abs( np.log(2) / np.log(res_dict['Locality Ratio']))
+            res_dict['Adaptive - estimated global ID'] = int(statistics.median((res_dict['Adaptive - estimated local ID'])))
+        elif method == 'FSA':
+            # if issparse(X):
+            #     X = X.toarray()
+            return print('method not implemented')
+        return res_dict
+    
+    def estimate_k_dimensionalities(self, X, K=None, k_vals=[5, 10, 30, 50], method='adaptive', res_dict=None, scaled=True, **kwargs):
+        all_res_dict = {}
+        for k in k_vals:
+            all_res_dict['k = ' + str(k)] = self.estimate_dimensionalities(X, K=K, method=method, n_neighbors=k, res_dict=res_dict, scaled=scaled, **kwargs)
+        return all_res_dict
+
+    # Previous version used FSA - im planning to maybe remove it because it often fails.
+    # def estimate_global_dimensionality(self, X, scaled=True):
+    #     if issparse(X):
+    #         X = X.toarray()
+    #     if self.verbosity >= 1:
+    #         print('   Estimating global dimensionality...')
+
+    #     self.global_dimensionality = dimensionality_estimator.transform()
+    #     gc.collect()
+    #     if self.verbosity >= 1:
+    #         print('   Global dimensionality is %f' %
+    #               self.global_dimensionality)
+    #     return self.global_dimensionality
+
+    # def estimate_local_dimensionality(self, X, scaled=True, smooth=False):
+    #     if issparse(X):
+    #         X = X.toarray()
+    #     if self.verbosity >= 1:
+    #         print('   Estimating local dimensionality...')
+    #     if self.base_knn_graph is None:
+    #         self.fit(X)
+    #     dimensionality_estimator = FisherS(scaled=scaled,
+    #                                                     verbose=self.bases_graph_verbose).fit_pw(X,
+    #                                                                                             n_jobs=self.n_jobs,
+    #                                                                                             metric=self.base_metric,
+    #                                                                                             n_neighbors=self.base_knn,
+    #                                                                                             smooth=smooth,
+    #                                                                                             backend=self.backend)
+    #     self.global_dimensionality = dimensionality_estimator.transform()
+    #     self.local_dimensionality = dimensionality_estimator.transform_pw()
+    #     gc.collect()
+    #     return self.local_dimensionality
 
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:

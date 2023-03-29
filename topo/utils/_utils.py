@@ -99,27 +99,28 @@ def get_indices_distances_from_sparse_matrix(X, n_neighbors):
     return _knn_indices, _knn_dists
 
 
+
 def print_eval_results(evaluation_dict, n_top=3):
-    for estimate in evaluation_dict.keys():
-        if estimate == 'EigenbasisLocal':
-            estimate_str = ' local '
-            estimated_attr = ' eigenbases '
-        elif estimate == 'ProjectionLocal':
-            estimate_str = ' local '
-            estimated_attr = ' projections '
-        elif estimate == 'EigenbasisGlobal':
-            estimate_str = ' global '
-            estimated_attr = ' eigenbases '
-        elif estimate == 'ProjectionGlobal':
-            estimate_str = ' global '
-            estimated_attr = ' projections '
+      for estimate in evaluation_dict.keys():
+            if estimate == 'EigenbasisLocal':
+                  estimate_str = ' local '
+                  estimated_attr = ' eigenbases '
+            elif estimate == 'ProjectionLocal':
+                  estimate_str = ' local '
+                  estimated_attr = ' projections '
+            elif estimate == 'EigenbasisGlobal':
+                  estimate_str = ' global '
+                  estimated_attr = ' eigenbases '
+            elif estimate == 'ProjectionGlobal':
+                  estimate_str = ' global '
+                  estimated_attr = ' projections '
+            
+            print('\n The top-' + str(n_top) + estimated_attr + 'which preserve' + estimate_str + 'information the most are: ')
+            res = dict(sorted(evaluation_dict[estimate].items(), key = lambda x: x[1], reverse = True)[:3])
+            i=1
+            for key in res.keys():
+                  print('   ' + str(i) + ' - ' + key + ': ' + str(res[key]))
+                  i+=1
 
-        print('\n Top-' + str(n_top) + estimated_attr + 'which preserve most' + estimate_str + 'information: ')
-        res = dict(sorted(evaluation_dict[estimate].items(), key = lambda x: x[1], reverse = True)[:3])
-        i=1
-        for key in res.keys():
-            print('   ' + str(i) + ' - ' + key + ': ' + str(res[key]))
-            i+=1
 
-    
 
