@@ -6,6 +6,3 @@ pandas
 numba
 setuptools>=65.5.1
 torch
-pymde
-pacmap
-
