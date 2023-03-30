@@ -664,8 +664,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         gc.collect()
         return self.transform()
 
-
-
     def eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
         Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
@@ -713,7 +711,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         """
         return self.eigenspectrum(eigenbasis_key=eigenbasis_key, **kwargs)
-
 
     def list_eigenbases(self):
         """
@@ -1015,7 +1012,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 K.data[K.indptr[i]: K.indptr[i + 1]])[n_neighbors - 1]
         return dist_to_k
 
-
     def _get_dist_to_median_nearest_neighbor(self, K, n_neighbors=10):
         median_k = np.floor(n_neighbors/2).astype(int)
         dist_to_median_k = np.zeros(K.shape[0])
@@ -1023,7 +1019,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             dist_to_median_k[i] = np.sort(
                 K.data[K.indptr[i]: K.indptr[i + 1]])[median_k - 1]
         return dist_to_median_k
-
 
     def estimate_dimensionalities(self, X, K=None, method='adaptive', n_neighbors=None, res_dict=None, force_recompute=True, **kwargs):
         """
@@ -1114,39 +1109,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         for k in k_vals:
             all_res_dict['k = ' + str(k)] = self.estimate_dimensionalities(X, K=None, method=method, n_neighbors=k, res_dict=res_dict, **kwargs)
         return all_res_dict
-
-    # Previous version used FSA - im planning to maybe remove it because it often fails.
-    # def estimate_global_dimensionality(self, X, scaled=True):
-    #     if issparse(X):
-    #         X = X.toarray()
-    #     if self.verbosity >= 1:
-    #         print('   Estimating global dimensionality...')
-
-    #     self.global_dimensionality = dimensionality_estimator.transform()
-    #     gc.collect()
-    #     if self.verbosity >= 1:
-    #         print('   Global dimensionality is %f' %
-    #               self.global_dimensionality)
-    #     return self.global_dimensionality
-
-    # def estimate_local_dimensionality(self, X, scaled=True, smooth=False):
-    #     if issparse(X):
-    #         X = X.toarray()
-    #     if self.verbosity >= 1:
-    #         print('   Estimating local dimensionality...')
-    #     if self.base_knn_graph is None:
-    #         self.fit(X)
-    #     dimensionality_estimator = FisherS(scaled=scaled,
-    #                                                     verbose=self.bases_graph_verbose).fit_pw(X,
-    #                                                                                             n_jobs=self.n_jobs,
-    #                                                                                             metric=self.base_metric,
-    #                                                                                             n_neighbors=self.base_knn,
-    #                                                                                             smooth=smooth,
-    #                                                                                             backend=self.backend)
-    #     self.global_dimensionality = dimensionality_estimator.transform()
-    #     self.local_dimensionality = dimensionality_estimator.transform_pw()
-    #     gc.collect()
-    #     return self.local_dimensionality
 
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:
@@ -1342,7 +1304,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 gc.collect()
 
         return kernel, results_dict
-
 
     def eval_models_layouts(self, X,
                             landmarks=None,
