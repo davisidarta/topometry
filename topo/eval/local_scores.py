@@ -91,13 +91,17 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
     return G
 
 
-def knn_spearman_r(data_graph, embedding_graph, path_method='D', indices=None, unweighted=False, n_jobs=1):
+def knn_spearman_r(data_graph, embedding_graph, path_method='D', subsample_idx=None, unweighted=False, n_jobs=1):
     # data_graph is a (N,N) similarity matrix from the reference high-dimensional data
     # embedding_graph is a (N,N) similarity matrix from the lower dimensional embedding
     geodesic_dist = geodesic_distance(
-        data_graph, method=path_method, unweighted=unweighted, indices=indices, n_jobs=n_jobs)
+        data_graph, method=path_method, unweighted=unweighted, n_jobs=n_jobs)
+    if subsample_idx is not None:
+        geodesic_dist = geodesic_dist[subsample_idx, :][:, subsample_idx]
     embedded_dist = geodesic_distance(
-        embedding_graph, method=path_method, unweighted=unweighted, indices=indices, n_jobs=n_jobs)
+        embedding_graph, method=path_method, unweighted=unweighted, n_jobs=n_jobs)
+    if subsample_idx is not None:
+        embedded_dist = embedded_dist[subsample_idx, :][:, subsample_idx]
     res, _ = spearmanr(squareform(geodesic_dist), squareform(embedded_dist))
     return res
 
@@ -109,6 +113,8 @@ def knn_kendall_tau(data_graph, embedding_graph, path_method='D', subsample_idx=
         geodesic_dist = geodesic_dist[subsample_idx, :][:, subsample_idx]
     embedded_dist = geodesic_distance(
         embedding_graph, method=path_method, unweighted=unweighted, n_jobs=n_jobs)
+    if subsample_idx is not None:
+        embedded_dist = embedded_dist[subsample_idx, :][:, subsample_idx]
     res, _ = kendalltau(squareform(geodesic_dist), squareform(embedded_dist))
     return res
 

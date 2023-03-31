@@ -488,3 +488,50 @@ def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
+
+def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), title='DC', **kwargs):
+    plt.figure(figsize=figsize)
+    plt.subplots_adjust(
+        left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
+    )
+    plot_num = 1
+    for i in range(0, n_eigenvectors):
+        plt.subplot(1, n_eigenvectors, plot_num)
+        plt.title(title+ ' ' + str(plot_num))
+        plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
+        plot_num += 1
+        plt.xticks(())
+        plt.yticks(())
+    return plt.show()
+
+
+def plot_dimensionality_histograms_single(id_list, bins=50, histtype='step', stacked=True, density=True, log=False, title='I.D. estimates'):
+    fig, ax = plt.subplots(1,1)
+    n, bins, patches  = ax.hist(id_list, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log)
+    sigma = np.std(id_list)
+    mu = np.mean(id_list)
+    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+        np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+    ax.set_title(title)
+    ax.legend(prop={'size': 10})
+    fig.tight_layout()
+    plt.show()
+
+def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
+    fig, ax = plt.subplots(1,1)
+    # data
+    for key in id_dict.keys():
+        i=0
+        x = id_dict[key]
+        #
+        # Make a multiple-histogram of data-sets with different length.
+        n, bins, patches  = ax.hist(x, bins=bins, histtype=histtype, stacked=stacked, density=True, log=log, label=key)
+        sigma = np.std(x)
+        mu = np.mean(x)
+        y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+            np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+        i= i+1
+    ax.set_title(title)
+    ax.legend(prop={'size': 10})
+    fig.tight_layout()
+    plt.show()
