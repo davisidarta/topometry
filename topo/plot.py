@@ -11,7 +11,7 @@ except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def decay_plot(evals, title=None, figsize=(9, 5), fontsize=10):
+def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=10):
     """
     Plot the eigenspectrum decay and its first derivatives.
 
@@ -35,8 +35,8 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=10):
     if title is not None:
         plt.suptitle(title, fontsize=fontsize)
     ax1.plot(range(0, len(evals)), evals, 'b')
-    ax1.set_ylabel('Eigenvalues')
-    ax1.set_xlabel('Eigenvectors')
+    ax1.set_ylabel('Eigenvalues', fontsize=label_fontsize)
+    ax1.set_xlabel('Eigenvectors', fontsize=label_fontsize)
     if max_eigs == len(evals):
         # Could not find a discrete eigengap crossing 0
         ax1.vlines(
@@ -50,11 +50,11 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=10):
         )
         plt.suptitle('Spectrum decay and eigengap (%i)' %
                       int(max_eigs), fontsize=fontsize)
-    ax1.legend(loc='best')
+    ax1.legend(prop={'size': 12}, fontsize=label_fontsize, loc='best')
     ax2 = fig.add_subplot(1, 2, 2)
     ax2.scatter(range(0, len(first_diff)), first_diff)
-    ax2.set_ylabel('Eigenvalues first derivatives')
-    ax2.set_xlabel('Eigenvalues')
+    ax2.set_ylabel('Eigenvalues first derivatives', fontsize=label_fontsize)
+    ax2.set_xlabel('Eigenvalues', fontsize=label_fontsize)
     if max_eigs == len(evals):
         # Could not find a discrete eigengap crossing 0
         ax2.vlines(
