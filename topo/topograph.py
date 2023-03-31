@@ -725,6 +725,143 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         """
         return list(self.EigenbasisDict.keys())
+    
+    def estimate_dimensionality(self, X, methods='fsa', k=[10, 20, 50, 75, 100], metric='euclidean', n_jobs=-1,  **kwargs):
+        """
+        Estimate the intrinsic dimensionality of the data using different methods.
+
+        Parameters
+        ----------
+
+        X : array-like, shape (n_samples, n_features)
+            The data to estimate the dimensionality of.
+
+        methods : list of str, (default ['fsa'])
+            The dimensionality estimation methods to use. Current options are
+            'fsa' (), 'twonn'() and 'mle'().
+
+        k : int, range or list of ints, (default [10, 20, 50, 75, 100])
+            The number of nearest neighbors to use for the dimensionality estimation methods.
+            If a single value of `k` is provided, then the result dictionary will have
+            keys corresponding to the methods, and values corresponding to the
+            dimensionality estimates.
+            If multiple values of `k` are provided, then the result dictionary will have
+            keys corresponding to the number of k, and values corresponding to other dictionaries,
+            which have keys corresponding to the methods, and values corresponding to the
+            dimensionality estimates.
+
+        metric : str (default 'euclidean')
+            The metric to use when calculating distance between instances in a feature array.
+
+        **kwargs : keyword arguments
+            Additional keyword arguments to pass to the backend kNN estimator.
+
+
+        Returns
+        -------
+        (local, global) : A tuple of dictionaries containing local and global dimensionality estimates, respectivelly.
+        
+            Their structure depends on the value of the `k` parameter:
+
+            * If a single value of `k` is provided, then the dictionary will have
+            keys corresponding to the methods, and values corresponding to the
+            dimensionality estimates. 
+
+            * If multiple values of `k` are provided, then the dictionary will have
+            keys corresponding to the number of k, and values corresponding to other dictionaries,
+            which have keys corresponding to the methods, and values corresponding to the
+            dimensionality estimates. 
+
+        """
+
+        if isinstance(methods, str):
+            methods = [methods]
+
+        if isinstance(k, list):
+            n_k = len(k)
+            use_k = k
+        elif isinstance(k, int):
+            n_k = 1
+            use_k = k
+        elif isinstance(k, range):
+            n_k = len(k)
+            use_k = k
+        
+        methods_dict_local = {}
+        methods_dict_global = {}
+        for method in methods:
+            if method not in ['fsa', 'twonn', 'mle']:
+                raise ValueError(
+                    'Invalid method. Valid methods are: fsa, twonn, mle.')
+            if method == 'fsa':
+                from scipy.stats import hmean
+                from topo.tpgraph.intrinsic_dim import estimate_local_dim_fsa
+                if n_k == 1:
+                    kernel_dummy = Kernel(metric=metric,
+                                n_neighbors=k,
+                                n_jobs=n_jobs, **kwargs).fit(X) #number of jobs (highly parallelizable)
+                    methods_dict_local['fsa'] = estimate_local_dim_fsa(kernel_dummy.knn_graph, k) #estimate local dimensionality with diffusion coordinates
+                    methods_dict_global['fsa'] = hmean(methods_dict_local['fsa']) / np.log(2)
+                    del kernel_dummy
+                else:
+                    methods_dict_local['fsa'] = {}
+                    methods_dict_global['fsa'] = {}
+                    for k in use_k: # the number of kNN
+                        kernel_dummy = Kernel(metric=metric,
+                                    n_neighbors=k,
+                                    n_jobs=n_jobs, **kwargs).fit(X) #number of jobs (highly parallelizable)
+                        methods_dict_local['fsa'][str(k)] = estimate_local_dim_fsa(kernel_dummy.knn_graph, k) #estimate local dimensionality with diffusion coordinates
+                        methods_dict_global['fsa'][str(k)] = hmean(methods_dict_local['fsa'][str(k)]) / np.log(2)
+                        del kernel_dummy
+            elif method == 'twonn':
+                try:
+                    import skdim
+                    has_skdim=True
+                except ImportError:
+                    raise ImportError(
+                        'skdim not found. Please install skdim to use the `twonn` method.')
+                if has_skdim:
+                    if n_k == 1:
+                        tnn_skd_dummy = skdim.id.TwoNN().fit_pw(X, n_neighbors=k, n_jobs=n_jobs)
+                        methods_dict_local['twonn'] = tnn_skd_dummy.dimension_pw_
+                        methods_dict_global['twonn'] = tnn_skd_dummy.dimension_
+                        del tnn_skd_dummy
+                    else:
+                        methods_dict_local['twonn'] = {}
+                        methods_dict_global['twonn'] = {}
+                        for k in use_k: # the number of kNN
+                            tnn_skd_dummy = skdim.id.TwoNN().fit_pw(X, n_neighbors=k, n_jobs=n_jobs)
+                            methods_dict_local['twonn'][str(k)] = tnn_skd_dummy.dimension_pw_
+                            methods_dict_global['twonn'][str(k)] = tnn_skd_dummy.dimension_
+                            del tnn_skd_dummy
+            elif method == 'mle':
+                try:
+                    import skdim
+                    has_skdim=True
+                except ImportError:
+                    raise ImportError(
+                        'skdim not found. Please install skdim to use the `twonn` method.')
+                if has_skdim:
+                    if n_k == 1:
+                        mle_skd_dummy = skdim.id.MLE()
+                        methods_dict_local['mle'] = mle_skd_dummy.fit_transform(X, n_neighbors=k, n_jobs=n_jobs)
+                        methods_dict_global['mle'] = mle_skd_dummy.fit_transform_pw(X, n_neighbors=k, n_jobs=n_jobs)
+                        del mle_skd_dummy
+                    else:
+                        methods_dict_local['mle'] = {}
+                        methods_dict_global['mle'] = {}
+                        for k in use_k: # the number of kNN
+                            mle_skd_dummy = skdim.id.MLE()
+                            methods_dict_local['mle'][str(k)] = mle_skd_dummy.fit_transform(X, n_neighbors=k, n_jobs=n_jobs)
+                            methods_dict_global['mle'][str(k)] = mle_skd_dummy.fit_transform_pw(X, n_neighbors=k, n_jobs=n_jobs)
+                            del mle_skd_dummy
+            
+            else:
+                raise ValueError(
+                    'Invalid method. Valid methods are: fsa, twonn, mle.')
+
+        return methods_dict_local, methods_dict_global           
+
 
     def transform(self, X=None, **kwargs):
         """
@@ -1005,42 +1142,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                         self.project(projection_method=projection)
                         gc.collect()
 
-    def estimate_global_dimensionality(self, X, scaled=True):
-        if issparse(X):
-            X = X.toarray()
-        if self.verbosity >= 1:
-            print('   Estimating global dimensionality...')
-        dimensionality_estimator = FisherS(scaled=scaled,
-                                                        verbose=self.bases_graph_verbose).fit(X,
-                                                                                                n_jobs=self.n_jobs,
-                                                                                                metric=self.base_metric,
-                                                                                                n_neighbors=self.base_knn,
-                                                                                                backend=self.backend)
-        self.global_dimensionality = dimensionality_estimator.transform()
-        gc.collect()
-        if self.verbosity >= 1:
-            print('   Global dimensionality is %f' %
-                  self.global_dimensionality)
-        return self.global_dimensionality
-
-    def estimate_local_dimensionality(self, X, scaled=True, smooth=False):
-        if issparse(X):
-            X = X.toarray()
-        if self.verbosity >= 1:
-            print('   Estimating local dimensionality...')
-        if self.base_knn_graph is None:
-            self.fit(X)
-        dimensionality_estimator = FisherS(scaled=scaled,
-                                                        verbose=self.bases_graph_verbose).fit_pw(X,
-                                                                                                n_jobs=self.n_jobs,
-                                                                                                metric=self.base_metric,
-                                                                                                n_neighbors=self.base_knn,
-                                                                                                smooth=smooth,
-                                                                                                backend=self.backend)
-        self.global_dimensionality = dimensionality_estimator.transform()
-        self.local_dimensionality = dimensionality_estimator.transform_pw()
-        gc.collect()
-        return self.local_dimensionality
 
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:

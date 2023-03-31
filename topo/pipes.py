@@ -122,18 +122,13 @@ def eval_models_layouts(TopOGraph, X,
     """
     Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
     Compares results with PCA and PCA-derived layouts (i.e. t-SNE, UMAP etc).
-
     Parameters
     --------------
-
     TopOGraph : target TopOGraph object (can be empty).
-
     X : data matrix. Expects either numpy.ndarray or scipy.sparse.csr_matrix.
-
     landmarks : optional (int, default None).
         If specified, subsamples the TopOGraph object and/or data matrix X to a number of landmark samples
         before computing results and scores. Useful if dealing with large datasets (>30,000 samples).
-
     kernels : list of str (optional, default ['fuzzy', 'cknn', 'bw_adaptive_alpha_decaying']).
         List of kernel versions to run and evaluate. These will be used to learn an eigenbasis and to learn a new graph kernel from it.
         Options are:
@@ -145,14 +140,12 @@ def eval_models_layouts(TopOGraph, X,
         * 'bw_adaptive_alpha_decaying_nbr_expansion'
         * 'gaussian'
         Will not run all by default to avoid long waiting times in reckless calls.
-
     eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
         List of eigenmap methods to run and evaluate. Options are:
         * 'DM'
         * 'LE'
         * 'top'
         * 'bottom'
-
     projections : list of str (optional, default ['Isomap', 'MAP']).
         List of projection methods to run and evaluate. Options are the same of the `topo.layouts.Projector()` object:
         * '(L)Isomap'
@@ -164,35 +157,23 @@ def eval_models_layouts(TopOGraph, X,
         * 'IsomorphicMDE' - MDE with preservation of nearest neighbors
         * 'IsometricMDE' - MDE with preservation of pairwise distances
         * 'NCVis'
-
     additional_eigenbases : dict (optional, default None).
         Dictionary containing named additional eigenbases (e.g. factor analysis, VAEs, ICA, etc) to be evaluated.
-
     additional_projections : dict (optional, default None).
         Dictionary containing named additional projections (e.g. t-SNE, UMAP, etc) to be evaluated.
-
     n_neighbors : int (optional, default 5).
         Number of nearest neighbors to use for the kNN graph.
-
     n_jobs : int (optional, default -1).
         Number of jobs to use for parallelization. If -1, uses all available cores.
-
     cor_method : str (optional, default 'spearman').
         Correlation method to use for local scores. Options are 'spearman' and 'kendall'.
-
     landmark_method : str (optional, default 'random').
         Method to use for landmark selection. Options are 'random' and 'kmeans'.
-
     kwargs : dict (optional, default {}).
         Additional keyword arguments to pass to the `topo.base.ann.kNN()` function.
-
-
     Returns
     -------
-
     Populates the TopOGraph object and returns a dictionary of dictionaries with the results
-
-
     """
     import gc
     # Run models
