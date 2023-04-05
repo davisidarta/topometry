@@ -54,7 +54,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     graph_knn : int (optional, default 30).
         Similar to `base_knn`, but used to learning topological graphs from the orthogonal bases.
 
-    n_eigs : int (optional, default 300).
+    n_eigs : int (optional, default 100).
         Number of eigenpairs to compute. 
 
     base_kernel : topo.tpgraph.Kernel (optional, default None).
@@ -147,7 +147,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Whether to use a low-memory implementation of the algorithm. Everything will quite much run the same way, but the TopOGraph object will
         not store the full kernel matrices obtained at each point of the algorithm. A few take-away points:
 
-        * If you are running a single model, you should always keep this set this to `True` unless you have very little memory available.
+        * If you are running a single model, you should always keep this set this to `False` unless you have very little memory available.
         
         * This parameter is particularly useful when analysing very large datasets, and for cross-validation of algorithmic combinations 
         (e.g. different `base_kernel_version` and `graph_kernel_version`) when using the `TopOGraph.run_models_layouts()` function.
@@ -179,13 +179,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     eigen_tol : float (optional, default 0.0).
         Error tolerance for the eigenvalue solver. If 0, machine precision is used.
 
-    diff_t : int (optional, default 1).
-        Time parameter for the diffusion operator, if `eigenmap_method` is 'DM' and `multiscale` is False. Also works with 'eigenmap_method' being 'LE'. 
+    diff_t : int (optional, default None).
+        Time parameter for the diffusion operator, if `eigenmap_method` is 'DM'. Also works with 'eigenmap_method' being 'LE'. 
         The diffusion operator or the graph Laplacian will be powered by t steps (a diffusion process). Ignored for other methods.
-
-    multiscale : bool (optional, default False).
-        Whether to use multiscale diffusion, if `eigenmap_method` is 'DM'. Ignored for other methods. Setting this to
-        True will make the `diff_t` parameter be ignored.
+        If None, the number of k-nearest neighbors is used.
 
     semi_aniso : bool (optional, default False).
         Whether to use semi-anisotropic diffusion, if `eigenmap_method` is 'DM'. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
@@ -259,7 +256,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def __init__(self,
                  base_knn=30,
                  graph_knn=30,
-                 n_eigs=300,
+                 n_eigs=100,
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',
@@ -269,8 +266,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_metric='cosine',
                  graph_metric='euclidean',
                  alpha=1.0,
-                 diff_t=1,
-                 multiscale=False,
+                 diff_t=None,
                  semi_aniso=False,
                  delta=1.0,
                  sigma=0.1,
@@ -285,7 +281,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  ):
         self.projection_method = projection_method
         self.diff_t = diff_t
-        self.multiscale = multiscale
         self.n_eigs = n_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
@@ -328,7 +323,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.current_graphkernel = None
         self.global_dimensionality = None
         self.local_dimensionality = None
-        self.dimensionality_estimator = None
         self.RiemannMetricDict = {}
         self.LocalScoresDict = {}
 
@@ -431,20 +425,15 @@ class TopOGraph(BaseEstimator, TransformerMixin):
              Currently, supports only data from similar type (i.e. all bool, all float).
              Not required if the `base_kernel` parameter is specified and corresponds to a fitted `topo.tpgraph.Kernel()` object.
 
+        **kwargs : Additional parameters to be passed to the `topo.base.ann.kNN()` function.
+
         Returns
         -------
 
-        TopoGraph instance with several slots, populated as per user settings.
-        If `eigenbasis='diffusion'`, populates `TopoGraph.MSDiffMap` with a multiscale diffusion mapping of data, and
-                `TopoGraph.DiffBasis` with a fitted `topo.tpgraph.diff.Diffusor()` class containing diffusion metrics
-                and transition probabilities, respectively stored in TopoGraph.DiffBasis.K and TopoGraph.DiffBasis.T
+        TopoGraph object with a populated `TopOGraph.EigenbasisDict` dictionary. The keys of the dictionary are the names of the eigendecompositions
+        that were performed. The values are the corresponding `topo.base.eigen.Eigenbasis()` objects. The latest set eigenbasis is
+        also accessible through the `TopOGraph.eigenbasis` attribute.
 
-        If `eigenbasis='continuous'`, populates `TopoGraph.CLapMap` with a continous Laplacian Eigenmapping of data, and
-                `TopoGraph.ContBasis` with a continuous-k-nearest-neighbors model, containing continuous metrics and
-                adjacency, respectively stored in `TopoGraph.ContBasis.K` and `TopoGraph.ContBasis.A`.
-
-        If `eigenbasis='fuzzy'`, populates `TopoGraph.FuzzyLapMap` with a fuzzy Laplacian Eigenmapping of data, and
-                `TopoGraph.FuzzyBasis` with a fuzzy simplicial set model, containing continuous metrics.
 
         """
         if self.base_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
@@ -453,9 +442,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.graph_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
             raise ValueError(
                 "graph_kernel_version must be one of ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']")
-        if self.eigenmap_method not in ['DM', 'LE', 'top', 'bottom']:
+        if self.eigenmap_method not in ['msDM', 'DM', 'LE', 'top', 'bottom']:
             raise ValueError(
-                "eigenmap_method must be one of ['DM', 'LE', 'top', 'bottom']")
+                "eigenmap_method must be one of ['msDM', 'DM', 'LE', 'top', 'bottom']")
         if (self.n_eigs > X.shape[0]) or (self.n_eigs > X.shape[1]):
             raise ValueError(
                 "n_eigs must be less than the number of samples and observations in X")
@@ -465,10 +454,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             raise ValueError("base_knn must be an integer")
         if not isinstance(self.graph_knn, int):
             raise ValueError("graph_knn must be an integer")
-
+        
         self._parse_backend()
         self._parse_random_state()
-
+        if self.diff_t is None:
+            self.diff_t = self.base_knn
         if X is None:
             if self.base_kernel is None:
                 raise ValueError('X was not passed!')
@@ -518,7 +508,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                             metric=self.base_metric,
                                                             n_jobs=self.n_jobs,
                                                             backend=self.backend,
-                                                            symmetrize=True,
                                                             return_instance=True,
                                                             verbose=self.bases_graph_verbose, **kwargs)
             end = time.time()
@@ -546,6 +535,32 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.verbosity >= 1:
             print('Computing eigenbasis...')
 
+        if self.eigenmap_method == 'msDM':
+            basis_key = 'msDM with ' + str(self.base_kernel_version)
+            if basis_key in self.EigenbasisDict.keys():
+                self.eigenbasis = self.EigenbasisDict[basis_key]
+                self.current_eigenbasis = basis_key
+            else:
+                start = time.time()
+                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
+                                                     method=self.eigenmap_method,
+                                                     eigensolver=self.eigensolver,
+                                                     eigen_tol=self.eigen_tol,
+                                                     drop_first=True,
+                                                     normalize=True,
+                                                     weight=True,
+                                                     t=self.diff_t,
+                                                     random_state=self.random_state,
+                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
+                self.EigenbasisDict[basis_key] = self.eigenbasis
+                self.current_eigenbasis = basis_key
+                end = time.time()
+                gc.collect()
+                self.runtimes[basis_key] = end - start
+                if self.verbosity >= 1:
+                    print(' Fitted eigenbasis with multiscale Diffusion Maps from the ' +
+                          str(self.base_kernel_version) + ' kernel in %f (sec)' % (end - start))
+
         if self.eigenmap_method == 'DM':
             basis_key = 'DM with ' + str(self.base_kernel_version)
             if basis_key in self.EigenbasisDict.keys():
@@ -560,7 +575,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      drop_first=True,
                                                      normalize=True,
                                                      weight=True,
-                                                     multiscale=self.multiscale,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
                                                      verbose=self.bases_graph_verbose).fit(self.base_kernel)
@@ -587,7 +601,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      drop_first=True,
                                                      normalize=True,
                                                      weight=True,
-                                                     multiscale=self.multiscale,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
                                                      verbose=self.bases_graph_verbose).fit(self.base_kernel)
@@ -614,7 +627,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      drop_first=True,
                                                      normalize=True,
                                                      weight=True,
-                                                     multiscale=self.multiscale,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
                                                      verbose=self.bases_graph_verbose).fit(self.base_kernel)
@@ -642,7 +654,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                  drop_first=True,
                                                  normalize=True,
                                                  weight=True,
-                                                 multiscale=self.multiscale,
                                                  t=self.diff_t,
                                                  random_state=self.random_state,
                                                  verbose=self.bases_graph_verbose).fit(self.base_kernel)
@@ -663,8 +674,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.fit(X)
         gc.collect()
         return self.transform()
-
-
 
     def eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
@@ -713,7 +722,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         """
         return self.eigenspectrum(eigenbasis_key=eigenbasis_key, **kwargs)
-
 
     def list_eigenbases(self):
         """
@@ -860,8 +868,55 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 raise ValueError(
                     'Invalid method. Valid methods are: fsa, twonn, mle.')
 
-        return methods_dict_local, methods_dict_global           
+        return methods_dict_local, methods_dict_global
+    
+    # def _get_dist_to_k_nearest_neighbor(base_knn_graph, n_neighbors=10):
+    #     dist_to_k = np.zeros(base_knn_graph)
+    #     for i in np.arange(len(dist_to_k)):
+    #         dist_to_k[i] = np.sort(
+    #             base_knn_graph.data[base_knn_graph.indptr[i]: base_knn_graph.indptr[i + 1]])[n_neighbors - 1]
+    #     return dist_to_k
 
+
+    # def _get_dist_to_median_nearest_neighbor(base_knn_graph, n_neighbors=10):
+    #     median_k = np.floor(n_neighbors/2).astype(int)
+    #     dist_to_median_k = np.zeros(K.shape[0])
+    #     for i in np.arange(len(dist_to_median_k)):
+    #         dist_to_median_k[i] = np.sort(
+    #             base_knn_graph.data[base_knn_graph.indptr[i]: base_knn_graph.indptr[i + 1]])[median_k - 1]
+    #     return dist_to_median_k
+
+
+    # def estimate_dimensionalities(X=None, base_knn_graph=None, n_neighbors=None, res_dict=None, **kwargs):
+    #     if res_dict is None or not isinstance(res_dict, dict):
+    #         res_dict = {}
+    #     import statistics
+    #     if (n_neighbors is None) or not isinstance(n_neighbors, int):
+    #         n_neighbors = base_knn
+    #     median_k = np.floor(n_neighbors/2).astype(int)
+    #     if base_knn_graph is not None:
+    #         n,m = np.shape(base_knn_graph)
+    #         if n != m:
+    #             raise ValueError('base_knn_graph must be a square matrix')
+    #     else:
+    #         if base_knn_graph is None:
+    #             if X is None:
+    #                 raise ValueError('Should have precomputed kNN or provided data')
+    #             from topo.base.ann import kNN
+    #             self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
+    #                                                             metric=self.base_metric,
+    #                                                             n_jobs=self.n_jobs,
+    #                                                             backend=self.backend,
+    #                                                             return_instance=True,
+    #                                                             verbose=self.bases_graph_verbose, **kwargs)
+    #         base_knn_graph = self.base_knn_graph
+    #     LocalityRatio = np.zeros(base_knn_graph.shape[0])  
+    #     res_dict['distances_to_k'] = _get_dist_to_k_nearest_neighbor(base_knn_graph, n_neighbors)
+    #     res_dict['distances_to_median_k'] = _get_dist_to_median_nearest_neighbor(base_knn_graph, n_neighbors)
+    #     res_dict['LocalityRatio'] = res_dict['distances_to_k']/res_dict['distances_to_median_k']
+    #     res_dict['Estimated_local_ID_for_'+str(median_k)+'_knn'] = np.log(2) - np.log(np.log(res_dict['distances_to_k']))
+    #     res_dict['Estimated_global_ID_for_'+str(median_k)+'_knn'] = np.floor(statistics.median((res_dict['Estimated_ID_for_median_k']))).astype(int)
+    #     return res_dict     
 
     def transform(self, X=None, **kwargs):
         """
@@ -938,16 +993,20 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.graph_kernel is None:
                 raise ValueError(
                     'No graph kernel computed. Call .fit() first.')
-            graph = self.graph_kernel
+            graph = self.graph_kernel.P
         start = time.time()
-        spt_layout = spectral_layout(graph.P, n_components, self.random_state,
-                                     laplacian_type=self.laplacian_type, eigen_tol=self.eigen_tol, return_evals=False)
-        expansion = 10.0 / np.abs(spt_layout).max()
-        spt_layout = (spt_layout * expansion).astype(
-            np.float32
-        ) + self.random_state.normal(
-            scale=0.0001, size=[graph.P.shape[0], n_components]
-        ).astype(np.float32)
+        try:
+            spt_layout = spectral_layout(graph, n_components, self.random_state,
+                                        laplacian_type=self.laplacian_type, eigen_tol=self.eigen_tol, return_evals=False)
+            expansion = 10.0 / np.abs(spt_layout).max()
+            spt_layout = (spt_layout * expansion).astype(
+                np.float32
+            ) + self.random_state.normal(
+                scale=0.0001, size=[graph.P.shape[0], n_components]
+            ).astype(np.float32)
+        except:
+            spt_layout = EigenDecomposition(
+                            n_components=n_components).fit_transform(graph)
         end = time.time()
         self.runtimes['Spectral'] = end - start
         self.SpecLayout = spt_layout
@@ -1142,7 +1201,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                         self.project(projection_method=projection)
                         gc.collect()
 
-
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:
             import pickle
@@ -1183,7 +1241,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=False,
                                 alpha_decaying=False,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1204,7 +1261,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=False,
                                 alpha_decaying=False,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1225,7 +1281,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=False,
                                 alpha_decaying=False,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1246,7 +1301,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=False,
                                 alpha_decaying=True,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1267,7 +1321,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=True,
                                 alpha_decaying=False,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1288,7 +1341,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=True,
                                 expand_nbr_search=True,
                                 alpha_decaying=True,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1309,7 +1361,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 adaptive_bw=False,
                                 expand_nbr_search=False,
                                 alpha_decaying=False,
-                                symmetrize=True,
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
@@ -1326,11 +1377,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         return kernel, results_dict
 
-
     def eval_models_layouts(self, X,
                             landmarks=None,
                             kernels=['cknn', 'bw_adaptive'],
-                            eigenmap_methods=['DM', 'LE'],
+                            eigenmap_methods=['msDM', 'DM', 'LE'],
                             projections=['MAP'],
                             additional_eigenbases=None,
                             additional_projections=None,
@@ -1362,12 +1412,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             * 'gaussian'
             Will not run all by default to avoid long waiting times in reckless calls.
 
-        eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
+        eigenmap_methods : list of str (optional, default ['msDM', 'DM', 'LE']).
             List of eigenmap methods to run and evaluate. Options are:
-            * 'DM'
-            * 'LE'
-            * 'top'
-            * 'bottom'
+            * 'msDM' - multiscale diffusion maps
+            * 'DM' - diffusion maps
+            * 'LE' - Laplacian eigenmaps
+            * 'top' - top eingenfunctions (with largest eigenvalues)
+            * 'bottom' - bottom eigenfunctions (with smallest eigenvalues)
 
         projections : list of str (optional, default ['Isomap', 'MAP']).
             List of projection methods to run and evaluate. Options are the same of the `topo.layouts.Projector()` object:

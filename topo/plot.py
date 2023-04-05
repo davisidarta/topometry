@@ -352,15 +352,18 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8), fontsi
 
 
 
+
 def plot_point_cov(points, nstd=2, ax=None, **kwargs):
     pos = points.mean(axis=0)
     cov = np.cov(points, rowvar=False)
     return plot_cov_ellipse(cov, pos, nstd, ax, **kwargs)
 
+
 def eigsorted(cov):
     vals, vecs = np.linalg.eigh(cov)
     order = vals.argsort()[::-1]
     return vals[order], vecs[:, order]
+
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     if ax is None:
@@ -373,8 +376,9 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, title=None, ax=None,
-                        labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
+
+def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, 
+                        labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
@@ -430,28 +434,23 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
     sample_points = rng.choice(range(N), n_plot, replace=False)
-    if ax is None:
-        f, ax = plt.subplots(figsize=figsize)
-    if title is not None:
-        ax.set_title(title)
-    ax.grid(False)
-    ax.set_aspect('equal', 'datalim')  # if an ellipse is a circle no distortion occured.
+    f, ax = plt.subplots(figsize=figsize)
+    ax.set_aspect('equal')  # if an ellipse is a circle no distortion occured.
     if labels is not None:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap, **kwargs)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
     else:
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, **kwargs)
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size)
     for i in range(n_plot):
         ii = sample_points[i]
         cov = H_emb[ii, :, :]
         if labels is not None:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None, color=colors[labels[ii]],
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none', color=colors[labels[ii]],
                              alpha=alpha)
         else:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor=None,
+            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none',
                              alpha=alpha)
     plt.show()
-
 
 
 def draw_edges(ax, data, kernel, color='black', **kwargs):
@@ -489,7 +488,7 @@ def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
 
-def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), title='DC', **kwargs):
+def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), fontsize=10, title='DC', **kwargs):
     plt.figure(figsize=figsize)
     plt.subplots_adjust(
         left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
@@ -497,7 +496,7 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     plot_num = 1
     for i in range(0, n_eigenvectors):
         plt.subplot(1, n_eigenvectors, plot_num)
-        plt.title(title+ ' ' + str(plot_num))
+        plt.title(title+ ' ' + str(plot_num), fontsize=fontsize)
         plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
         plot_num += 1
         plt.xticks(())

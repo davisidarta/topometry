@@ -101,7 +101,7 @@ def _adap_bw(K, n_neighbors):
 
 def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
-                   expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
+                   expand_nbr_search=False, alpha_decaying=False, return_densities=False, 
                    backend='nmslib', n_jobs=-1, verbose=False, **kwargs):
     """
     Compute a kernel matrix from a set of points.
@@ -153,9 +153,6 @@ def compute_kernel(X, metric='cosine',
         returns a tuple containing the kernel matrix and a dictionary containing the
         bandwidth metric.
 
-    symmetrize : bool (optional, default True).
-        Whether to symmetrize the kernel matrix after normalizations.
-
     backend : str (optional, default 'nmslib').
         Which backend to use for neighborhood computations. Defaults to 'nmslib'.
         Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'. 
@@ -193,7 +190,7 @@ def compute_kernel(X, metric='cosine',
             metric_fun = _get_metric_function(metric)
             K = matrix_pairwise_distance(X, metric_fun)
         else:
-            K = kNN(X, metric=metric, n_neighbors=k, symmetrize=True,
+            K = kNN(X, metric=metric, n_neighbors=k, 
                     backend=backend, n_jobs=n_jobs, **kwargs)
         if return_densities:
             dens_dict['knn'] = K
@@ -266,8 +263,9 @@ def compute_kernel(X, metric='cosine',
                     sigma = 1e-10
                 dists = (dists / sigma) ** 2
         W = csr_matrix((np.exp(-dists), (x, y)), shape=[N, N])
-    if symmetrize:
-        W = (W + W.T) / 2
+    # Symmetrize
+    W = (W + W.T)/2
+    ## Set diagonal to zero
     W[(np.arange(N), np.arange(N))] = 0
     # handle nan
     W.data = np.where(np.isnan(W.data), 1, W.data)
@@ -334,8 +332,6 @@ class Kernel(BaseEstimator, TransformerMixin):
     semi_aniso : bool (optional, default False).
         Whether to use semi-anisotropic diffusion. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
 
-    symmetrize : bool (optional, default True).
-        Whether to symmetrize the kernel matrix after normalizations.
 
     backend : str (optional, default 'nmslib').
         Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
@@ -390,7 +386,6 @@ class Kernel(BaseEstimator, TransformerMixin):
                  adaptive_bw=True,
                  expand_nbr_search=False,
                  alpha_decaying=False,
-                 symmetrize=True,
                  backend='nmslib',
                  n_jobs=1,
                  laplacian_type='normalized',
@@ -413,7 +408,6 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.adaptive_bw = adaptive_bw
         self.expand_nbr_search = expand_nbr_search
         self.alpha_decaying = alpha_decaying
-        self.symmetrize = symmetrize
         self.n_landmarks = n_landmarks
         self.laplacian_type = laplacian_type
         self.cache_input = cache_input
@@ -507,7 +501,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._K is None or (self._K is not None and recompute):
             self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
                                                      n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
-                                                     expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
+                                                     expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True,
                                                      backend=self.backend, n_jobs=self.n_jobs, verbose=self.verbose, **kwargs)
         if self.metric != 'precomputed':
             self.knn_ = self.dens_dict['knn']

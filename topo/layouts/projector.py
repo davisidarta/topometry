@@ -232,6 +232,7 @@ class Projector(BaseEstimator, TransformerMixin):
             else:
                 self.N = X.N
             self.M = X.M
+            K = X.P.copy()
         else:
             if self.metric != 'precomputed':
                 if issparse(X):
@@ -239,8 +240,8 @@ class Projector(BaseEstimator, TransformerMixin):
                 if self.landmarks_ is not None:
                     if self.projection_method != 'Isomap':
                         X = X[self.landmarkds_, :]
-                K = kNN(X, metric=self.metric, n_neighbors=self.n_neighbors,
-                        symmetrize=True, n_jobs=self.n_jobs, backend=self.nbrs_backend)
+                K = kNN(X, metric=self.metric, n_neighbors=self.n_neighbors
+                        , n_jobs=self.n_jobs, backend=self.nbrs_backend)
             else:
                 if self.landmarks_ is not None:
                     if self.projection_method != 'Isomap':
@@ -256,13 +257,13 @@ class Projector(BaseEstimator, TransformerMixin):
             if self.init == 'spectral':
                 try:
                     self.init_Y_ = spectral_layout(
-                        K, self.n_components, self.random_state, laplacian_type='normalized', eigen_tol=10e-4, return_evals=False)
+                        K, self.n_components, self.random_state, laplacian_type='random_walk', eigen_tol=10e-4, return_evals=False)
                 except:
                     print(
                         'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
                     from topo.spectral.eigen import EigenDecomposition
                     self.init_Y_ = EigenDecomposition(
-                        n_components=self.n_components + 1).fit_transform(K)
+                        n_components=self.n_components).fit_transform(K)
             else:
                 self.init_Y_ = self.random_state.randn(
                     K.shape[0], self.n_components)

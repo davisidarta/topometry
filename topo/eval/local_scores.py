@@ -141,7 +141,7 @@ def local_score(data, emb, n_neighbors=5, metric='cosine', n_jobs=-1, landmarks=
         emb_knn = emb
     else:
         emb_knn = kNN(emb, n_neighbors=n_neighbors,
-                      metric='euclidean', n_jobs=n_jobs, **kwargs)
+                      metric=metric, n_jobs=n_jobs, **kwargs)
     if cor_method == 'kendall':
         local_scores = knn_kendall_tau(
             data_knn, emb_knn, subsample_idx=landmarks_, unweighted=False, n_jobs=n_jobs)
