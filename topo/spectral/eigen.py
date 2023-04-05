@@ -140,10 +140,11 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Number of eigenpairs to be computed.
 
     method : string (optional, default 'DM').
-        Method for organizing the eigendecomposition. Can be either 'top', 'bottom', 'DM' or 'LE'.
+        Method for organizing the eigendecomposition. Can be either 'top', 'bottom', 'msDM', 'DM' or 'LE'.
         * 'top' : computes the top eigenpairs of the matrix.
         * 'bottom' : computes the bottom eigenpairs of the matrix.
-        * 'DM' : computes the eigenpairs of diffusion operator on the matrix. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
+        * 'msDM' : computes the eigenpairs of the diffusion operator on the matrix, and multiscales them. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
+        * 'DM' : computes the eigenpairs of the diffusion operator on the matrix. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
         * 'LE' : computes the eigenpairs of the graph laplacian on the matrix. If a `Kernel()` object is provided, will use the computed graph laplacian if available. 
 
     eigensolver : string (optional, default 'arpack').
@@ -180,10 +181,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Time parameter for the diffusion operator, if 'method' is 'DM' and 'multiscale' is False. Also works with 'method' being 'LE'. 
         The diffusion operator or the graph Laplacian will be powered by t. Ignored for other methods.
 
-    multiscale : bool (optional, default True).
-        Whether to use multiscale diffusion, if 'method' is 'DM'. Ignored for other methods. Setting this to
-        True will make the 't' parameter be ignored.
-
     return_evals : bool (optional, default False).
         Whether to return the eigenvalues along with the eigenvectors.
 
@@ -202,7 +199,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                  drop_first=True,
                  normalize=True,
                  weight=True,
-                 multiscale=True,
                  laplacian_type='normalized',
                  anisotropy=1,
                  t=1,
@@ -217,7 +213,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.normalize = normalize
         self.laplacian_type = laplacian_type
         self.weight = weight
-        self.multiscale = multiscale
         self.t = t
         self.anisotropy = anisotropy
         self.random_state = random_state
@@ -230,8 +225,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.powered_operator = None
         self.N = None
         self.D_inv_sqrt_ = None
-        self.multiscaled_evecs = None
-        self.return_evals = False
+        self.return_evals = return_evals
 
     def __repr__(self):
         if self.eigenvectors is not None:
@@ -244,22 +238,20 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             msg = "EigenDecomposition() estimator without any fitted data."
         if self.eigenvectors is not None:
             if self.method == 'DM':
-                if self.multiscale:
-                    msg += " using multiscale Diffusion Maps."
-                else:
-                    msg += " using Diffusion Maps."
-            else:
-                if self.method == 'LE':
-                    msg += " using Laplacian Eigenmaps"
-                elif self.method == 'top':
-                    msg += " using top eigenpairs"
-                elif self.method == 'bottom':
-                    msg += " using bottom eigenpairs"
-                if self.normalize:
-                    msg += " with normalization"
-                if self.weight:
-                    msg += ", weighted by the square root of the eigenvalues"
-                msg += '.'
+                msg += " using Diffusion Maps"
+            elif self.method == 'msDM':
+                msg += " using multiscale Diffusion Maps"
+            elif self.method == 'LE':
+                msg += " using Laplacian Eigenmaps"
+            elif self.method == 'top':
+                msg += " using top eigenpairs"
+            elif self.method == 'bottom':
+                msg += " using bottom eigenpairs"
+            if self.normalize:
+                msg += " with normalization"
+            if self.weight:
+                msg += ", weighted by the square root of the eigenvalues"
+            msg += '.'
         return msg
 
     def fit(self, X):
@@ -279,16 +271,16 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             If 'method' is 'DM' or 'LE', the diffusion operator or graph laplacian is stored at EigenDecomposition.diffusion_operator
             or EigenDecomposition.graph_laplacian, respectively.
         """
-        if self.method not in ['DM', 'LE', 'top', 'bottom']:
+        if self.method not in ['msDM','DM', 'LE', 'top', 'bottom']:
             raise ValueError(
-                "Method must be one of 'DM', 'LE', 'top', 'bottom'.")
-        if self.method in ['DM', 'top']:
+                "Method must be one of 'msDM','DM', 'LE', 'top', 'bottom'.")
+        if self.method in ['msDM', 'DM', 'top']:
             largest = True
         else:
             largest = False
         if isinstance(X, Kernel):
             self.N = X.N
-            if self.method == 'DM':
+            if self.method == 'DM' or self.method == 'msDM':
                 self.diffusion_operator = X.P
                 if X.D_inv_sqrt_ is not None:
                     self.D_inv_sqrt_ = X.D_inv_sqrt_
@@ -302,21 +294,36 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             else:
                 target = X.K
         elif isinstance(X, np.ndarray) or isinstance(X, sparse.csr_matrix):
+            if self.D_inv_sqrt_ is None:
+                symmetric = False
+                
             self.N = X.shape[0]
             if self.method == 'DM':
-                symmetric = False
-                self.diffusion_operator = diffusion_operator(
-                    X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
+                if symmetric:
+                    self.diffusion_operator, self.D_inv_sqrt_ = diffusion_operator(
+                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True)
+                else:
+                    self.diffusion_operator = diffusion_operator(
+                        X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
                 target = self.diffusion_operator
                 if self.t is not None:
                     if self.t > 1:
-                        if not self.multiscale:
-                            self.powered_operator = np.linalg.matrix_power(
-                                self.diffusion_operator, int(self.t))
-                            target = self.powered_operator
+                        self.powered_operator = np.linalg.matrix_power(
+                            self.diffusion_operator, int(self.t))
+                        target = self.powered_operator
+
+            elif self.method == 'msDM':
+                if symmetric:
+                    self.diffusion_operator, self.D_inv_sqrt_ = diffusion_operator(
+                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True)
+                else:
+                    self.diffusion_operator = diffusion_operator(
+                        X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
+                target = self.diffusion_operator
+
             elif self.method == 'LE':
                 self.laplacian = graph_laplacian(
-                    X, laplacian_type='normalized')
+                    X, laplacian_type=self.laplacian_type)
                 target = self.laplacian
             else:
                 target = X
@@ -330,26 +337,22 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 evecs = self.D_inv_sqrt_.dot(evecs)
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            if self.multiscale:
-                use_eigs = int(np.sum(evals > 0, axis=0))
-                eigs_idx = list(range(1, int(use_eigs)))
-                eig_vals = np.ravel(evals[eigs_idx])
-                self.dmaps = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
-            else:
-                self.dmaps = evecs * evals
+            self.dmaps = evecs * evals
+        elif self.method == 'msDM':
+            if symmetric:
+                evecs = self.D_inv_sqrt_.dot(evecs)
+            for i in range(evecs.shape[1]):
+                evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
+            use_eigs = int(np.sum(evals > 0, axis=0))
+            eigs_idx = list(range(1, int(use_eigs)))
+            eig_vals = np.ravel(evals[eigs_idx])
+            self.dmaps = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
         else:
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            if self.multiscale:
-                use_eigs = int(np.sum(evals > 0, axis=0))
-                eigs_idx = list(range(1, int(use_eigs)))
-                eig_vals = np.ravel(evals[eigs_idx])
-                self.multiscaled_evecs = evecs[:,
-                                               eigs_idx] * (eig_vals / (1 - eig_vals))
-            else:
-                if self.weight:
-                    # weight by eigenvalues
-                    evecs = evecs * np.sqrt(evals + 1e-10)
+            if self.weight:
+                # weight by eigenvalues
+                evecs = evecs * np.sqrt(evals + 1e-10)
         self.eigenvectors = evecs
         self.eigenvalues = evals
         return self
@@ -358,7 +361,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         """
         If using multiscale diffusion maps, this rescales the mapping to a new number of eigenvectors.
         """
-        if self.method != 'DM' or not self.multiscale:
+        if self.method != 'msDM':
             raise ValueError(
                 "Rescaling is only available for multiscale diffusion maps.")
         if use_eigs > self.eigenvectors.shape[1]:
@@ -372,12 +375,12 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def results(self, return_evals=None):
         """
-        Returns the results of the decomposition. If using `method='DM'`, returns the (multiscaled) diffusion maps.
+        Returns the results of the decomposition.
 
         Returns
         -------
         evecs : array-like, shape (n_samples, n_components)
-            Eigenvectors of the matrix.
+            Eigenvectors of the matrix. If using 'msDM', returns the multiscaled eigenvectors.
         evals : array-like, shape (n_components, )
             Eigenvalues of the matrix. Returned only if return_evals is True.
     
@@ -387,28 +390,21 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
         if self.eigenvectors is None:
             return ValueError('The estimator has not been fitted yet.')
-        if self.method == 'DM':
+        if self.method == 'DM' or self.method == 'msDM':
             if return_evals:
                 return self.dmaps, self.eigenvalues
             else:
                 return self.dmaps
         else:
-            if not self.multiscale:
-                if return_evals:
-                    return self.eigenvectors, self.eigenvalues
-                else:
-                    return self.eigenvectors
+            if return_evals:
+                return self.eigenvectors, self.eigenvalues
             else:
-                if return_evals:
-                    return self.multiscaled_evecs, self.eigenvalues
-                else:
-                    return self.multiscaled_evecs
+                return self.eigenvectors
 
 
     def transform(self, X=None):
         """
-        Here for scikit-learn compability. Returns the eigenvectors learned during fitting.
-        If using `method='DM'`, returns the (multiscaled) diffusion maps.
+        Here for scikit-learn compability. 
 
         Parameters
         ----------
@@ -419,28 +415,24 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Returns
         -------
         evecs : array-like, shape (n_samples, n_components)
-            Eigenvectors of the matrix.
+            Eigenvectors of the matrix. If using 'msDM', returns the multiscaled eigenvectors.
         evals : array-like, shape (n_components, )
             Eigenvalues of the matrix. Returned only if return_evals is True.
         """
+
         if self.eigenvectors is None:
             return ValueError('The estimator has not been fitted yet.')
-        if self.method == 'DM':
+        if self.method == 'DM' or self.method == 'msDM':
             if self.return_evals:
                 return self.dmaps, self.eigenvalues
             else:
                 return self.dmaps
         else:
-            if not self.multiscale:
-                if self.return_evals:
-                    return self.eigenvectors, self.eigenvalues
-                else:
-                    return self.eigenvectors
+            if self.return_evals:
+                return self.eigenvectors, self.eigenvalues
             else:
-                if self.return_evals:
-                    return self.multiscaled_evecs, self.eigenvalues
-                else:
-                    return self.multiscaled_evecs
+                return self.eigenvectors
+            
 
     def fit_transform(self, X):
         """
