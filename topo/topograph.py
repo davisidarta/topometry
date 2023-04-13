@@ -12,7 +12,6 @@ from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
-from topo.tpgraph.fisher import FisherS
 
 try:
     import hnswlib
@@ -73,9 +72,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
          Anisotropy. Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
          Defaults to 1, which unbiases results from data underlying sampling distribution.
 
-    laplacian_type : str (optional, default 'normalized').
-        Which Laplacian to use by default with the kernel. Defaults to 'normalized', which is the most common.
-        Other options include 'unnormalized' (also referred to as the combinatorial Laplacian), 'normalized', 'random_walk' and 'geometric'.
+    laplacian_type : str (optional, default 'random_walk').
+        Which Laplacian to use by default with the kernel. Defaults to 'random_walk', but 'normalized' is the most common.
+        Options include 'unnormalized' (also referred to as the combinatorial Laplacian), 'normalized', 'random_walk' and 'geometric'.
 
     base_kernel_version : str (optional, default 'bw_adaptive')
         Which method to use for learning affinities to use in the eigenmap strategy. Defaults to 'bw_adaptive', which  employs an adaptive bandwidth. 
@@ -260,7 +259,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',
-                 laplacian_type='normalized',
+                 laplacian_type='random_walk',
                  projection_method='MAP',
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
@@ -445,7 +444,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.eigenmap_method not in ['msDM', 'DM', 'LE', 'top', 'bottom']:
             raise ValueError(
                 "eigenmap_method must be one of ['msDM', 'DM', 'LE', 'top', 'bottom']")
-        if (self.n_eigs > X.shape[0]) or (self.n_eigs > X.shape[1]):
+        if (self.n_eigs - 1 > X.shape[0]) or (self.n_eigs - 1 > X.shape[1]):
             raise ValueError(
                 "n_eigs must be less than the number of samples and observations in X")
         if not isinstance(self.n_eigs, int):
@@ -869,54 +868,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     'Invalid method. Valid methods are: fsa, twonn, mle.')
 
         return methods_dict_local, methods_dict_global
-    
-    # def _get_dist_to_k_nearest_neighbor(base_knn_graph, n_neighbors=10):
-    #     dist_to_k = np.zeros(base_knn_graph)
-    #     for i in np.arange(len(dist_to_k)):
-    #         dist_to_k[i] = np.sort(
-    #             base_knn_graph.data[base_knn_graph.indptr[i]: base_knn_graph.indptr[i + 1]])[n_neighbors - 1]
-    #     return dist_to_k
-
-
-    # def _get_dist_to_median_nearest_neighbor(base_knn_graph, n_neighbors=10):
-    #     median_k = np.floor(n_neighbors/2).astype(int)
-    #     dist_to_median_k = np.zeros(K.shape[0])
-    #     for i in np.arange(len(dist_to_median_k)):
-    #         dist_to_median_k[i] = np.sort(
-    #             base_knn_graph.data[base_knn_graph.indptr[i]: base_knn_graph.indptr[i + 1]])[median_k - 1]
-    #     return dist_to_median_k
-
-
-    # def estimate_dimensionalities(X=None, base_knn_graph=None, n_neighbors=None, res_dict=None, **kwargs):
-    #     if res_dict is None or not isinstance(res_dict, dict):
-    #         res_dict = {}
-    #     import statistics
-    #     if (n_neighbors is None) or not isinstance(n_neighbors, int):
-    #         n_neighbors = base_knn
-    #     median_k = np.floor(n_neighbors/2).astype(int)
-    #     if base_knn_graph is not None:
-    #         n,m = np.shape(base_knn_graph)
-    #         if n != m:
-    #             raise ValueError('base_knn_graph must be a square matrix')
-    #     else:
-    #         if base_knn_graph is None:
-    #             if X is None:
-    #                 raise ValueError('Should have precomputed kNN or provided data')
-    #             from topo.base.ann import kNN
-    #             self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
-    #                                                             metric=self.base_metric,
-    #                                                             n_jobs=self.n_jobs,
-    #                                                             backend=self.backend,
-    #                                                             return_instance=True,
-    #                                                             verbose=self.bases_graph_verbose, **kwargs)
-    #         base_knn_graph = self.base_knn_graph
-    #     LocalityRatio = np.zeros(base_knn_graph.shape[0])  
-    #     res_dict['distances_to_k'] = _get_dist_to_k_nearest_neighbor(base_knn_graph, n_neighbors)
-    #     res_dict['distances_to_median_k'] = _get_dist_to_median_nearest_neighbor(base_knn_graph, n_neighbors)
-    #     res_dict['LocalityRatio'] = res_dict['distances_to_k']/res_dict['distances_to_median_k']
-    #     res_dict['Estimated_local_ID_for_'+str(median_k)+'_knn'] = np.log(2) - np.log(np.log(res_dict['distances_to_k']))
-    #     res_dict['Estimated_global_ID_for_'+str(median_k)+'_knn'] = np.floor(statistics.median((res_dict['Estimated_ID_for_median_k']))).astype(int)
-    #     return res_dict     
 
     def transform(self, X=None, **kwargs):
         """
@@ -944,7 +895,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.verbosity >= 1:
             print('        Computing neighborhood graph...')
         start = time.time()
-        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(X=None), n_neighbors=self.graph_knn,
+        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(), n_neighbors=self.graph_knn,
                                         metric=self.graph_metric,
                                         n_jobs=self.n_jobs,
                                         backend=self.backend,
@@ -993,7 +944,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.graph_kernel is None:
                 raise ValueError(
                     'No graph kernel computed. Call .fit() first.')
-            graph = self.graph_kernel.P
+            graph = self.graph_kernel.K
         start = time.time()
         try:
             spt_layout = spectral_layout(graph, n_components, self.random_state,
@@ -1002,11 +953,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             spt_layout = (spt_layout * expansion).astype(
                 np.float32
             ) + self.random_state.normal(
-                scale=0.0001, size=[graph.P.shape[0], n_components]
+                scale=0.0001, size=[graph.shape[0], n_components]
             ).astype(np.float32)
         except:
             spt_layout = EigenDecomposition(
-                            n_components=n_components).fit_transform(graph)
+                            n_components=n_components+1).fit_transform(graph)
         end = time.time()
         self.runtimes['Spectral'] = end - start
         self.SpecLayout = spt_layout
@@ -1086,27 +1037,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         else:
             if self.SpecLayout is not None:
                 if np.shape(self.SpecLayout)[1] != n_components:
-                    try:
-                        self.SpecLayout = self.spectral_layout(
+                    self.SpecLayout = self.spectral_layout(
                             n_components=n_components)
-                    except:
-                        print(
-                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
-                        self.SpecLayout = EigenDecomposition(
-                            n_components=n_components+1).fit_transform(self.graph_kernel)
             else:
-                if self.n < 100000:
-                    try:
-                        self.SpecLayout = self.spectral_layout(
-                            n_components=n_components)
-                    except:
-                        print(
-                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
-                        self.SpecLayout = EigenDecomposition(
-                            n_components=n_components+1).fit_transform(self.graph_kernel)
-                else:
-                    self.SpecLayout = EigenDecomposition(
-                        n_components=n_components+1).fit_transform(self.graph_kernel)
+                self.SpecLayout = self.spectral_layout(
+                n_components=n_components)  
             init_Y = self.SpecLayout
 
         projection_key = projection_method + ' of ' + key
@@ -1133,6 +1068,16 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.ProjectionDict[projection_key] = Y
         return Y
 
+    def trustworthiness(self, Y, X=None, use_base_knn_graph=True, n_neighbors=5, metric='cosine'):
+        from sklearn.manifold import trustworthiness
+        if use_base_knn_graph:
+            result = trustworthiness(self.base_knn_graph.toarray(), Y, n_neighbors=self.base_knn, metric='precomputed')
+        else:
+            if X is None:
+                return print('X must be given if use_base_knn_graph is set to False')
+            result = trustworthiness(X, Y, n_neighbors=n_neighbors, metric=metric)
+        return result
+    
     def run_models(self, X,
                    kernels=['fuzzy', 'cknn', 'bw_adaptive'],
                    eigenmap_methods=['DM', 'LE', 'top'],

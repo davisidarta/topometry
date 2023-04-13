@@ -30,6 +30,7 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=10
     fig = plt.figure(figsize=figsize)
     max_eigs = int(np.sum(evals > 0, axis=0))
     first_diff = np.diff(evals)
+    sec_diff = np.diff(first_diff)
     eigengap = np.argmax(first_diff) + 1
     ax1 = fig.add_subplot(1, 2, 1)
     if title is not None:
@@ -52,8 +53,9 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=10
                       int(max_eigs), fontsize=fontsize)
     ax1.legend(prop={'size': 12}, fontsize=label_fontsize, loc='best')
     ax2 = fig.add_subplot(1, 2, 2)
-    ax2.scatter(range(0, len(first_diff)), first_diff)
-    ax2.set_ylabel('Eigenvalues first derivatives', fontsize=label_fontsize)
+    ax2.set_yscale('log')
+    ax2.scatter(range(0, len(first_diff)), np.abs(first_diff))
+    ax2.set_ylabel('Eigenvalues first derivatives (abs)', fontsize=label_fontsize)
     ax2.set_xlabel('Eigenvalues', fontsize=label_fontsize)
     if max_eigs == len(evals):
         # Could not find a discrete eigengap crossing 0
@@ -204,7 +206,7 @@ def draw_simple_ellipse(position, width, height, angle,
                         alpha=0.1, color=None):
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
-    width, height = np.sqrt(width + 10e-8), np.sqrt(height + 10e-8)
+    width, height = np.sqrt(width + 10e-4), np.sqrt(height + 10e-4)
     # Draw the Ellipse
     for nsig in np.linspace(from_size, to_size, n_ellipses):
         ax.add_patch(Ellipse(position, nsig * width, nsig * height,

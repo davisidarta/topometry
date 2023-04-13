@@ -8,35 +8,13 @@
 
 import numpy as np
 from scipy.sparse import find, csr_matrix, linalg, lil_matrix, csc_matrix, kron, coo_matrix, tril, diags
-from scipy.sparse.csgraph import shortest_path, connected_components
+from scipy.sparse.csgraph import connected_components
 from scipy.spatial import procrustes
 from scipy.stats import rv_discrete
 from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
 from topo.base.ann import kNN
-from topo.base.dists import \
-    (euclidean,
-     standardised_euclidean,
-     cosine,
-     correlation,
-     bray_curtis,
-     canberra,
-     chebyshev,
-     manhattan,
-     mahalanobis,
-     minkowski,
-     dice,
-     hamming,
-     jaccard,
-     kulsinski,
-     rogers_tanimoto,
-     russellrao,
-     sokal_michener,
-     sokal_sneath,
-     yule,
-     matrix_pairwise_distance,
-     matrix_to_matrix_distance
-     )
+from topo.base.dists import pairwise_distances
 from topo.spectral._spectral import graph_laplacian, diffusion_operator
 from topo.spectral._spectral import degree as compute_degree
 from topo.tpgraph.cknn import cknn_graph
@@ -48,46 +26,7 @@ from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 
-def _get_metric_function(metric):
-    if metric == 'euclidean':
-        metric_fun = euclidean
-    elif metric == 'standardised_euclidean':
-        metric_fun = standardised_euclidean
-    elif metric == 'cosine':
-        metric_fun = cosine
-    elif metric == 'correlation':
-        metric_fun = correlation
-    elif metric == 'bray_curtis':
-        metric_fun = bray_curtis
-    elif metric == 'canberra':
-        metric_fun = canberra
-    elif metric == 'chebyshev':
-        metric_fun = chebyshev
-    elif metric == 'manhattan':
-        metric_fun = manhattan
-    elif metric == 'mahalanobis':
-        metric_fun = mahalanobis
-    elif metric == 'minkowski':
-        metric_fun = minkowski
-    elif metric == 'dice':
-        metric_fun = dice
-    elif metric == 'hamming':
-        metric_fun = hamming
-    elif metric == 'jaccard':
-        metric_fun = jaccard
-    elif metric == 'kulsinski':
-        metric_fun = kulsinski
-    elif metric == 'rogers_tanimoto':
-        metric_fun = rogers_tanimoto
-    elif metric == 'russellrao':
-        metric_fun = russellrao
-    elif metric == 'sokal_michener':
-        metric_fun = sokal_michener
-    elif metric == 'sokal_sneath':
-        metric_fun = sokal_sneath
-    elif metric == 'yule':
-        metric_fun = yule
-    return metric_fun
+
 
 
 def _adap_bw(K, n_neighbors):
@@ -101,7 +40,7 @@ def _adap_bw(K, n_neighbors):
 
 def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
-                   expand_nbr_search=False, alpha_decaying=False, return_densities=False, 
+                   expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
                    backend='nmslib', n_jobs=-1, verbose=False, **kwargs):
     """
     Compute a kernel matrix from a set of points.
@@ -153,6 +92,9 @@ def compute_kernel(X, metric='cosine',
         returns a tuple containing the kernel matrix and a dictionary containing the
         bandwidth metric.
 
+    symmetrize : bool (optional, default True).
+        Whether to symmetrize the kernel matrix after normalizations.
+
     backend : str (optional, default 'nmslib').
         Which backend to use for neighborhood computations. Defaults to 'nmslib'.
         Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'. 
@@ -187,10 +129,9 @@ def compute_kernel(X, metric='cosine',
         expand_nbr_search = False
     else:
         if pairwise:
-            metric_fun = _get_metric_function(metric)
-            K = matrix_pairwise_distance(X, metric_fun)
+            K = pairwise_distances(X, metric)
         else:
-            K = kNN(X, metric=metric, n_neighbors=k, 
+            K = kNN(X, metric=metric, n_neighbors=k,
                     backend=backend, n_jobs=n_jobs, **kwargs)
         if return_densities:
             dens_dict['knn'] = K
@@ -228,7 +169,7 @@ def compute_kernel(X, metric='cosine',
                 dens_dict['adaptive_bw'] = adap_sd
             if expand_nbr_search:
                 new_k = int(k + (k - pm.max()))
-                new_K = kNN(X, metric=metric, k=new_k,
+                new_K = kNN(X, metric=metric, n_neighbors=new_k,
                             backend=backend, n_jobs=n_jobs, **kwargs)
                 adap_sd_new = _adap_bw(new_K, new_k)
                 x_new, y_new, dists_new = find(new_K)
@@ -262,11 +203,11 @@ def compute_kernel(X, metric='cosine',
                 if sigma == 0:
                     sigma = 1e-10
                 dists = (dists / sigma) ** 2
-        W = csr_matrix((np.exp(-dists), (x, y)), shape=[N, N])
-    # Symmetrize
-    W = (W + W.T)/2
-    ## Set diagonal to zero
-    W[(np.arange(N), np.arange(N))] = 0
+        W = csr_matrix((np.abs(np.exp(-dists)), (x, y)), shape=[N, N])
+    if symmetrize:
+        W = (W + W.T) / 2
+    #W[(np.arange(N), np.arange(N))] = 0
+
     # handle nan
     W.data = np.where(np.isnan(W.data), 1, W.data)
     if not return_densities:
@@ -332,6 +273,8 @@ class Kernel(BaseEstimator, TransformerMixin):
     semi_aniso : bool (optional, default False).
         Whether to use semi-anisotropic diffusion. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
 
+    symmetrize : bool (optional, default True).
+        Whether to symmetrize the kernel matrix after normalizations.
 
     backend : str (optional, default 'nmslib').
         Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
@@ -386,6 +329,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                  adaptive_bw=True,
                  expand_nbr_search=False,
                  alpha_decaying=False,
+                 symmetrize=True,
                  backend='nmslib',
                  n_jobs=1,
                  laplacian_type='normalized',
@@ -408,6 +352,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.adaptive_bw = adaptive_bw
         self.expand_nbr_search = expand_nbr_search
         self.alpha_decaying = alpha_decaying
+        self.symmetrize = symmetrize
         self.n_landmarks = n_landmarks
         self.laplacian_type = laplacian_type
         self.cache_input = cache_input
@@ -420,6 +365,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.dens_dict = None
         self._clusters = None
         self._A = None
+        self._Dd = None
         self._degree = None
         self._weighted_degree = None
         self._L = None
@@ -501,7 +447,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._K is None or (self._K is not None and recompute):
             self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
                                                      n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
-                                                     expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True,
+                                                     expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
                                                      backend=self.backend, n_jobs=self.n_jobs, verbose=self.verbose, **kwargs)
         if self.metric != 'precomputed':
             self.knn_ = self.dens_dict['knn']
@@ -631,7 +577,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self._L is None:
             if laplacian_type is None:
                 laplacian_type = self.laplacian_type
-            self._L = graph_laplacian(self.K, laplacian_type=laplacian_type)
+            self._L, self._Dd = graph_laplacian(self.K, laplacian_type=laplacian_type, return_D=True)
         return self._L
 
     @property
@@ -720,8 +666,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                     "No kernel matrix has been fitted yet. Call fit() first.")
             if landmark:
                 print('Landmarks are still to be implemented.')
-            SP = shortest_path(self.K, method='auto',
-                               directed=False, indices=indices)
+            from topo.eval.local_scores import geodesic_distance
+            SP = geodesic_distance(self._K, method='D', unweighted=False, directed=False, indices=landmark, n_jobs=self.n_jobs, random_state=self.random_state)
             SP = (SP + SP.T) / 2
             SP[np.where(SP == 0)] = np.inf
             SP[(np.arange(SP.shape[0]), np.arange(SP.shape[0]))] = 0
@@ -1186,4 +1132,3 @@ class Kernel(BaseEstimator, TransformerMixin):
         with open(wd + filename, 'wb') as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
         return print('Kernel saved at ' + wd + filename)
-

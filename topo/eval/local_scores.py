@@ -6,7 +6,6 @@ from scipy.sparse.csgraph import shortest_path, NegativeCycleError
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
 
-
 def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, indices=None, n_jobs=1, random_state=None):
     """
     Compute the geodesic distance matrix from an adjacency matrix.
@@ -86,6 +85,8 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
             G = G.ravel()
         # guarantee symmetry
         G = (G + G.T) / 2
+        #
+        G[np.where(G == 0)] = np.inf
         # zero diagonal
         G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
     return G
@@ -119,7 +120,7 @@ def knn_kendall_tau(data_graph, embedding_graph, path_method='D', subsample_idx=
     return res
 
 
-def local_score(data, emb, n_neighbors=5, metric='cosine', n_jobs=-1, landmarks=None, landmark_method='random', random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', **kwargs):
+def geodesic_correlation(data, emb, n_neighbors=5, data_metric='cosine', emb_metric='euclidean', n_jobs=-1, landmarks=None, landmark_method='random', random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', **kwargs):
     random_state = check_random_state(random_state)
     if landmarks is not None:
         if isinstance(landmarks, int):
@@ -136,12 +137,12 @@ def local_score(data, emb, n_neighbors=5, metric='cosine', n_jobs=-1, landmarks=
         data_knn = data
     else:
         data_knn = kNN(data, n_neighbors=n_neighbors,
-                       metric=metric, n_jobs=n_jobs, **kwargs)
+                       metric=data_metric, n_jobs=n_jobs, **kwargs)
     if emb_is_graph:
         emb_knn = emb
     else:
         emb_knn = kNN(emb, n_neighbors=n_neighbors,
-                      metric=metric, n_jobs=n_jobs, **kwargs)
+                      metric=emb_metric, n_jobs=n_jobs, **kwargs)
     if cor_method == 'kendall':
         local_scores = knn_kendall_tau(
             data_knn, emb_knn, subsample_idx=landmarks_, unweighted=False, n_jobs=n_jobs)
@@ -149,4 +150,5 @@ def local_score(data, emb, n_neighbors=5, metric='cosine', n_jobs=-1, landmarks=
         local_scores = knn_spearman_r(
             data_knn, emb_knn, subsample_idx=landmarks_, unweighted=False, n_jobs=n_jobs)
     return local_scores
+
 
