@@ -178,8 +178,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Whether to normalize the eigenvectors, if 'method' is 'top', 'bottom' or 'LE' ('DM' is always normalized).
 
     t : int (optional, default 1).
-        Time parameter for the diffusion operator, if 'method' is 'DM' and 'multiscale' is False. Also works with 'method' being 'LE'. 
-        The diffusion operator or the graph Laplacian will be powered by t. Ignored for other methods.
+        Time parameter for the diffusion operator, if 'method' is 'DM'. The diffusion operator will be powered by t. Ignored for other methods.
 
     return_evals : bool (optional, default False).
         Whether to return the eigenvalues along with the eigenvectors.
@@ -204,6 +203,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                  t=1,
                  random_state=None,
                  return_evals=False,
+                 estimate_eigengap=True,
                  verbose=False):
         self.n_components = n_components
         self.method = method
@@ -221,11 +221,13 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.eigenvectors = None
         self.laplacian = None
         self.diffusion_operator = None
-        self.dmaps = None
+        self.embedding = None
         self.powered_operator = None
         self.N = None
         self.D_inv_sqrt_ = None
         self.return_evals = return_evals
+        self.estimate_eigengap = estimate_eigengap
+        self.eigengap = None
 
     def __repr__(self):
         if self.eigenvectors is not None:
@@ -267,7 +269,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         -------
         self : object
             Returns the instance itself, with eigenvectors stored at EigenDecomposition.eigenvectors
-            and eigenvalues stored at EigenDecomposition.eigenvalues. If method is 'DM', stores Diffusion Maps at EigenDecomposition.dmaps.
+            and eigenvalues stored at EigenDecomposition.eigenvalues. If method is 'DM', stores Diffusion Maps at EigenDecomposition.embedding.
             If 'method' is 'DM' or 'LE', the diffusion operator or graph laplacian is stored at EigenDecomposition.diffusion_operator
             or EigenDecomposition.graph_laplacian, respectively.
         """
@@ -332,29 +334,44 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         if self.drop_first:
             evals = evals[1:]
             evecs = evecs[:, 1:]
+        if self.estimate_eigengap:
+            max_eigs = int(np.sum(evals > 0, axis=0))
+            first_diff = np.diff(evals)
+            eg = np.argmax(first_diff) + 1
+            if max_eigs == len(evals):
+                self.eigengap = max_eigs
+            else:
+                self.eigengap = eg
         if self.method == 'DM':
             if symmetric:
                 evecs = self.D_inv_sqrt_.dot(evecs)
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            self.dmaps = evecs * evals
+            self.embedding = evecs * evals
         elif self.method == 'msDM':
             if symmetric:
                 evecs = self.D_inv_sqrt_.dot(evecs)
+            if np.shape(evecs)[1] <= 5:
+                for i in range(evecs.shape[1]):
+                    evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
+                self.embedding = evecs * (evals / (1 - evals))
+            else:
+                for i in range(evecs.shape[1]):
+                    evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
+                use_eigs = int(np.sum(evals > 0, axis=0))
+                eigs_idx = list(range(1, int(use_eigs)))
+                eig_vals = np.ravel(evals[eigs_idx])
+                self.embedding = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
+        elif self.method == 'LE':
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            use_eigs = int(np.sum(evals > 0, axis=0))
-            eigs_idx = list(range(1, int(use_eigs)))
-            eig_vals = np.ravel(evals[eigs_idx])
-            self.dmaps = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
+            evecs = evecs * (1 / np.sqrt(evals + 1e-10))
+            self.embedding = evecs
         else:
-            for i in range(evecs.shape[1]):
-                evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            if self.weight:
-                # weight by eigenvalues
-                evecs = evecs * np.sqrt(evals + 1e-10)
+            self.embedding = evecs
         self.eigenvectors = evecs
         self.eigenvalues = evals
+
         return self
 
     def rescale(self, use_eigs=50):
@@ -369,7 +386,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 "Cannot rescale to more eigenvectors than are available.")
         eigs_idx = list(range(1, int(use_eigs)))
         eig_vals = np.ravel(self.eigenvalues[eigs_idx])
-        self.dmaps = self.eigenvectors[:,
+        self.embedding = self.eigenvectors[:,
                                        eigs_idx] * (eig_vals / (1 - eig_vals))
         return self
 
@@ -392,14 +409,14 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             return ValueError('The estimator has not been fitted yet.')
         if self.method == 'DM' or self.method == 'msDM':
             if return_evals:
-                return self.dmaps, self.eigenvalues
+                return self.embedding, self.eigenvalues
             else:
-                return self.dmaps
+                return self.embedding
         else:
             if return_evals:
-                return self.eigenvectors, self.eigenvalues
+                return self.embedding, self.eigenvalues
             else:
-                return self.eigenvectors
+                return self.embedding
 
 
     def transform(self, X=None):
@@ -424,9 +441,9 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             return ValueError('The estimator has not been fitted yet.')
         if self.method == 'DM' or self.method == 'msDM':
             if self.return_evals:
-                return self.dmaps, self.eigenvalues
+                return self.embedding, self.eigenvalues
             else:
-                return self.dmaps
+                return self.embedding
         else:
             if self.return_evals:
                 return self.eigenvectors, self.eigenvalues

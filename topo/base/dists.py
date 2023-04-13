@@ -1371,3 +1371,53 @@ if _have_numba:
             for i in range(len(perm)):
                 out[i] = metric(a[perm[i][0]], a[perm[i][1]])
             return out
+
+
+
+    def _get_metric_function(metric):
+        if metric == 'euclidean':
+            metric_fun = euclidean
+        elif metric == 'standardised_euclidean':
+            metric_fun = standardised_euclidean
+        elif metric == 'cosine':
+            metric_fun = cosine
+        elif metric == 'correlation':
+            metric_fun = correlation
+        elif metric == 'bray_curtis':
+            metric_fun = bray_curtis
+        elif metric == 'canberra':
+            metric_fun = canberra
+        elif metric == 'chebyshev':
+            metric_fun = chebyshev
+        elif metric == 'manhattan':
+            metric_fun = manhattan
+        elif metric == 'mahalanobis':
+            metric_fun = mahalanobis
+        elif metric == 'minkowski':
+            metric_fun = minkowski
+        elif metric == 'dice':
+            metric_fun = dice
+        elif metric == 'hamming':
+            metric_fun = hamming
+        elif metric == 'jaccard':
+            metric_fun = jaccard
+        elif metric == 'kulsinski':
+            metric_fun = kulsinski
+        elif metric == 'rogers_tanimoto':
+            metric_fun = rogers_tanimoto
+        elif metric == 'russellrao':
+            metric_fun = russellrao
+        elif metric == 'sokal_michener':
+            metric_fun = sokal_michener
+        elif metric == 'sokal_sneath':
+            metric_fun = sokal_sneath
+        elif metric == 'yule':
+            metric_fun = yule
+        return metric_fun
+
+    def pairwise_distances(a, metric='cosine'):
+        if metric == 'cosine':
+            return cosine_pairwise_distance(a)
+        else:
+            return matrix_pairwise_distance(a, _get_metric_function(metric))
+

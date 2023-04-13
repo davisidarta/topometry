@@ -64,11 +64,11 @@ meaning they can be easily pipelined.
     :maxdepth: 2
     :caption: General tutorials:
 
-    MNIST_TopOMetry_Tutorial
-    Evaluations
+    MNIST
+    evaluations
     classes_tutorial
-    Dimenality_estimation
-    Non_euclidean
+    id_estimatation
+    non_euclidean
     20Newsgroups_Tutorial
 
 .. toctree::
@@ -76,9 +76,6 @@ meaning they can be easily pipelined.
     :caption: Single-cell tutorials:
 
     singlecell
-    T_CD4_diversity
-    trajectory_inference
-    integration
 
 .. toctree::
     :maxdepth: 2

@@ -8,9 +8,9 @@ from topo.base.ann import kNN
 from topo.topograph import TopOGraph
 from topo.eval.global_scores import global_score_pca
 from topo.eval.local_scores import geodesic_distance
+from sklearn.manifold import trustworthiness
 
-
-def local_score(data, emb, landmarks=None,
+def geodesic_correlation(data, emb, landmarks=None,
                         landmark_method='random',
                         metric='euclidean',
                         n_neighbors=3, n_jobs=-1,
@@ -102,8 +102,8 @@ def local_score(data, emb, landmarks=None,
     else:
         print('Computing Kendall Tau for eigenbasis...')
         results = kendalltau(
-            base_geodesics, embedding_geodesics)
-    return results.correlation
+            base_geodesics, embedding_geodesics).correlation
+    return results
 
 def global_score(data, emb):
     global_scores_pca = global_score_pca(data, emb)
@@ -118,6 +118,7 @@ def eval_models_layouts(TopOGraph, X,
                         additional_projections=None,
                         landmark_method='random',
                         n_neighbors=5, n_jobs=-1,
+                        methods=['tw', 'gc', 'gs'],
                         cor_method='spearman', **kwargs):
     """
     Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
@@ -177,8 +178,9 @@ def eval_models_layouts(TopOGraph, X,
     n_jobs : int (optional, default -1).
         Number of jobs to use for parallelization. If -1, uses all available cores.
 
-    cor_method : str (optional, default 'spearman').
-        Correlation method to use for local scores. Options are 'spearman' and 'kendall'.
+    methods : list of str (optional, default ['tw', 'gc', 'gs']).
+        Methods to use in the evaluation. Options are 'tw' (trustworthiness), 'gc' (geodesic correlation)
+        and 'gs' (global score).
 
     landmark_method : str (optional, default 'random').
         Method to use for landmark selection. Options are 'random' and 'kmeans'.
@@ -214,80 +216,90 @@ def eval_models_layouts(TopOGraph, X,
 
     # Compute geodesics
     gc.collect()
-    EigenbasisLocalResults = {}
-    EigenbasisGlobalResults = {}
+    EigenbasisTWResults = {}
+    EigenbasisGCResults = {}
+    EigenbasisGSResults = {}
     if TopOGraph.verbosity > 0:
         print('Computing base geodesics...')
     if landmarks is not None:
         base_graph = TopOGraph.base_knn_graph[landmark_indices, :][:, landmark_indices]
     else:
         base_graph = TopOGraph.base_knn_graph
-    base_geodesics = squareform(geodesic_distance(
-        base_graph, directed=False, n_jobs=n_jobs))
+    if 'gc' in methods:
+        base_geodesics = squareform(geodesic_distance(base_graph.toarray(), directed=False, n_jobs=n_jobs)
+                                    )
+    if 'tw' in methods:
+        from sklearn.metrics import pairwise_distances
+        if isinstance(X, csr_matrix):
+            data_pdist = pairwise_distances(X.toarray(), metric=TopOGraph.base_metric)
+        else:
+            data_pdist = pairwise_distances(X, metric=TopOGraph.base_metric)
     gc.collect()
     for key in TopOGraph.EigenbasisDict.keys():
-        if TopOGraph.verbosity > 0:
-            print('Computing geodesics for eigenbasis \'{}...\''.format(key))
-        emb_graph = kNN(TopOGraph.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
-                        metric=TopOGraph.base_metric,
-                        n_jobs=n_jobs,
-                        backend=TopOGraph.backend,
-                        return_instance=False,
-                        verbose=False, **kwargs)
-        if landmarks is not None:
-            emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+        if 'gc' in methods:
+            if TopOGraph.verbosity > 0:
+                print('Computing geodesics for eigenbasis \'{}...\''.format(key))
+            emb_graph = kNN(TopOGraph.EigenbasisDict[key].transform(), n_neighbors=n_neighbors,
+                            metric=TopOGraph.base_metric,
+                            n_jobs=n_jobs,
+                            backend=TopOGraph.backend,
+                            return_instance=False,
+                            verbose=False, **kwargs)
+            if landmarks is not None:
+                emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(emb_graph.toarray(), directed=False, n_jobs=n_jobs)
+                                            )
             gc.collect()
-        embedding_geodesics = squareform(geodesic_distance(
-            emb_graph, directed=False, n_jobs=n_jobs))
-        gc.collect()
-        if cor_method == 'spearman':
             if TopOGraph.verbosity > 0:
                 print('Computing Spearman R for eigenbasis \'{}...\''.format(key))
-            EigenbasisLocalResults[key], _ = spearmanr(
+            EigenbasisGCResults[key], _ = spearmanr(
                 base_geodesics, embedding_geodesics)
-        else:
-            if TopOGraph.verbosity > 0:
-                print('Computing Kendall Tau for eigenbasis \'{}...\''.format(key))
-            EigenbasisLocalResults[key], _ = kendalltau(
-                base_geodesics, embedding_geodesics)
-        gc.collect()
-        EigenbasisGlobalResults[key] = global_score(
-            X, TopOGraph.EigenbasisDict[key].results())
-        if TopOGraph.verbosity > 0:
-            print('Finished for eigenbasis {}'.format(key))
-        gc.collect()
-    ProjectionLocalResults = {}
-    ProjectionGlobalResults = {}
-    for key in TopOGraph.ProjectionDict.keys():
-        if TopOGraph.verbosity > 0:
-            print('Computing geodesics for projection \' {}...\''.format(key))
-        emb_graph = kNN(TopOGraph.ProjectionDict[key],
-                        n_neighbors=n_neighbors,
-                        metric=TopOGraph.graph_metric,
-                        n_jobs=n_jobs,
-                        backend=TopOGraph.backend,
-                        return_instance=False,
-                        verbose=False, **kwargs)
-        if landmarks is not None:
-            emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
             gc.collect()
-        embedding_geodesics = squareform(geodesic_distance(
-            emb_graph, directed=False, n_jobs=n_jobs))
-        gc.collect()
-        if cor_method == 'spearman':
+        if 'gs' in methods:
+            EigenbasisGSResults[key] = global_score(
+                X, TopOGraph.EigenbasisDict[key].transform())
+            if TopOGraph.verbosity > 0:
+                print('Computed global score for eigenbasis {}'.format(key))
+            gc.collect()
+        if 'tw' in methods:
+            EigenbasisTWResults[key] = trustworthiness(data_pdist,
+                                                        TopOGraph.EigenbasisDict[key].transform(), n_neighbors=TopOGraph.base_knn,
+                                                        metric = 'precomputed')
+
+    ProjectionTWResults = {}
+    ProjectionGCResults = {}
+    ProjectionGSResults = {}
+    for key in TopOGraph.ProjectionDict.keys():
+        if 'gc' in methods:
+            if TopOGraph.verbosity > 0:
+                print('Computing geodesics for projection \' {}...\''.format(key))
+            emb_graph = kNN(TopOGraph.ProjectionDict[key],
+                            n_neighbors=n_neighbors,
+                            metric=TopOGraph.graph_metric,
+                            n_jobs=n_jobs,
+                            backend=TopOGraph.backend,
+                            return_instance=False,
+                            verbose=False, **kwargs)
+            if landmarks is not None:
+                emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+                gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(emb_graph.toarray(), directed=False, n_jobs=n_jobs)
+                )
+            gc.collect()
             if TopOGraph.verbosity > 0:
                 print('Computing Spearman R for projection \'{}...\''.format(key))
-            ProjectionLocalResults[key], _ = spearmanr(
+            ProjectionGCResults[key], _ = spearmanr(
                 base_geodesics, embedding_geodesics)
-        else:
-            if TopOGraph.verbosity > 0:
-                print('Computing Kendall Tau for projection \'{}...\''.format(key))
-            ProjectionLocalResults[key], _ = kendalltau(
-                base_geodesics, embedding_geodesics)
-        gc.collect()
-        ProjectionGlobalResults[key] = global_score(
-            X, TopOGraph.ProjectionDict[key])
-        gc.collect()
+            gc.collect()
+        if 'gs' in methods:
+            ProjectionGSResults[key] = global_score(
+                X, TopOGraph.ProjectionDict[key])
+            gc.collect()
+        if 'tw' in methods:
+            ProjectionTWResults[key] = trustworthiness(data_pdist,
+                                                        TopOGraph.EigenbasisDict[key].transform(), n_neighbors=TopOGraph.base_knn,
+                                                        metric = 'precomputed')
     from sklearn.decomposition import PCA
     if TopOGraph.verbosity >= 1:
         print('Computing PCA for comparison...')
@@ -304,7 +316,37 @@ def eval_models_layouts(TopOGraph, X,
                 return print('Uknown data format.')
         else:
             data = X
+    # Now with PCA
     pca_emb = PCA(n_components=TopOGraph.n_eigs).fit_transform(data)
+    if 'gc' in methods:
+        if TopOGraph.verbosity > 0:
+            print('Computing Spearman R for PCA...')
+        emb_graph = kNN(pca_emb,
+                        n_neighbors=n_neighbors,
+                        metric=TopOGraph.graph_metric,
+                        n_jobs=n_jobs,
+                        backend=TopOGraph.backend,
+                        return_instance=False,
+                        verbose=False, **kwargs)
+        if landmarks is not None:
+            emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+            gc.collect()
+        embedding_geodesics = squareform(geodesic_distance(emb_graph.toarray(), directed=False, n_jobs=n_jobs)
+            )
+        gc.collect()
+        if TopOGraph.verbosity > 0:
+            print('Computing Spearman R for PCA...')
+        EigenbasisGCResults[key], _ = spearmanr(
+            base_geodesics, embedding_geodesics)
+        gc.collect()
+    if 'gs' in methods:
+        EigenbasisGSResults[key] = global_score(
+            X, TopOGraph.ProjectionDict[key])
+        gc.collect()
+    if 'tw' in methods:
+        EigenbasisTWResults[key] = trustworthiness(data_pdist,
+                                                    TopOGraph.EigenbasisDict[key].transform(), n_neighbors=TopOGraph.base_knn,
+                                                    metric = 'precomputed')
     emb_graph = kNN(pca_emb,
                     n_neighbors=n_neighbors,
                     metric=TopOGraph.graph_metric,
@@ -315,15 +357,13 @@ def eval_models_layouts(TopOGraph, X,
     if landmarks is not None:
         emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
         gc.collect()
-    embedding_geodesics = squareform(geodesic_distance(
-        emb_graph, directed=False, n_jobs=n_jobs))
+    embedding_geodesics = squareform(geodesic_distance(emb_graph.toarray(), directed=False, n_jobs=n_jobs)
+        )
     gc.collect()
     if TopOGraph.verbosity > 0:
         print('Computing Spearman R for PCA...')
     EigenbasisLocalResults['PCA'], _ = spearmanr(
         base_geodesics, embedding_geodesics)
-    gc.collect()
-    ProjectionGlobalResults['PCA'] = global_score(X, pca_emb)
     gc.collect()
     if additional_eigenbases is not None:
         for key in additional_eigenbases.keys():
@@ -339,8 +379,8 @@ def eval_models_layouts(TopOGraph, X,
             if landmarks is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
                 gc.collect()
-            embedding_geodesics = squareform(geodesic_distance(
-                emb_graph, directed=False, n_jobs=n_jobs))
+            embedding_geodesics = squareform(geodesic_distance(emb_graph.toarray(), directed=False, n_jobs=n_jobs)
+                )
             gc.collect()
             if cor_method == 'spearman':
                 if TopOGraph.verbosity > 0:
@@ -351,7 +391,8 @@ def eval_models_layouts(TopOGraph, X,
                 if TopOGraph.verbosity > 0:
                     print('Computing Kendall Tau for additional eigenbasis \'{}...\''.format(key))
                 EigenbasisLocalResults[key], _ = kendalltau(
-                    base_geodesics, embedding_geodesics)
+                    base_geodesics, embedding_geodesics
+                    )
             gc.collect()
             EigenbasisGlobalResults[key] = global_score(
                 X, additional_eigenbases[key])
@@ -371,8 +412,9 @@ def eval_models_layouts(TopOGraph, X,
                             verbose=False, **kwargs)
             if landmarks is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-            embedding_geodesics = squareform(geodesic_distance(
-                emb_graph, directed=False, n_jobs=n_jobs))
+            embedding_geodesics = squareform(emb_graph.toarray()
+                #geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs)
+                )
             gc.collect()
             if cor_method == 'spearman':
                 if TopOGraph.verbosity > 0:

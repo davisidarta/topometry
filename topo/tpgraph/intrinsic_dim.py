@@ -81,16 +81,33 @@ def estimate_local_dim_fsa(K, n_neighbors=10):
     d = - np.log(2) / np.log(dist_to_median_k / dist_to_k)
     return d
 
-# From https://github.com/phrenico/cmfsapy/
-def ml_estimator(normed_dists):
-    return -1./ np.nanmean(np.log(normed_dists), axis=1)
+# Levina and Bickel 2004
+# https://proceedings.neurips.cc/paper/2004/hash/74934548253bcab8490ebd74afed7031-Abstract.html
+def mle_local(knn_dist, eps=1.0e-10, n_neighbors=None, remove_self=False):
+    if remove_self:
+        # remove self-neighbor
+        knn_dist = knn_dist[:, 1:]
+    knn_dist[knn_dist < eps] = eps
+    log_knn = np.log(knn_dist)
+    if n_neighbors is None:
+        n_neighbors = knn_dist.shape[1]
+    elif n_neighbors > knn_dist.shape[1]:
+        raise ValueError(
+            f"n_neighbors must be <= {knn_dist.shape[1]} but was {n_neighbors}"
+        )
 
-# From https://github.com/phrenico/cmfsapy/
-def ml_dims(dists, n_neighbors=10):
-    """Maximum likelihood estimator af intrinsic dimension (Levina-Bickel)"""
-    norm_dists = dists / _get_dist_to_k_nearest_neighbor(K, n_neighbors=n_neighbors)
-    dims = ml_estimator(norm_dists.toarray()[:, 1:-1])
-    return dims
+    k1 = n_neighbors - 1
+    log_rij = -np.sum(log_knn[:, :-1], axis=1)
+    return k1 / (k1 * log_knn[:, -1] + log_rij)
+
+
+# MacKay and Ghahramani 2005
+# http://www.inference.org.uk/mackay/dimension/
+def mle_global(knn_dist, eps=1.0e-10, n_neighbors=None, remove_self=False):
+    id_local = mle_local(
+        knn_dist, eps=eps, n_neighbors=n_neighbors, remove_self=remove_self
+    )
+    return 1.0 / np.mean(1.0 / id_local)
 
 # From https://github.com/phrenico/cmfsapy/
 def szepes_ml(local_d):
@@ -99,7 +116,7 @@ def szepes_ml(local_d):
     :param numpy.ndarray of float local_d: local FSA estimates
     :return: global ML-FSA estimate
     """
-    return  hmean(local_d) / np.log(2)
+    return  hmean(local_d) * 2
 
 def local_eigengap_experimental(K, max_n_components=30, verbose=False):
     # Construct neighborhood graph

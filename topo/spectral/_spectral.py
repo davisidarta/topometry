@@ -15,25 +15,35 @@ from sklearn.utils import check_random_state, as_float_array
 def _dense_degree(W):
     return np.diag(W.sum(axis=1))
 
-def _dense_unnormalized_laplacian(W):
+def _dense_unnormalized_laplacian(W, return_D=False):
     D = _dense_degree(W)
     L = D - W
     # Return ndarray instead of np.matrix
-    return L.A
+    if return_D:
+        return L.A, D
+    else:
+        return L.A
 
-def _dense_symmetric_normalized_laplacian(W):
+
+def _dense_symmetric_normalized_laplacian(W, return_D=False):
     D = _dense_degree(W)
     L = D - W
-    D_tilde = np.diag(1/np.sqrt(D.diagonal()))
+    Dinvs = np.diag(1/np.sqrt(D.diagonal()))
     # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
-    Lsym_norm = D_tilde @ (L @ D_tilde)
-    return Lsym_norm
+    Lsym_norm = Dinvs @ (L @ Dinvs)
+    if return_D:
+        return Lsym_norm, Dinvs
+    else:
+        return Lsym_norm
 
-def _dense_normalized_random_walk_laplacian(W):
+def _dense_normalized_random_walk_laplacian(W, return_D=False):
     D = _dense_degree(W)
     # Lr = D^-1@Lr = I - D^-1@W = I - P
     Lr = np.eye(*W.shape) - (np.diag(1/D.diagonal())@W)
-    return Lr
+    if return_D:
+        return Lr, D
+    else:
+        return Lr
 
 def _dense_diffusion(W, alpha=0, semi_aniso=False):
     D = _dense_degree(W)
@@ -90,12 +100,15 @@ def degree(W):
         return _dense_degree(W)
 
 
-def _sparse_unnormalized_laplacian(W):
+def _sparse_unnormalized_laplacian(W, return_D=False):
     D = _sparse_degree(W)
     L = D - W
-    return L
+    if return_D:
+        return L, D
+    else:
+        return L
 
-def _sparse_symmetrized_normalized_laplacian(W):
+def _sparse_symmetrized_normalized_laplacian(W, return_D=False):
     D = _sparse_degree(W)
     L = D - W
     N = np.shape(W)[0]
@@ -105,9 +118,12 @@ def _sparse_symmetrized_normalized_laplacian(W):
     Dinvs = sparse.csr_matrix((D_tilde, (range(N), range(N))), shape=[N, N])
     # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
     Lsym_norm = Dinvs.dot(L).dot(Dinvs)
-    return Lsym_norm
+    if return_D:
+        return Lsym_norm, Dinvs
+    else:
+        return Lsym_norm
 
-def _sparse_normalized_random_walk_laplacian(W):
+def _sparse_normalized_random_walk_laplacian(W, return_D=False):
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
     # D ^-1:
@@ -115,8 +131,11 @@ def _sparse_normalized_random_walk_laplacian(W):
     Dinv = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
     I = sparse.identity(W.shape[0], dtype=np.float32)
     Lr = I - Dinv.dot(W)
-    return Lr
-
+    if return_D:
+        return Lr, Dinv
+    else:
+        return Lr
+    
 def _sparse_diffusion(W, alpha=0, semi_aniso=False):
     # Note the resulting operator is not symmetric!
     N = np.shape(W)[0]
@@ -177,7 +196,7 @@ def _sparse_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=
         return Psym
 
 
-def graph_laplacian(W, laplacian_type='random_walk'):
+def graph_laplacian(W, laplacian_type='normalized', return_D=False):
     """
     Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
     see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
@@ -189,7 +208,10 @@ def graph_laplacian(W, laplacian_type='random_walk'):
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
     laplacian : str (optional, default 'random_walk').
-        The type of laplacian to use. Can be 'unnormalized', 'normalized', 'geometric' or 'random_walk'.
+        The type of laplacian to use. Can be 'unnormalized', 'normalized' or 'random_walk'.
+
+    return_D : bool (optional, default False).
+        Whether to also return a degree matrix with the Laplacian in a tuple
 
     Returns
     -------
@@ -216,10 +238,10 @@ def graph_laplacian(W, laplacian_type='random_walk'):
         else:
             raise ValueError('Unknown laplacian type: {}'.format(laplacian_type) + '. Should \
             be one of \"unnormalized\", \"normalized\", or \"random_walk\".')
-    return lap_fun(W)
+    return lap_fun(W, return_D)
 
 
-def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True, return_evals=False, eigen_tol=0, random_state=None):
+def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals=False, eigen_tol=0, random_state=None):
     """
     Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf), given a adjacency or affinity graph W.
     The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is),
@@ -239,9 +261,6 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True,
 
     drop_first : bool (optional, default True).
         Whether to drop the first eigenvector.
-
-    weight : bool (optional, default True).
-        Whether to weight the eigenvectors by the square root of the eigenvalues.
 
     return_evals : bool (optional, default False).
         Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
@@ -298,7 +317,6 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, weight=True,
     # Normalize
     for i in range(evecs.shape[1]):
         evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-    evecs = evecs * np.sqrt(evals + 1e-12) # prevent division by zero
     # Return embedding and evals
     if drop_first:
         evecs = evecs[:, 1:]
