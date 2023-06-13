@@ -155,8 +155,27 @@ class RiemannMetric(object):
         return self.fit()
 
 
+def eigsorted(cov):
+    vals, vecs = np.linalg.eigh(cov)
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
 
-
+def get_eccentricity(emb, laplacian, H_emb=None):
+    if H_emb is None:
+        from topo.eval import RiemannMetric
+        rmetric = RiemannMetric(emb, laplacian)
+        H_emb = rmetric.get_dual_rmetric()
+    N = np.shape(laplacian)[0]
+    ecc_list = []
+    for i in range(N):
+        cov = H_emb[i, :, :]
+        vals, vecs = eigsorted(cov)
+        theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+        # Width and height are "full" widths, not radius
+        width, height = 2 * np.sqrt(np.absolute(vals))
+        ecc = np.abs(width - height / width)
+        ecc_list.append(ecc)
+    return ecc_list
 
 
 

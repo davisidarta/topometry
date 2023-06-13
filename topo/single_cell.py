@@ -15,6 +15,9 @@ if _HAVE_SCANPY:
     import scanpy.external as sce
     from scipy.sparse import csr_matrix
     from topo.topograph import TopOGraph
+    from anndata import AnnData
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
 
     def preprocess(AnnData, normalize=True, log=True, target_sum=1e4, min_mean=0.0125, max_mean=8, min_disp=0.3, max_value=10, save_to_raw=True, plot_hvg=False, scale=True, **kwargs):
         """
@@ -367,29 +370,98 @@ if _HAVE_SCANPY:
                    projections=projections)
         
         # Get results to AnnData
-        for kernel in kernels:  
+        for base_kernel in kernels:  
             for eigenmap_method in eigenmap_methods:
-                if eigenmap_method in ['DM', 'LE']:
-                    basis_key = eigenmap_method + ' with ' + str(kernel)
+                if eigenmap_method in ['msDM','DM', 'LE']:
+                    basis_key = eigenmap_method + ' with ' + str(base_kernel)
                 elif eigenmap_method == 'top':
-                    basis_key = 'Top eigenpairs with ' + str(kernel)
+                    basis_key = 'Top eigenpairs with ' + str(base_kernel)
                 elif eigenmap_method == 'bottom':
-                    basis_key = 'Bottom eigenpairs with ' + str(kernel)
+                    basis_key = 'Bottom eigenpairs with ' + str(base_kernel)
                 else:
                     raise ValueError('Unknown eigenmap method.')
                 AnnData.obsm['X_' + basis_key] = topograph.EigenbasisDict[basis_key].transform(data) # returns the scaled eigenvectors
 
-                for kernel in kernels:
-                    graph_key = kernel + ' from ' + basis_key
+                for graph_kernel in kernels:
+                    graph_key = graph_kernel + ' from ' + basis_key
                     AnnData.obsp[basis_key + '_distances'] = topograph.eigenbasis_knn_graph
                     AnnData.obsp[graph_key + '_connectivities'] = topograph.GraphKernelDict[graph_key].P
                     sc.tl.leiden(AnnData, adjacency = topograph.GraphKernelDict[graph_key].P, resolution=resolution, key_added = graph_key + '_leiden', **kwargs)
-                for projection in projections:
-                    if projection in ['MAP', 'UMAP', 'MDE', 'Isomap']: 
-                        suffix_key = graph_key
-                    else:
-                        suffix_key = basis_key
-                    projection_key = projection + ' of ' + suffix_key
-                    AnnData.obsm['X_' + projection_key] = topograph.ProjectionDict[projection_key]
+                    for projection in projections:
+                        if projection in ['MAP', 'UMAP', 'MDE', 'Isomap']: 
+                            suffix_key = graph_key
+                        else:
+                            suffix_key = basis_key
+                        projection_key = projection + ' of ' + suffix_key
+                        AnnData.obsm['X_' + projection_key] = topograph.ProjectionDict[projection_key]
         return AnnData
 
+
+
+    def explained_variance_by_hvg(AnnData, title='scRNAseq data', n_pcs=200, gene_number_range = [250, 1000, 3000], figsize=(12,6), sup_title_fontsize=20, title_fontsize=16, return_dicts=False):
+        """
+        Plots the explained variance by PCA with varying number of highly variable genes.
+
+        Parameters
+        ----------
+        AnnData: the target AnnData object.
+
+        title: str (optional, default 'scRNAseq data').
+
+        n_pcs: int (optional, default 200).
+            Number of principal components to use.
+
+        gene_number_range: list of int (optional, default [250, 1000, 3000]).
+            List of numbers of highly variable genes to test.
+
+        figsize: tuple of int (optional, default (12,6)).
+
+        sup_title_fontsize: int (optional, default 20).
+
+        title_fontsize: int (optional, default 16).
+
+        return_dicts: bool (optional, default False).
+            Whether to return explained covariance ratio and singular values dictionaries.
+
+        Returns
+        -------
+        A plot. If `return_dicts=True`, also returns a tuple of dictionaries (explained_cov_ratio, singular_values) with the keys
+        being strings with the number of genes and the values being the explained covariance ratio
+        and the singular values for PCA.
+        
+        """
+        prop_cycle = plt.rcParams['axes.prop_cycle']
+        colors = prop_cycle.by_key()['color']
+        explained_cov_ratio = {}
+        singular_values = {}
+        for n_genes in gene_number_range:
+            sc.pp.highly_variable_genes(AnnData, n_top_genes=n_genes)
+            AnnData.raw = AnnData.copy()
+            AnnData = AnnData[:, AnnData.var.highly_variable]
+            sc.pp.scale(AnnData, max_value=10)
+            pca = PCA(n_components=n_pcs)
+            pca.fit(AnnData.X)
+            AnnData.obsm['X_pca'] = pca.transform(AnnData.X)
+            explained_cov_ratio[n_genes] = pca.explained_variance_ratio_
+            singular_values[n_genes] = pca.singular_values_
+        plt.figure(figsize=figsize)
+        plt.subplots_adjust(left=0.2, right=0.98, bottom=0.001,
+                            top=0.9, wspace=0.15, hspace=0.01)
+        plt.suptitle(title, fontsize=sup_title_fontsize)
+        for j, gene_number in enumerate(gene_number_range):
+            plt.subplot(1, 2, 1)
+            plt.plot(singular_values[gene_number], label='{} genes'.format(gene_number), color=colors[j])
+            plt.title('Eigenspectrum', fontsize=title_fontsize)
+            plt.xlabel('Principal component', fontsize=title_fontsize-6)
+            plt.ylabel('Singular values', fontsize=title_fontsize-6)
+            plt.legend(fontsize=11)
+            plt.subplot(1, 2, 2)
+            plt.plot(explained_cov_ratio[gene_number].cumsum(), label='{} genes'.format(gene_number), color=colors[j])
+            plt.title('Total explained variance', fontsize=title_fontsize)
+            plt.xlabel('Principal component', fontsize=13)
+            plt.ylabel('Cumulative explained variance', fontsize=title_fontsize-6)
+            plt.legend(fontsize=11)
+        plt.tight_layout()
+        plt.show()
+        if return_dicts:
+            return explained_cov_ratio, singular_values

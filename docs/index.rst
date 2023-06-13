@@ -62,20 +62,15 @@ meaning they can be easily pipelined.
 
 .. toctree::
     :maxdepth: 2
-    :caption: General tutorials:
+    :caption: Tutorials:
 
-    MNIST
-    evaluations
-    classes_tutorial
-    id_estimatation
-    non_euclidean
-    20Newsgroups_Tutorial
-
-.. toctree::
-    :maxdepth: 3
-    :caption: Single-cell tutorials:
-
-    singlecell
+    a_mnist
+    b_newsgroups
+    c_classes
+    d_id_estimatation
+    e_evaluations
+    f_scvelo_pancreas
+    h_non_euclidean
 
 .. toctree::
     :maxdepth: 2

@@ -259,7 +259,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',
-                 laplacian_type='random_walk',
+                 laplacian_type='normalized',
                  projection_method='MAP',
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
@@ -273,7 +273,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  low_memory=False,
                  eigen_tol=1e-4,
                  eigensolver='arpack',
-                 backend='nmslib',
+                 backend='hnswlib',
                  cache=True,
                  verbosity=1,
                  random_state=None,
@@ -324,7 +324,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.local_dimensionality = None
         self.RiemannMetricDict = {}
         self.LocalScoresDict = {}
-
+        self.temp_file = None
+        
     def __repr__(self):
         if self.base_metric == 'precomputed':
             msg = "TopOGraph object with precomputed distances from %i samples" % (
@@ -546,7 +547,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      eigensolver=self.eigensolver,
                                                      eigen_tol=self.eigen_tol,
                                                      drop_first=True,
-                                                     normalize=True,
                                                      weight=True,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
@@ -572,7 +572,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      eigensolver=self.eigensolver,
                                                      eigen_tol=self.eigen_tol,
                                                      drop_first=True,
-                                                     normalize=True,
                                                      weight=True,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
@@ -598,7 +597,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      eigensolver=self.eigensolver,
                                                      eigen_tol=self.eigen_tol,
                                                      drop_first=True,
-                                                     normalize=True,
                                                      weight=True,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
@@ -624,7 +622,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                      eigensolver=self.eigensolver,
                                                      eigen_tol=self.eigen_tol,
                                                      drop_first=True,
-                                                     normalize=True,
                                                      weight=True,
                                                      t=self.diff_t,
                                                      random_state=self.random_state,
@@ -651,7 +648,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                  eigensolver=self.eigensolver,
                                                  eigen_tol=self.eigen_tol,
                                                  drop_first=True,
-                                                 normalize=True,
                                                  weight=True,
                                                  t=self.diff_t,
                                                  random_state=self.random_state,
@@ -732,142 +728,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         """
         return list(self.EigenbasisDict.keys())
-    
-    def estimate_dimensionality(self, X, methods='fsa', k=[10, 20, 50, 75, 100], metric='euclidean', n_jobs=-1,  **kwargs):
-        """
-        Estimate the intrinsic dimensionality of the data using different methods.
-
-        Parameters
-        ----------
-
-        X : array-like, shape (n_samples, n_features)
-            The data to estimate the dimensionality of.
-
-        methods : list of str, (default ['fsa'])
-            The dimensionality estimation methods to use. Current options are
-            'fsa' (), 'twonn'() and 'mle'().
-
-        k : int, range or list of ints, (default [10, 20, 50, 75, 100])
-            The number of nearest neighbors to use for the dimensionality estimation methods.
-            If a single value of `k` is provided, then the result dictionary will have
-            keys corresponding to the methods, and values corresponding to the
-            dimensionality estimates.
-            If multiple values of `k` are provided, then the result dictionary will have
-            keys corresponding to the number of k, and values corresponding to other dictionaries,
-            which have keys corresponding to the methods, and values corresponding to the
-            dimensionality estimates.
-
-        metric : str (default 'euclidean')
-            The metric to use when calculating distance between instances in a feature array.
-
-        **kwargs : keyword arguments
-            Additional keyword arguments to pass to the backend kNN estimator.
-
-
-        Returns
-        -------
-        (local, global) : A tuple of dictionaries containing local and global dimensionality estimates, respectivelly.
-        
-            Their structure depends on the value of the `k` parameter:
-
-            * If a single value of `k` is provided, then the dictionary will have
-            keys corresponding to the methods, and values corresponding to the
-            dimensionality estimates. 
-
-            * If multiple values of `k` are provided, then the dictionary will have
-            keys corresponding to the number of k, and values corresponding to other dictionaries,
-            which have keys corresponding to the methods, and values corresponding to the
-            dimensionality estimates. 
-
-        """
-
-        if isinstance(methods, str):
-            methods = [methods]
-
-        if isinstance(k, list):
-            n_k = len(k)
-            use_k = k
-        elif isinstance(k, int):
-            n_k = 1
-            use_k = k
-        elif isinstance(k, range):
-            n_k = len(k)
-            use_k = k
-        
-        methods_dict_local = {}
-        methods_dict_global = {}
-        for method in methods:
-            if method not in ['fsa', 'twonn', 'mle']:
-                raise ValueError(
-                    'Invalid method. Valid methods are: fsa, twonn, mle.')
-            if method == 'fsa':
-                from scipy.stats import hmean
-                from topo.tpgraph.intrinsic_dim import estimate_local_dim_fsa
-                if n_k == 1:
-                    kernel_dummy = Kernel(metric=metric,
-                                n_neighbors=k,
-                                n_jobs=n_jobs, **kwargs).fit(X) #number of jobs (highly parallelizable)
-                    methods_dict_local['fsa'] = estimate_local_dim_fsa(kernel_dummy.knn_graph, k) #estimate local dimensionality with diffusion coordinates
-                    methods_dict_global['fsa'] = hmean(methods_dict_local['fsa']) / np.log(2)
-                    del kernel_dummy
-                else:
-                    methods_dict_local['fsa'] = {}
-                    methods_dict_global['fsa'] = {}
-                    for k in use_k: # the number of kNN
-                        kernel_dummy = Kernel(metric=metric,
-                                    n_neighbors=k,
-                                    n_jobs=n_jobs, **kwargs).fit(X) #number of jobs (highly parallelizable)
-                        methods_dict_local['fsa'][str(k)] = estimate_local_dim_fsa(kernel_dummy.knn_graph, k) #estimate local dimensionality with diffusion coordinates
-                        methods_dict_global['fsa'][str(k)] = hmean(methods_dict_local['fsa'][str(k)]) / np.log(2)
-                        del kernel_dummy
-            elif method == 'twonn':
-                try:
-                    import skdim
-                    has_skdim=True
-                except ImportError:
-                    raise ImportError(
-                        'skdim not found. Please install skdim to use the `twonn` method.')
-                if has_skdim:
-                    if n_k == 1:
-                        tnn_skd_dummy = skdim.id.TwoNN().fit_pw(X, n_neighbors=k, n_jobs=n_jobs)
-                        methods_dict_local['twonn'] = tnn_skd_dummy.dimension_pw_
-                        methods_dict_global['twonn'] = tnn_skd_dummy.dimension_
-                        del tnn_skd_dummy
-                    else:
-                        methods_dict_local['twonn'] = {}
-                        methods_dict_global['twonn'] = {}
-                        for k in use_k: # the number of kNN
-                            tnn_skd_dummy = skdim.id.TwoNN().fit_pw(X, n_neighbors=k, n_jobs=n_jobs)
-                            methods_dict_local['twonn'][str(k)] = tnn_skd_dummy.dimension_pw_
-                            methods_dict_global['twonn'][str(k)] = tnn_skd_dummy.dimension_
-                            del tnn_skd_dummy
-            elif method == 'mle':
-                try:
-                    import skdim
-                    has_skdim=True
-                except ImportError:
-                    raise ImportError(
-                        'skdim not found. Please install skdim to use the `twonn` method.')
-                if has_skdim:
-                    if n_k == 1:
-                        mle_skd_dummy = skdim.id.MLE()
-                        methods_dict_local['mle'] = mle_skd_dummy.fit_transform(X, n_neighbors=k, n_jobs=n_jobs)
-                        methods_dict_global['mle'] = mle_skd_dummy.fit_transform_pw(X, n_neighbors=k, n_jobs=n_jobs)
-                        del mle_skd_dummy
-                    else:
-                        methods_dict_local['mle'] = {}
-                        methods_dict_global['mle'] = {}
-                        for k in use_k: # the number of kNN
-                            mle_skd_dummy = skdim.id.MLE()
-                            methods_dict_local['mle'][str(k)] = mle_skd_dummy.fit_transform(X, n_neighbors=k, n_jobs=n_jobs)
-                            methods_dict_global['mle'][str(k)] = mle_skd_dummy.fit_transform_pw(X, n_neighbors=k, n_jobs=n_jobs)
-                            del mle_skd_dummy
-            
-            else:
-                raise ValueError(
-                    'Invalid method. Valid methods are: fsa, twonn, mle.')
-
-        return methods_dict_local, methods_dict_global
 
     def transform(self, X=None, **kwargs):
         """
@@ -957,14 +817,14 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             ).astype(np.float32)
         except:
             spt_layout = EigenDecomposition(
-                            n_components=n_components+1).fit_transform(graph)
+                            n_components=n_components).fit_transform(graph)
         end = time.time()
         self.runtimes['Spectral'] = end - start
         self.SpecLayout = spt_layout
         gc.collect()
         return spt_layout
 
-    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', num_iters=1000, **kwargs):
+    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', n_neighbors=None, num_iters=800, **kwargs):
         """
         Projects the data into a lower dimensional space using the specified projection method. Calls topo.layout.Projector().
 
@@ -1010,6 +870,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         np.ndarray containing the resulting embedding. Also stores it in the `TopOGraph.ProjectionDict` slot.
 
         """
+        if n_neighbors is None:
+            n_neighbors = self.graph_knn
+        elif not isinstance(n_neighbors,int):
+            raise ValueError('n_neighbors must be an integer')
+        
         if projection_method is None:
             projection_method = self.projection_method
 
@@ -1068,15 +933,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.ProjectionDict[projection_key] = Y
         return Y
 
-    def trustworthiness(self, Y, X=None, use_base_knn_graph=True, n_neighbors=5, metric='cosine'):
-        from sklearn.manifold import trustworthiness
-        if use_base_knn_graph:
-            result = trustworthiness(self.base_knn_graph.toarray(), Y, n_neighbors=self.base_knn, metric='precomputed')
-        else:
-            if X is None:
-                return print('X must be given if use_base_knn_graph is set to False')
-            result = trustworthiness(X, Y, n_neighbors=n_neighbors, metric=metric)
-        return result
     
     def run_models(self, X,
                    kernels=['fuzzy', 'cknn', 'bw_adaptive'],
@@ -1163,6 +1019,28 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
         gc.collect()
         return print('TopOGraph saved at ' + filename)
+
+    # def memory_saver(self, save_temp=True):
+    #     """
+    #     Removes all the intermediate results from the `TopOGraph` object.
+    #     Optionally, also saves these results in a temporary file.
+
+    #     """
+    #     if save_temp:
+    #         import tempfile
+    #         import pickle
+    #         temp = tempfile.NamedTemporaryFile(delete=False)
+    #         self.write_pkl(filename=temp.name, remove_base_class=True)
+    #         self.temp_file = temp.name
+
+    #     self.base_nbrs_class = None
+    #     self.BaseKernelDict = {}
+    #     self.EigenbasisDict = {}
+    #     self.GraphKernelDict = {}
+    #     self.ProjectionDict = {}
+
+
+
 
     def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False):
         import gc

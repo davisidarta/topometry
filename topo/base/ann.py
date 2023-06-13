@@ -19,9 +19,8 @@ def kNN(X, Y=None,
         n_neighbors=5,
         metric='euclidean',
         n_jobs=-1,
-        backend='nmslib',
+        backend='hnswlib',
         low_memory=True,
-        symmetrize=True,
         M=15,
         p=11/16,
         efC=50,
@@ -107,6 +106,9 @@ def kNN(X, Y=None,
             warn("Only the 'pynndescent', 'annoy' and 'faiss' backends support Y. Falling back to 'annoy'...")
             backend = 'annoy'
     if backend == 'nmslib':
+        if isinstance(X, np.ndarray):
+            warn("nmslib does not support dense matrices. Converting to array...")
+            X = csr_matrix(X)
         # Construct an approximate k-nearest-neighbors graph
         nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
                                       metric=metric,
@@ -118,6 +120,9 @@ def kNN(X, Y=None,
                                       efS=efS,
                                       verbose=verbose).fit(X)
     elif backend == 'hnswlib':
+        if issparse(X):
+            warn("hnswlib does not support sparse matrices. Converting to array...")
+            X = X.toarray()
         nbrs = HNSWlibTransformer(n_neighbors=n_neighbors,
                                        metric=metric,
                                        n_jobs=n_jobs,
@@ -130,6 +135,10 @@ def kNN(X, Y=None,
             from pynndescent import PyNNDescentTransformer
         except ImportError:
             return(print("PyNNDescent is required to use `pynndescent` as a kNN backend. Please install it with `pip install pynndescent`. "))
+        
+        if issparse(X):
+            warn("PyNNDescent does not support sparse matrices. Converting to array...")
+            X = X.toarray()
         if metric == 'lp':
             metric = 'minkowski'
             metric_kwds={'p':p}
@@ -188,13 +197,6 @@ def kNN(X, Y=None,
         # distances must be monotonically decreasing, needs to be inverted with angular metrics
         # otherwise, we'll have a similarity metric, not a distance metric
         knn.data = 1 - knn.data 
-    # if symmetrize:
-    #     if Y is None:
-    #         knn = ( knn + knn.T ) / 2
-    #         knn[(np.arange(knn.shape[0]), np.arange(knn.shape[0]))] = 0
-    #         knn.data = np.where(np.isnan(knn.data), 0, knn.data)
-    #     else:
-    #         knn = knn.dot(knn.T)
     if return_instance:
         return nbrs, knn
     else:
@@ -747,11 +749,12 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         query_qty = self.N
         if self.metric == 'euclidean':
             distances = np.sqrt(distances)
-        indptr = np.arange(0, self.N * self.n_neighbors + 1,
-                           self.n_neighbors)
-        kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
-                                       indptr), shape=(self.N,
-                                                       self.N))
+        if self.return_graph:
+            indptr = np.arange(0, self.N * self.n_neighbors + 1,
+                            self.n_neighbors)
+            kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
+                                        indptr), shape=(self.N,
+                                                        self.N))
         if return_grad:
             x, y, dists = find(kneighbors_graph)
 

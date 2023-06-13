@@ -88,7 +88,8 @@ def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral',
     """
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    plt.gca().set_aspect('equal', 'datalim')
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_box_aspect(1) 
     ax.scatter(
         res[:, 0],
         res[:, 1],
@@ -126,8 +127,10 @@ def hyperboloid(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectr
                alpha=opacity
                )
     ax.view_init(35, 80)
-    plt.gca().set_aspect('auto', 'datalim')
+    ax.set_aspect("equal", adjustable="datalim")
     return plt.show()
+
+
 
 def two_to_3d_hyperboloid(emb):
     x = emb[:, 0]
@@ -152,7 +155,8 @@ def poincare(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'
                marker=marker,
                alpha=opacity)
     ax.axis('off')
-    plt.gca().set_aspect('equal', 'datalim')
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_box_aspect(1) 
     return plt.show()
 
 def sphere(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
@@ -368,8 +372,8 @@ def eigsorted(cov):
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
-    if ax is None:
-        ax = plt.gca()
+    #if ax is None:
+    ax = plt.gca()
     vals, vecs = eigsorted(cov)
     theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
     # Width and height are "full" widths, not radius
@@ -379,7 +383,8 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     return ellip
 
 
-def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha=0.1, 
+
+def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
@@ -428,6 +433,7 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
 
 
     """
+
     if H_emb is None:
         from topo.eval import RiemannMetric
         rmetric = RiemannMetric(emb, laplacian)
@@ -436,8 +442,14 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
     sample_points = rng.choice(range(N), n_plot, replace=False)
-    f, ax = plt.subplots(figsize=figsize)
-    ax.set_aspect('equal')  # if an ellipse is a circle no distortion occured.
+    if ax == None:
+        f, ax = plt.subplots(figsize=figsize)
+    # ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(title, fontsize=title_fontsize)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_box_aspect(1)   # if an ellipse is a circle no distortion occured in particular directions
     if labels is not None:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
@@ -452,7 +464,7 @@ def plot_riemann_metric(emb, laplacian=None, H_emb=None, n_plot=50, std=1, alpha
         else:
             plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none',
                              alpha=alpha)
-    plt.show()
+    return ax
 
 
 def draw_edges(ax, data, kernel, color='black', **kwargs):
@@ -472,7 +484,6 @@ def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15
     k_color = list()
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
-
     fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
     fig.suptitle(title, fontsize=round(fontsize * 1.5))
     ax1.set_xticklabels(keys, fontsize=fontsize, rotation=90)
@@ -484,6 +495,7 @@ def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15
         return plt.show()
     else:
         return fig
+
 
 def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
     for key, value in evaluation_dict.items():
@@ -506,16 +518,27 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     return plt.show()
 
 
-def plot_dimensionality_histograms_single(id_list, bins=50, histtype='step', stacked=True, density=True, log=False, title='I.D. estimates'):
+def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title = 'FSA', histtype='step', stacked=True, density=True, log=False, title_fontsize=22, legend_fontsize=15):
     fig, ax = plt.subplots(1,1)
-    n, bins, patches  = ax.hist(id_list, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log)
-    sigma = np.std(id_list)
-    mu = np.mean(id_list)
-    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-        np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-    ax.set_title(title)
+    fig.set_figwidth(6)
+    fig.set_figheight(8)
+    for key in local_id_dict.keys():
+        i=0
+        x = local_id_dict[key]
+        #
+        # Make a multiple-histogram of data-sets with different length.
+        label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(global_id_dict[key])) + ' )'
+        n, bins, patches  = ax.hist(x, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log, label=label)
+        sigma = np.std(x)
+        mu = np.mean(x)
+        y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+            np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+        i= i+1
+    ax.set_title(title, fontsize=title_fontsize, pad=10)
+    ax.legend(prop={'size': 12}, fontsize=legend_fontsize)
+    ax.set_xlabel('Estimated intrinsic dimension', fontsize=legend_fontsize)
+    ax.set_ylabel('Frequency', fontsize=legend_fontsize)
     ax.legend(prop={'size': 10})
-    fig.tight_layout()
     plt.show()
 
 def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
@@ -536,3 +559,123 @@ def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', s
     ax.legend(prop={'size': 10})
     fig.tight_layout()
     plt.show()
+
+
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw=None, cbarlabel="", cbar_fontsize=12, shrink=0.6, cb_pad=0.3, **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (M, N).
+    row_labels
+        A list or array of length M with the labels for the rows.
+    col_labels
+        A list or array of length N with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if ax is None:
+        ax = plt.gca()
+
+    if cbar_kw is None:
+        cbar_kw = {}
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    cbar = ax.figure.colorbar(im, ax=ax, shrink=shrink, pad=cb_pad, **cbar_kw)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom", fontsize=cbar_fontsize)
+
+    # Show all ticks and label them with the respective list entries.
+    ax.set_xticks(np.arange(data.shape[1]), labels=col_labels)
+    ax.set_yticks(np.arange(data.shape[0]), labels=row_labels)
+
+    # Let the horizontal axes labeling appear on top.
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
+             rotation_mode="anchor")
+
+    # Turn spines off and create white grid.
+    ax.spines[:].set_visible(False)
+
+    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    return im, cbar
+
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=("black", "white"),
+                     threshold=None, an_fontsize=8, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A pair of colors.  The first is used for values below a threshold,
+        the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        from matplotlib import ticker
+        valfmt = ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), fontsize=an_fontsize, **kw)
+            texts.append(text)
+
+    return texts
