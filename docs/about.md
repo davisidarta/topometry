@@ -52,7 +52,8 @@ In most cases, one of the topological models will be the best performer, but tha
 
 ## When not to use TopOMetry
 
-One should consider that TopOMetry does not currently support neither including new data without recomputing decompositions, nor inverse transforms. If that is critical to your production workflow, then TopOMetry is problably not be the best option, and you might prefer to use UMAP or autoencoers. However, even in that case, you should consider TopOMetry in some of your data to evaluate whether your current workflow is generating reliable embeddings.
+First and foremost, when you do not have enough samples to safely assume that the manifold hypothesis holds true. 
+In addition, one should consider that TopOMetry does not currently support neither including new data without recomputing decompositions, nor inverse transforms. If that is critical to your production workflow, then TopOMetry is problably not be the best option, and you might prefer to use UMAP or topological autoencoers. However, even in that case, you should consider TopOMetry in some of your data to evaluate whether your current workflow is generating reliable embeddings, or to estimate its intrinsic dimensionalities in order to properly build an adequate architecture.
 
 ------------
 ## TopOMetry classes

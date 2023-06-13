@@ -11,7 +11,7 @@ from warnings import warn
 import numpy as np
 from sklearn.utils import check_random_state
 from scipy.linalg import eigh
-from topo.spectral import graph_laplacian, diffusion_operator, LE  # , FischerS
+from topo.spectral import graph_laplacian, diffusion_operator, LE 
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy import sparse
 from topo.tpgraph.kernels import Kernel
@@ -165,17 +165,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             It can be faster on very large, sparse problems, but requires
             setting a random seed for better reproducibility.
 
+    laplacian_type : string (optional, default 'normalized')
+        The type of Laplacian to compute. Possible values are: 'normalized', 'unnormalized', 'random_walk' and 'geometric'.
+
+    anisotropy : float (optional, default 0).
+        The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.     
+
     eigen_tol : float (optional, default 0.0).
         Error tolerance for the eigenvalue solver. If 0, machine precision is used.
 
-    weight : bool (optional, default True).
-        Whether to weight the eigenvectors by the square root of the eigenvalues, if 'method' is 'top', 'bottom' or 'LE' ('DM' is always weighted).
-
-    anisotropy : float (optional, default 1.0).
-        Anisotropy parameter for the diffusion operator, if method is 'DM'. 'Alpha' in the diffusion maps literature.
-
-    normalize : bool (optional, default False).
-        Whether to normalize the eigenvectors, if 'method' is 'top', 'bottom' or 'LE' ('DM' is always normalized).
 
     t : int (optional, default 1).
         Time parameter for the diffusion operator, if 'method' is 'DM'. The diffusion operator will be powered by t. Ignored for other methods.
@@ -196,9 +194,8 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                  eigensolver='arpack',
                  eigen_tol=1e-4,
                  drop_first=True,
-                 normalize=True,
                  weight=True,
-                 laplacian_type='normalized',
+                 laplacian_type='random_walk',
                  anisotropy=1,
                  t=1,
                  random_state=None,
@@ -210,7 +207,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.eigensolver = eigensolver
         self.eigen_tol = eigen_tol
         self.drop_first = drop_first
-        self.normalize = normalize
         self.laplacian_type = laplacian_type
         self.weight = weight
         self.t = t
@@ -249,8 +245,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 msg += " using top eigenpairs"
             elif self.method == 'bottom':
                 msg += " using bottom eigenpairs"
-            if self.normalize:
-                msg += " with normalization"
             if self.weight:
                 msg += ", weighted by the square root of the eigenvalues"
             msg += '.'
@@ -342,31 +336,22 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 self.eigengap = max_eigs
             else:
                 self.eigengap = eg
-        if self.method == 'DM':
+
+        if self.method in ['DM', 'msDM']:
             if symmetric:
                 evecs = self.D_inv_sqrt_.dot(evecs)
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            self.embedding = evecs * evals
-        elif self.method == 'msDM':
-            if symmetric:
-                evecs = self.D_inv_sqrt_.dot(evecs)
-            if np.shape(evecs)[1] <= 5:
-                for i in range(evecs.shape[1]):
-                    evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-                self.embedding = evecs * (evals / (1 - evals))
-            else:
-                for i in range(evecs.shape[1]):
-                    evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-                use_eigs = int(np.sum(evals > 0, axis=0))
-                eigs_idx = list(range(1, int(use_eigs)))
-                eig_vals = np.ravel(evals[eigs_idx])
-                self.embedding = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
-        elif self.method == 'LE':
-            for i in range(evecs.shape[1]):
-                evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            evecs = evecs * (1 / np.sqrt(evals + 1e-10))
-            self.embedding = evecs
+            if self.method == 'DM':
+                self.embedding = evecs * evals
+            elif self.method == 'msDM':
+                if np.shape(evecs)[1] <= 5: # use all evecs
+                    self.embedding = evecs * (evals / (1 - evals))
+                else:
+                    use_eigs = int(np.sum(evals > 0, axis=0))
+                    eigs_idx = list(range(1, int(use_eigs)))
+                    eig_vals = np.ravel(evals[eigs_idx])
+                    self.embedding = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
         else:
             self.embedding = evecs
         self.eigenvectors = evecs
@@ -407,16 +392,10 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
         if self.eigenvectors is None:
             return ValueError('The estimator has not been fitted yet.')
-        if self.method == 'DM' or self.method == 'msDM':
-            if return_evals:
+        if return_evals:
                 return self.embedding, self.eigenvalues
-            else:
-                return self.embedding
         else:
-            if return_evals:
-                return self.embedding, self.eigenvalues
-            else:
-                return self.embedding
+            return self.embedding
 
 
     def transform(self, X=None):
@@ -504,12 +483,12 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 return_evals
             )
         else:
-            if self.eigenvectors is None:
+            if self.embedding is None:
                 self.fit(X)
             if return_evals:
-                return self.eigenvectors, self.eigenvalues
+                return self.embedding, self.eigenvalues
             else:
-                return self.eigenvectors
+                return self.embedding
 
     def plot_eigenspectrum(self):
         """

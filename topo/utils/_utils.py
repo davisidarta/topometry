@@ -23,11 +23,11 @@ def get_landmark_indices(data, n_landmarks=1000, method='random', random_state=N
         landmarks_ = np.arange(np.shape(data)[0])
         return random_state.choice(landmarks_, size=n_landmarks, replace=False)
     elif method == 'kmeans':
-        raise ValueError('Not currently implemented')
-        # from sklearn.cluster import MiniBatchKMeans
-        # kmeans = MiniBatchKMeans(n_clusters=n_landmarks,
-        #                          random_state=random_state, **kwargs).fit(data)
-        # return kmeans.cluster_centers_
+        #raise ValueError('Not currently implemented')
+        from sklearn.cluster import MiniBatchKMeans
+        kmeans = MiniBatchKMeans(n_clusters=n_landmarks,
+                                 random_state=random_state, **kwargs).fit(data)
+        return kmeans.cluster_centers_
     else:
         raise ValueError('Unknown landmark selection method')
 
@@ -121,3 +121,29 @@ def print_eval_results(evaluation_dict, n_top=3):
                   print('   ' + str(i) + ' - ' + key + ': ' + str(res[key]))
                   i+=1
 
+
+def eigsorted(cov):
+    vals, vecs = np.linalg.eigh(cov)
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
+
+def get_eccentricity(emb, laplacian, H_emb=None):
+    if H_emb is None:
+        from topo.eval import RiemannMetric
+        rmetric = RiemannMetric(emb, laplacian)
+        H_emb = rmetric.get_dual_rmetric()
+    N = np.shape(laplacian)[0]
+    ecc_list = []
+    for i in range(N):
+        cov = H_emb[i, :, :]
+        vals, vecs = eigsorted(cov)
+        theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+        # Width and height are "full" widths, not radius
+        width, height = np.sqrt(np.absolute(vals))
+        if width > height:
+            R = width / height
+        else:
+            R = height / width
+        ecc = np.sqrt(np.abs(1 - R))
+        ecc_list.append(ecc)
+    return ecc_list

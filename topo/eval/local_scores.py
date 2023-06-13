@@ -2,11 +2,13 @@ import numpy as np
 from sklearn.utils import check_random_state
 from scipy.spatial.distance import squareform
 from scipy.stats import spearmanr, kendalltau
-from scipy.sparse.csgraph import shortest_path, NegativeCycleError
+from scipy.sparse import csr_matrix, csgraph
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics import pairwise_distances
 
-def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, indices=None, n_jobs=1, random_state=None):
+def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, random_state=None):
     """
     Compute the geodesic distance matrix from an adjacency matrix.
     Parameters
@@ -40,7 +42,7 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
 
     """
     if n_jobs == 1:
-        G = shortest_path(adjacency, method=method,
+        G = csgraph.shortest_path(adjacency, method=method,
                           unweighted=unweighted, directed=directed, indices=None)
         if indices is not None:
             G = G.T[indices].T
@@ -57,27 +59,26 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
         if not isinstance(n_jobs, int):
             n_jobs = 1
         if method == 'FW':
-            raise ValueError(
-                'The Floyd-Warshall algorithm cannot be used with parallel computations.')
+            raise ValueError('The Floyd-Warshall algorithm cannot be used with parallel computations.')
         if indices is None:
             indices = np.arange(adjacency.shape[0])
         elif np.issubdtype(type(indices), np.integer):
             indices = np.array([indices])
         n = len(indices)
-        local_function = partial(shortest_path,
+        local_function = partial(csgraph.shortest_path,
                                 adjacency, method, directed, False, unweighted, False)
         if n_jobs == 1 or n == 1:
             try:
-                res = shortest_path(adjacency, method, directed, False,
+                G = csgraph.shortest_path(adjacency, method, directed, False,
                                                 unweighted, False, indices)
-            except NegativeCycleError:
+            except csgraph.NegativeCycleError:
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present.")
         else:
             try:
                 with mp.Pool(n_jobs) as pool:
                     G = np.array(pool.map(local_function, indices))
-            except NegativeCycleError:
+            except csgraph.NegativeCycleError:
                 pool.terminate()
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present.")
@@ -120,35 +121,156 @@ def knn_kendall_tau(data_graph, embedding_graph, path_method='D', subsample_idx=
     return res
 
 
-def geodesic_correlation(data, emb, n_neighbors=5, data_metric='cosine', emb_metric='euclidean', n_jobs=-1, landmarks=None, landmark_method='random', random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', **kwargs):
-    random_state = check_random_state(random_state)
+def geodesic_correlation(data, emb, landmarks=None,
+                        landmark_method='random',
+                        metric='euclidean',
+                        n_neighbors=3, n_jobs=-1,
+                        cor_method='spearman', random_state=None, return_graphs=False , verbose=False, **kwargs):
+    if random_state is None:
+            random_state = np.random.RandomState()
+    elif isinstance(random_state, np.random.RandomState):
+        pass
+    elif isinstance(random_state, int):
+            random_state = np.random.RandomState(random_state)
+    else:
+        print('RandomState error! No random state was defined!')
+    if isinstance(data, csr_matrix):
+        if data.shape[0] == data.shape[1]:
+            DATA_IS_GRAPH = True
+        else:
+            DATA_IS_GRAPH = False
+    else:
+        if np.shape(data)[0] == np.shape(data)[1]:
+            DATA_IS_GRAPH = True
+        else:
+            DATA_IS_GRAPH = False
+    if isinstance(emb, csr_matrix):
+        if emb.shape[0] == emb.shape[1]:
+            EMB_IS_GRAPH = True
+        else:
+            EMB_IS_GRAPH = False
+    else:
+        if np.shape(emb)[0] == np.shape(emb)[1]:
+            EMB_IS_GRAPH = True
+        else:
+            EMB_IS_GRAPH = False
+    if not DATA_IS_GRAPH:
+        data_graph = kNN(data, n_neighbors=n_neighbors,
+                        metric=metric,
+                        n_jobs=n_jobs,
+                        return_instance=False,
+                        verbose=False, **kwargs)
+    else:
+        data_graph = data.copy()
+    if not EMB_IS_GRAPH:
+        emb_graph = kNN(emb, n_neighbors=n_neighbors,
+                        metric=metric,
+                        n_jobs=n_jobs,
+                        return_instance=False,
+                        verbose=False, **kwargs)
+    else:
+        emb_graph = emb.copy()
+    # Define landmarks if applicable
     if landmarks is not None:
         if isinstance(landmarks, int):
-            landmarks_ = get_landmark_indices(
-                emb, n_landmarks=landmarks, method=landmark_method, random_state=random_state)
+            landmark_indices = get_landmark_indices(
+                data_graph, n_landmarks=landmarks, method=landmark_method, random_state=random_state)
+            if landmark_indices.shape[0] == data.shape[0]:
+                landmark_indices = None
         elif isinstance(landmarks, np.ndarray):
-            landmarks_ = landmarks
+            landmark_indices = landmarks
         else:
             raise ValueError(
                 '\'landmarks\' must be either an integer or a numpy array.')
+    if landmarks is not None:
+        data_graph = data_graph[landmark_indices, :][:, landmark_indices]
+        emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+    base_geodesics = squareform(geodesic_distance(
+        data_graph, directed=False, n_jobs=n_jobs))
+    embedding_geodesics = squareform(geodesic_distance(
+        emb_graph, directed=False, n_jobs=n_jobs))
+    if cor_method == 'spearman':
+        if verbose:
+            print('Computing Spearman R...')
+        results = spearmanr(
+            base_geodesics, embedding_geodesics).correlation
     else:
-        landmarks_ = None
-    if data_is_graph:
-        data_knn = data
-    else:
-        data_knn = kNN(data, n_neighbors=n_neighbors,
-                       metric=data_metric, n_jobs=n_jobs, **kwargs)
-    if emb_is_graph:
-        emb_knn = emb
-    else:
-        emb_knn = kNN(emb, n_neighbors=n_neighbors,
-                      metric=emb_metric, n_jobs=n_jobs, **kwargs)
-    if cor_method == 'kendall':
-        local_scores = knn_kendall_tau(
-            data_knn, emb_knn, subsample_idx=landmarks_, unweighted=False, n_jobs=n_jobs)
-    elif cor_method == 'spearman':
-        local_scores = knn_spearman_r(
-            data_knn, emb_knn, subsample_idx=landmarks_, unweighted=False, n_jobs=n_jobs)
-    return local_scores
+        if verbose:
+            print('Computing Kendall Tau for eigenbasis...')
+        results = kendalltau(
+            base_geodesics, embedding_geodesics).correlation
+    if return_graphs:
+        return results, data_graph, emb_graph
+    return results
+
+def trustworthiness(X, X_embedded, n_neighbors=3, metric='euclidean', X_is_distance=False, n_jobs=-1, backend='hnswlib', **kwargs):
+    """
+    Expresses to what extent the local structure is retained.
+    Adapted from scikit-learn for increased computational efficiency.
+
+
+    Parameters
+    ----------
+    X : ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+        If the metric is 'precomputed' X must be a square distance
+        matrix. Otherwise it contains a sample per row.
+
+    X_embedded : ndarray of shape (n_samples, n_components)
+        Embedding of the training data in low-dimensional space.
+
+    n_neighbors : int, default=5
+        Number of neighbors k that will be considered.
+
+    X_is_distance : bool, default=False
+        Whether X is a distance matrix. If metric is 'precomputed', X may be a
+        distance matrix, in which case X_is_distance must be True.
+
+    metric : str or callable, default='euclidean'
+        Which metric to use for computing pairwise distances between samples
+        from the original input space. 
+
+
+        
+    Returns
+    -------
+    trustworthiness : float
+        Trustworthiness of the low-dimensional embedding.
+    """
+
+    dist_X = pairwise_distances(X, metric=metric, n_jobs=n_jobs)
+    if X_is_distance:
+        dist_X = dist_X.copy()
+    # we set the diagonal to np.inf to exclude the points themselves from
+    # their own neighborhood
+    np.fill_diagonal(dist_X, np.inf)
+    ind_X = np.argsort(dist_X, axis=1)
+    # `ind_X[i]` is the index of sorted distances between i and other samples
+    
+    if backend == 'sklearn':
+        ind_X_embedded = NearestNeighbors(metric=metric, n_neighbors=n_neighbors, n_jobs=n_jobs).fit(
+                X_embedded).kneighbors(return_distance=False)
+
+    if backend == 'hnswlib':
+        from topo.base.ann import HNSWlibTransformer
+        nbrs_transformer = HNSWlibTransformer(metric=metric,
+                                               n_neighbors=n_neighbors,
+                                                 n_jobs=n_jobs, **kwargs).fit(X_embedded)
+        ind_X_embedded, _ = nbrs_transformer.p.knn_query(X_embedded, k=n_neighbors+1)
+        ind_X_embedded = ind_X_embedded[:, 1:]
+
+    # We build an inverted index of neighbors in the input space: For sample i,
+    # we define `inverted_index[i]` as the inverted index of sorted distances:
+    # inverted_index[i][ind_X[i]] = np.arange(1, n_sample + 1)
+    n_samples = X.shape[0]
+    inverted_index = np.zeros((n_samples, n_samples), dtype=int)
+    ordered_indices = np.arange(n_samples + 1)
+    inverted_index[ordered_indices[:-1, np.newaxis],
+                   ind_X] = ordered_indices[1:]
+    ranks = inverted_index[ordered_indices[:-1, np.newaxis],
+                           ind_X_embedded] - n_neighbors
+    t = np.sum(ranks[ranks > 0])
+    t = 1.0 - t * (2.0 / (n_samples * n_neighbors *
+                          (2.0 * n_samples - 3.0 * n_neighbors - 1.0)))
+    return t
 
 

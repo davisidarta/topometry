@@ -42,7 +42,7 @@ from topo.layouts.graph_utils import simplicial_set_embedding, find_ab_params
 def fuzzy_embedding(graph,
                     n_components=2,
                     initial_alpha=1,
-                    min_dist=0.1,
+                    min_dist=0.3,
                     spread=1,
                     n_epochs=600,
                     metric='cosine',
