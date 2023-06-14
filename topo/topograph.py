@@ -1052,7 +1052,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
 
 
-    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False, data_for_expansion=None):
+    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False, base=True, data_for_expansion=None):
         import gc
         gc.collect()
         kernel_key = kernel_version

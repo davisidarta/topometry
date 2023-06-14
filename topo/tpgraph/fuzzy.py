@@ -51,8 +51,8 @@ from topo.utils._utils import get_indices_distances_from_sparse_matrix
 SMOOTH_K_TOLERANCE = 1e-6
 MIN_K_DIST_SCALE = 1e-4
 NPY_INFINITY = np.inf
-INT32_MIN = np.iinfo(np.int32).min + 1
-INT32_MAX = np.iinfo(np.int32).max - 1
+INT32_MIN = np.iinfo(int).min + 1
+INT32_MAX = np.iinfo(int).max - 1
 
 def fuzzy_simplicial_set(
         X,
@@ -242,8 +242,8 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     n_samples = knn_indices.shape[0]
     n_neighbors = knn_indices.shape[1]
 
-    rows = np.zeros(knn_indices.size, dtype=np.int32)
-    cols = np.zeros(knn_indices.size, dtype=np.int32)
+    rows = np.zeros(knn_indices.size, dtype=int)
+    cols = np.zeros(knn_indices.size, dtype=int)
     vals = np.zeros(knn_indices.size, dtype=np.float32)
 
     for i in range(n_samples):
