@@ -12,5 +12,6 @@ myst-parser
 sphinx-rtd-theme
 sphinx-autoapi
 mock
+kneed
 topometry
 
