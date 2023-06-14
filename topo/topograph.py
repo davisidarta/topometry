@@ -13,26 +13,6 @@ from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
 
-try:
-    import hnswlib
-    _have_hnswlib = True
-except ImportError:
-    _have_hnswlib = False
-try:
-    import nmslib
-    _have_nmslib = True
-except ImportError:
-    _have_nmslib = False
-try:
-    import annoy
-    _have_annoy = True
-except ImportError:
-    _have_annoy = False
-try:
-    import faiss
-    _have_faiss = True
-except ImportError:
-    _have_faiss = False
 
 
 class TopOGraph(BaseEstimator, TransformerMixin):
@@ -276,7 +256,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  backend='hnswlib',
                  cache=True,
                  verbosity=1,
-                 random_state=None,
+                 random_state=42,
                  ):
         self.projection_method = projection_method
         self.diff_t = diff_t
@@ -325,6 +305,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.RiemannMetricDict = {}
         self.LocalScoresDict = {}
         self.temp_file = None
+        self._have_hnswlib = None
+        self._have_nmslib = None
+        self._have_annoy = None
+        self._have_faiss = None
         
     def __repr__(self):
         if self.base_metric == 'precomputed':
@@ -355,46 +339,67 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
+        try:
+            import hnswlib
+            self._have_hnswlib = True
+        except ImportError:
+            self._have_hnswlib = False
+        try:
+            import nmslib
+            self._have_nmslib = True
+        except ImportError:
+            self._have_nmslib = False
+        try:
+            import annoy
+            self._have_annoy = True
+        except ImportError:
+            self._have_annoy = False
+        try:
+            import faiss
+            self._have_faiss = True
+        except ImportError:
+            self._have_faiss = False
+
         if self.backend == 'hnswlib':
-            if not _have_hnswlib:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
-                elif _have_faiss:
-                    self.backend == 'faiss'
+            if not self._have_hnswlib:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
                 else:
-                    self.backend == 'sklearn'
+                    self.backend = 'sklearn'
         elif self.backend == 'nmslib':
-            if not _have_nmslib:
-                if _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
-                elif _have_faiss:
-                    self.backend == 'faiss'
+            if not self._have_nmslib:
+                if self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
                 else:
-                    self.backend == 'sklearn'
+                    self.backend = 'sklearn'
         elif self.backend == 'annoy':
-            if not _have_annoy:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_faiss:
-                    self.backend == 'faiss'
+            if not self._have_annoy:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
                 else:
-                    self.backend == 'sklearn'
+                    self.backend = 'sklearn'
         elif self.backend == 'faiss':
-            if not _have_faiss:
-                if _have_nmslib:
-                    self.backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.backend == 'hnswlib'
-                elif _have_annoy:
-                    self.backend == 'annoy'
+            if not self._have_faiss:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
                 else:
-                    self.backend == 'sklearn'
+                    self.backend = 'sklearn'
         else:
             print(
                 "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
@@ -668,7 +673,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def fit_transform(self, X=None):
         self.fit(X)
         gc.collect()
-        return self.transform()
+        return self.transform(X=None)
 
     def eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
@@ -755,7 +760,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.verbosity >= 1:
             print('        Computing neighborhood graph...')
         start = time.time()
-        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(), n_neighbors=self.graph_knn,
+        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(X=None), n_neighbors=self.graph_knn,
                                         metric=self.graph_metric,
                                         n_jobs=self.n_jobs,
                                         backend=self.backend,
@@ -824,7 +829,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         gc.collect()
         return spt_layout
 
-    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', n_neighbors=None, num_iters=800, **kwargs):
+    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', n_neighbors=None, num_iters=500, **kwargs):
         """
         Projects the data into a lower dimensional space using the specified projection method. Calls topo.layout.Projector().
 
@@ -1070,7 +1075,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1090,7 +1096,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1110,7 +1117,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1130,7 +1138,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1150,7 +1159,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1170,7 +1180,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -1190,7 +1201,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 semi_aniso=self.semi_aniso,
                                 anisotropy=self.alpha,
                                 cache_input=False,
-                                verbose=self.bases_graph_verbose).fit(knn)
+                                verbose=self.bases_graph_verbose,
+                                random_state=self.random_state).fit(knn)
                 gc.collect()
                 results_dict[kernel_key] = kernel
             if low_memory:
