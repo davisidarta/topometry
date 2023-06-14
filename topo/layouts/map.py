@@ -62,7 +62,7 @@ def fuzzy_embedding(graph,
                     densmap_kwds={},
                     output_dens=False,
                     ):
-    """\
+    """
     Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
     between the 1-skeletons of the high and low dimensional fuzzy simplicial
