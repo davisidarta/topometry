@@ -76,6 +76,7 @@ meaning they can be easily pipelined.
     c_classes
     d_id_estimation
     e_evaluations
+    f_scvelo
     h_non_euclidean
 
 .. toctree::
