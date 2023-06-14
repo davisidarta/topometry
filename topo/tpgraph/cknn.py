@@ -109,9 +109,9 @@ def cknn_graph(X, n_neighbors=10,
         A[dd, dd] = False
     if weighted is None:
         if return_densities:
-            return A.astype(np.int), A.astype(np.float), adap_sd
+            return A.astype(int), A.astype(np.float), adap_sd
         else:
-            return A.astype(np.int), A.astype(np.float)
+            return A.astype(int), A.astype(np.float)
     else:
         if weighted:
             if return_densities:
@@ -120,8 +120,8 @@ def cknn_graph(X, n_neighbors=10,
                 return A.astype(np.float)
         else:
             if return_densities:
-                return A.astype(np.int), adap_sd
+                return A.astype(int), adap_sd
             else:
-                return A.astype(np.int)
+                return A.astype(int)
 
 
