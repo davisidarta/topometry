@@ -11,7 +11,7 @@
 
 TopOMetry is a high-level python library to explore data topology through manifold learning. It is compatible with scikit-learn, meaning most of its operators can be easily pipelined.
 
-Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an orthonormal eigenbasis. These eigenbases are special versions of [Diffusion Maps](), [Laplacian Eigenmaps]() or [Kernel Eigenmaps](). New topological operators are then learned from such eigenbasis and can be used for clustering and
+Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an orthonormal eigenbasis. These eigenbases are special versions of [Diffusion Maps](https://doi.org/10.1016/j.acha.2006.04.006), [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf) or [Kernel Eigenmaps](https://www.merl.com/publications/docs/TR2003-21.pdf). New topological operators are then learned from such eigenbasis and can be used for clustering and
 graph-layout optimization (visualization).
 
 For more information, please see our [pre-print](https://doi.org/10.1101/2022.03.14.484134).
@@ -25,30 +25,24 @@ generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_seq
 
 If you haven't already, [install](installation.md) *topometry* and start using it ([quick-start](quickstart.md)).
 
-* For a first introduction, check the tutorial with [MNIST handwritten digits](MNIST_TopOMetry_tutorial.md).
-* To learn how to systematically run and evaluate multiple models at once, check the [evaluation tutorial](Evaluations.md)
-* To dive deeper into TopOMetry classes, see the [classes tutorial](classes_tutorial.md)
-* To explore how TopOMetry estimate local and global intrinsic dimensionality, check the [dimensionality estimation tutorial](dimensionality_estimation.md).
-* To explore TopOMetry for document embedding, see the tutorial using the [Newsgroups dataset](c_20Newsgroups_Tutorial.md)
-* To use TopOMetry to embedd to non-euclidean spaces (similarly to [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html)), see the [tutorial on non-Euclidean spaces](Non_euclidean_tutorial.md).
-
-## Single-cell analysis
-
-* To get started with TopOMetry for single-cell data analysis, see the [tutorial using peripheral blood mononuclear cells](singlecell.md).
-* To replicate the results shown in the [manuscript]() for T cells, see the tutorial on [T cell diversity](T_CD4_diversity.md).
-* If you want to use TopOMetry for uncovering developmental trajectories,, see the [trajectory inference tutorial](trajectory_inference.md), in which we combine TopOMetry and [pyVIA](https://pyvia.readthedocs.io/en/latest/).
-* If you wish to combine TopOMetry with existing tools for batch corretion and data integration, see the [integration tutorial](integration.md).
+* For a first introduction, check the tutorial with [MNIST handwritten digits](a_mnist.md).
+* To explore TopOMetry for document embedding, see the tutorial using the [Newsgroups dataset](b_newsgroups.md)
+* To dive deeper into TopOMetry classes, see the [classes tutorial](c_classes.md).
+* To explore how TopOMetry estimate local and global intrinsic dimensionality, check the [dimensionality estimation tutorial](d_id_estimation.md).
+* To learn how to systematically run and evaluate multiple models, check the [evaluation tutorial](e_evaluations.md)
+* To see how TopOMetry can be integrated into different single-cell workflows, check the [RNA velocity tutorial](f_scvelo.md) using [scVelo](https://scvelo.readthedocs.io/)
+* To use TopOMetry to embedd to non-euclidean spaces (similarly to [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html)), see the [tutorial on non-Euclidean spaces](h_non_euclidean.md).
 
 
 -------------
 
 ## When it is best to use TopOMetry
 
-This is a frequently asked question with a simple answer: *when the data tells you so*. 
+This is a frequently asked question with a simple answer: *always, unless the data tells you so*. 
 
-One should never assume a priori that a method will be the best with every single dataset. Instead, TopOMetry allows users to systematically evaluate topological and external models (e.g., PCA, UMAP, t-SNE etc.) and discover which will be the best in their particular case. 
+One should never assume a priori that a method will be the best with every single dataset. TopOMetry allows users to explore high-dimensional data in several ways and to compute many different representations for it. It is not claimed to be superior to every other method _a priori_. Instead, it allows practitioners to see which method works best for their particular use case by themselves, based on quantitative and qualitative assessments. 
 
-In most cases, one of the topological models will be the best performer, but that should never be considered true without looking at the data and how these models perform on it. Conversely, the evaluation results may occasionally point to a different method as the best. The aim here is to provide users with plenty of options and allow them to pick which is the best for them.
+In all tested cases so far, TopOMetry models outperformed the classical PCA-based approach used in single-cell genomics, and in most of them it has also outperformed stand-alone UMAP. However, that should never be considered true without looking at the data and how these models perform on it. The aim here is to provide users with plenty of options and allow them to pick which is the best for them, empowering them with evidence-based decisions.
 
 ## When not to use TopOMetry
 
