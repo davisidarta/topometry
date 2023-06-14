@@ -434,12 +434,8 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, a
 
 
     """
-<<<<<<< HEAD
 
     if H_emb is None:
-=======
-    if H is None:
->>>>>>> master
         from topo.eval import RiemannMetric
         rmetric = RiemannMetric(emb, L)
         H = rmetric.get_dual_rmetric()
@@ -501,21 +497,13 @@ def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, 
     else:
         return fig
 
-<<<<<<< HEAD
 
 def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
-=======
-def plot_all_scores(evaluation_dict, log=True, figsize=(8,8), fontsize=20):
->>>>>>> master
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
 
-<<<<<<< HEAD
 def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), fontsize=10, title='DC', **kwargs):
-=======
-def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), title='DC', **kwargs):
->>>>>>> master
     plt.figure(figsize=figsize)
     plt.subplots_adjust(
         left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
@@ -574,7 +562,6 @@ def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', s
     plt.show()
 
 
-<<<<<<< HEAD
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw=None, cbarlabel="", cbar_fontsize=12, shrink=0.6, cb_pad=0.3, **kwargs):
     """
@@ -693,6 +680,3 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
-=======
-
->>>>>>> master
