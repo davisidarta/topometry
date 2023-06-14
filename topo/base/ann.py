@@ -1074,7 +1074,7 @@ class FAISSTransformer(TransformerMixin, BaseEstimator):
         if self._metric_info.get("negate", False):
             dist_arr = 1 - dist_arr
         del sims
-        nbr_arr = np.array(nbrs, dtype=int)
+        nbr_arr = np.array(nbrs, dtype=np.int32)
         del nbrs
         indptr = np.arange(0, n_samples_transform * n_neighbors + 1, n_neighbors)
         dist_arr = np.concatenate(
