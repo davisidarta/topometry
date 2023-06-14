@@ -26,19 +26,26 @@ Welcome to TopOMetry documentation!
 
 
 
-TopOMetry (Topologically Optimized geoMetry) is a comprehensive dimensional reduction framework
-that dissects the steps of dimensional reduction approaches to learn latent topological representations.
-It allows learning topological metrics, latent topological orthogonal basis, and topological graphs from data.
-Visualization can then be performed with different layout optimization algorithms.
+TopOMetry (Topologically Optimized geoMetry) is a comprehensive toolkit to explore high-dimensional
+data, with a focus on single-cell genomics. It allows users to:
 
-TopOMetry focus is on approximating the Laplace-Beltrami Operator (LBO) at each step of dimensional reduction.
-The LBO is a natural way to describe data geometry and its high-dimensional topology.
+* construct k-nearest-neighbors graphs with several approximate-nearest-neighbors algorithms
+* compute similarity metrics and topological operators to describe the geometry of the data
+* estimate intrinsic dimensionalities 
+* obtain properly weighted eigenbases to represent the underlying data manifold
+* combine different kernel, eigendecomposition and graph-layout-optimization methods to obtain dozens of representations of single-cell data
+* evaluate the quality of the learned embeddings with quantitative metrics
+* assess distortions in the learned embeddings with with the Riemannian metric 
 
-TopOMetry can yield strikingly new biological insights on single-cell data, and I have developed CellTOMetry to work
-as an interface between topometry and the more general python computational environment for single-cell analysis.
-The orthogonal bases can be used in a way similar that PCA is used in most existing algorithms, and contributors
-are welcome to test how their method perform when using topological denoised information. Check the single-cell
-tutorials and TopOMetry's API for more information.
+TopOMetry was designed to be user-friendly, consistent with the scikit-learn API,
+and to be easily integrated with the more general python computational environment for single-cell analysis. Users can compute and evaluate
+dozens of representations with a single line of code.
+
+TopOMetry's based on Laplacian-type topological operators, with a focus on the Laplace-Beltrami Operator (LBO) and its eigenfunctions.
+The LBO is a natural way to describe data geometry and its high-dimensional topology, and is guaranteed to recover
+all of the relevant geometry if the manifold hypothesis holds true. These learned representations can be used for several downstream tasks in data analysis and single-cell bioinformatics,such as clustering, visualization with graph-layout optimization, RNA velocity and pseudotime estimation.
+This can yield strikingly new biological insights on single-cell data. Check the preprint for more information.
+
 
 TopOMetry classes are built in a modular fashion using scikit-learn `BaseEstimator`,
 meaning they can be easily pipelined.
