@@ -240,8 +240,12 @@ class Projector(BaseEstimator, TransformerMixin):
                 if self.landmarks_ is not None:
                     if self.projection_method != 'Isomap':
                         X = X[self.landmarkds_, :]
+<<<<<<< HEAD
                 K = kNN(X, metric=self.metric, n_neighbors=self.n_neighbors
                         , n_jobs=self.n_jobs, backend=self.nbrs_backend)
+=======
+                K = kNN(X, metric=self.metric, n_neighbors=self.n_neighbors, n_jobs=self.n_jobs, backend=self.nbrs_backend)
+>>>>>>> master
             else:
                 if self.landmarks_ is not None:
                     if self.projection_method != 'Isomap':

@@ -530,7 +530,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                                                           self.base_kernel_version,
                                                                                           self.BaseKernelDict,
                                                                                           suffix='',
-                                                                                          low_memory=self.low_memory)
+                                                                                          low_memory=self.low_memory,
+                                                                                          data_for_expansion=X,
+                                                                                          base=True)
             end = time.time()
             gc.collect()
             if self.verbosity >= 1:
@@ -673,7 +675,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def fit_transform(self, X=None):
         self.fit(X)
         gc.collect()
+<<<<<<< HEAD
         return self.transform(X=None)
+=======
+        return self.transform()
+>>>>>>> master
 
     def eigenspectrum(self, eigenbasis_key=None, **kwargs):
         """
@@ -759,8 +765,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             print('    Building topological graph from eigenbasis...')
         if self.verbosity >= 1:
             print('        Computing neighborhood graph...')
+        target = eigenbasis.transform(X=None)[:, 0:eigenbasis.eigengap]
         start = time.time()
-        self.eigenbasis_knn_graph = kNN(eigenbasis.transform(X=None), n_neighbors=self.graph_knn,
+        self.eigenbasis_knn_graph = kNN(target, n_neighbors=self.graph_knn,
                                         metric=self.graph_metric,
                                         n_jobs=self.n_jobs,
                                         backend=self.backend,
@@ -777,7 +784,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                                                                         self.graph_kernel_version,
                                                                                         self.GraphKernelDict,
                                                                                         suffix=' from ' + self.current_eigenbasis,
-                                                                                        low_memory=self.low_memory)
+                                                                                        low_memory=self.low_memory,
+                                                                                        data_for_expansion=eigenbasis.transform(X=None),
+                                                                                        base=False)
         
         end = time.time()
         gc.collect()
@@ -909,9 +918,30 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 if np.shape(self.SpecLayout)[1] != n_components:
                     self.SpecLayout = self.spectral_layout(
                             n_components=n_components)
+<<<<<<< HEAD
             else:
                 self.SpecLayout = self.spectral_layout(
                 n_components=n_components)  
+=======
+                    except Exception:
+                        print(
+                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
+                        self.SpecLayout = EigenDecomposition(
+                            n_components=n_components+1).fit_transform(self.graph_kernel)
+            else:
+                if self.n < 100000:
+                    try:
+                        self.SpecLayout = self.spectral_layout(
+                            n_components=n_components)
+                    except Exception:
+                        print(
+                            'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
+                        self.SpecLayout = EigenDecomposition(
+                            n_components=n_components+1).fit_transform(self.graph_kernel)
+                else:
+                    self.SpecLayout = EigenDecomposition(
+                        n_components=n_components+1).fit_transform(self.graph_kernel)
+>>>>>>> master
             init_Y = self.SpecLayout
 
         projection_key = projection_method + ' of ' + key
@@ -1007,6 +1037,114 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                         self.project(projection_method=projection)
                         gc.collect()
 
+<<<<<<< HEAD
+=======
+    def _get_dist_to_k_nearest_neighbor(self, K, n_neighbors=10):
+        dist_to_k = np.zeros(K.shape[0])
+        for i in np.arange(len(dist_to_k)):
+            dist_to_k[i] = np.sort(
+                K.data[K.indptr[i]: K.indptr[i + 1]])[n_neighbors - 1]
+        return dist_to_k
+
+    def _get_dist_to_median_nearest_neighbor(self, K, n_neighbors=10):
+        median_k = np.floor(n_neighbors/2).astype(int)
+        dist_to_median_k = np.zeros(K.shape[0])
+        for i in np.arange(len(dist_to_median_k)):
+            dist_to_median_k[i] = np.sort(
+                K.data[K.indptr[i]: K.indptr[i + 1]])[median_k - 1]
+        return dist_to_median_k
+
+    def estimate_dimensionalities(self, X, K=None, method='adaptive', n_neighbors=None, res_dict=None, force_recompute=True, **kwargs):
+        """
+        This function allows estimating local and global dimensionalities with different methods.
+        `scikit-dim` is used for the Fischer Separability Analysis and the TwoNN methods.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            The input data. 
+
+        K : array-like, shape (optional, n_samples, n_samples)
+            The input k-nearest-neighbors distances, untransformed, as outputed by a kNN algorithm.            
+        
+        method : str (optional, default 'adaptive')
+            The method to use for estimating local intrinsic dimensionality (local ID) of the data. Options are:
+         
+            * `'adaptive'` : The default `'adaptive'` method is an implementation of Farahmand-Szepesvári-Audibert (FSA) dimension estimator. 
+            We named it 'adaptive' to  avoid confusion with Fischer Separability Analysis (also FSA).
+            Interestingly, we found that there is an explicit connection between these adaptive estimates of local intrinsic dimensionality
+            (local ID) of the data and the manifold-adaptive similarity kernel introduced in TopOMetry. 
+
+            * `'FSA'` : The `'FSA'` method is the Fischer Separability Analysis estimator, adapted from the scikit-dim package for computational efficiency.
+            
+            * `'TwoNN'` : The `'TwoNN'` method is the Two Nearest Neighbors estimator, also adapted from the scikit-dim package for computational efficiency.
+        
+        n_neighbors : int (optional, default None)
+            Number of neighbors to use for the local ID estimation. If not provided, will use the `base_knn` value given to `TopOGraph` at initialization.
+
+        res_dict : dict (optional, default None)
+            A dictionary used to store the results. If not provided, will create a new one. 
+            This is useful if you want to run multiple estimations and store the results in the same dictionary.
+
+        scaled : bool (optional, default True)
+            Whether the data is already scaled. FSA requires it to be so, and will scale it if it is not.
+
+
+        Returns
+        -------
+        res_dict : dict
+            A dictionary with the results.
+            
+        """
+        if res_dict is None or not isinstance(res_dict, dict):
+            res_dict = {}
+        if (n_neighbors is None) or not isinstance(n_neighbors, int) or (n_neighbors != self.base_knn):
+            n_neighbors = self.base_knn
+            median_k = np.floor(n_neighbors/2).astype(int)
+        if force_recompute:
+            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
+                                                            metric=self.base_metric,
+                                                            n_jobs=self.n_jobs,
+                                                            backend=self.backend,
+                                                            return_instance=True,
+                                                            verbose=self.bases_graph_verbose, **kwargs)
+            K = self.base_knn_graph
+        else:
+            if K is None:
+                if X is None:
+                    if self.base_knn_graph is None:
+                        raise ValueError('Either X or K must be provided')
+                    else:
+                        K = self.base_knn_graph
+                else:
+                    self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=n_neighbors,
+                                                                    metric=self.base_metric,
+                                                                    n_jobs=self.n_jobs,
+                                                                    backend=self.backend,
+                                                                    return_instance=True,
+                                                                    verbose=self.bases_graph_verbose, **kwargs)
+                    K = self.base_knn_graph
+    
+        res_dict['Distance to k-neighbor'] = self._get_dist_to_k_nearest_neighbor(K, n_neighbors)
+        res_dict['Distance to median neighbor']= self._get_dist_to_median_nearest_neighbor(K, n_neighbors)
+        res_dict['Locality Ratio'] = res_dict['Distance to k-neighbor']/res_dict['Distance to median neighbor']
+        if method == 'adaptive':
+            import statistics    
+            res_dict['Adaptive - estimated local ID'] = np.abs( np.log(2) / np.log(res_dict['Locality Ratio']))
+            res_dict['Adaptive - estimated global ID'] = int(statistics.median((res_dict['Adaptive - estimated local ID'])))
+        elif method == 'FSA':
+            # if issparse(X):
+            #     X = X.toarray()
+            return print('method not implemented')
+        return res_dict
+    
+    def estimate_k_dimensionalities(self, X, k_vals=[5, 10, 30, 50], method='adaptive', res_dict=None, **kwargs):
+        all_res_dict = {}
+        for k in k_vals:
+            all_res_dict['k = ' + str(k)] = self.estimate_dimensionalities(X, K=None, method=method, n_neighbors=k, res_dict=res_dict, **kwargs)
+        return all_res_dict
+
+>>>>>>> master
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
         try:
             import pickle
@@ -1025,6 +1163,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         gc.collect()
         return print('TopOGraph saved at ' + filename)
 
+<<<<<<< HEAD
     # def memory_saver(self, save_temp=True):
     #     """
     #     Removes all the intermediate results from the `TopOGraph` object.
@@ -1048,6 +1187,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
 
     def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False):
+=======
+    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False, data_for_expansion=None, base=False):
+>>>>>>> master
         import gc
         gc.collect()
         kernel_key = kernel_version
@@ -1144,7 +1286,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_nbr_expansion':
-                kernel = Kernel(metric="precomputed",
+                if data_for_expansion is None:
+                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
+                if base:
+                    use_metric = self.base_metric
+                else:
+                    use_metric = self.graph_metric
+                kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
                                 cknn=False,
@@ -1165,7 +1313,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_alpha_decaying_nbr_expansion':
-                kernel = Kernel(metric="precomputed",
+                if data_for_expansion is None:
+                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
+                if base:
+                    use_metric = self.base_metric
+                else:
+                    use_metric = self.graph_metric
+                kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
                                 cknn=False,

@@ -206,7 +206,11 @@ def compute_kernel(X, metric='cosine',
         W = csr_matrix((np.abs(np.exp(-dists)), (x, y)), shape=[N, N])
     if symmetrize:
         W = (W + W.T) / 2
+<<<<<<< HEAD
     #W[(np.arange(N), np.arange(N))] = 0
+=======
+    W[(np.arange(N), np.arange(N))] = 0
+>>>>>>> master
 
     # handle nan
     W.data = np.where(np.isnan(W.data), 1, W.data)

@@ -221,8 +221,13 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.powered_operator = None
         self.N = None
         self.D_inv_sqrt_ = None
+<<<<<<< HEAD
         self.return_evals = return_evals
         self.estimate_eigengap = estimate_eigengap
+=======
+        self.multiscaled_evecs = None
+        self.return_evals = False
+>>>>>>> master
         self.eigengap = None
 
     def __repr__(self):
@@ -353,10 +358,35 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                     eig_vals = np.ravel(evals[eigs_idx])
                     self.embedding = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
         else:
+<<<<<<< HEAD
             self.embedding = evecs
         self.eigenvectors = evecs
         self.eigenvalues = evals
 
+=======
+            for i in range(evecs.shape[1]):
+                evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
+            if self.multiscale:
+                use_eigs = int(np.sum(evals > 0, axis=0))
+                eigs_idx = list(range(1, int(use_eigs)))
+                eig_vals = np.ravel(evals[eigs_idx])
+                self.multiscaled_evecs = evecs[:,eigs_idx] * (eig_vals / (1 - eig_vals))
+            else:
+                if self.weight:
+                    # weight by eigenvalues
+                    evecs = evecs * np.sqrt(evals + 1e-10)
+        self.eigenvectors = evecs
+        self.eigenvalues = evals
+        max_eigs = int(np.sum(self.eigenvalues > 0, axis=0))
+        first_diff = np.diff(self.eigenvalues)
+        eigengap = np.argmax(first_diff) + 1
+        if max_eigs == len(evals):
+            # Could not find a discrete eigengap crossing 0
+            self.eigengap = eigengap
+        else:
+            # Found a discrete eigengap crossing 0
+            self.eigengap = max_eigs
+>>>>>>> master
         return self
 
     def rescale(self, use_eigs=50):
