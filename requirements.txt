@@ -4,8 +4,5 @@ scipy
 matplotlib
 pandas
 numba
-setuptools
+setuptools>=65.5.1
 torch
-pymde
-pacmap
-

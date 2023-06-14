@@ -2,19 +2,61 @@ import numpy as np
 from sklearn.utils import check_random_state
 from scipy.spatial.distance import squareform
 from scipy.stats import spearmanr, kendalltau
+<<<<<<< HEAD
 from scipy.sparse import csr_matrix, csgraph
+=======
+from scipy.sparse.csgraph import shortest_path, NegativeCycleError
+from scipy.sparse import lil_matrix
+>>>>>>> master
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
 
+<<<<<<< HEAD
 def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, random_state=None):
+=======
+def subset_geodesic_distances(knn_dists, geodesic_dists):
+>>>>>>> master
     """
-    Compute the geodesic distance matrix from an adjacency matrix.
+    Subsets the geodesic distance matrix to only include distances up to the k-th
+    nearest neighbor distance for each point.
+
+    Parameters:
+    -----------
+    knn_dists: scipy.sparse.csr_matrix
+        Precomputed k-nearest-neighbors distances matrix.
+    geodesic_dists: scipy.sparse.csr_matrix
+        Geodesic distances matrix.
+
+    Returns:
+    --------
+    subset_geodesics: scipy.sparse.csr_matrix
+        Subsetted geodesic distances matrix.
+    """
+    n_points = knn_dists.shape[0]
+    # Compute the maximum distance to consider for each point
+    max_dist = knn_dists.max(axis=1).toarray()
+    # Subset the geodesic distances matrix
+    subset_geodesics = lil_matrix(geodesic_dists.shape, dtype=np.float32)
+    for i in range(n_points):
+        mask = (geodesic_dists[i,:] <= max_dist[i,:]).flatten()
+        subset_geodesics[i,mask] = geodesic_dists[i,mask]
+    subset_geodesics = subset_geodesics.tocsr()
+    return subset_geodesics
+
+
+def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, subset_to_knn=True, random_state=None):
+    """
+    Compute the geodesic distance matrix from an adjacency (or an affinity) matrix.
+    The default behavior is to subset the geodesic distance matrix to only include distances up
+    to the k-th nearest neighbor distance for each point. This is to ensure we are only assessing
+    the performance of the embedding on the local structure of the data.
+
     Parameters
     ----------
-    adjacency : array-like, shape (n_vertices, n_vertices)
-        Adjacency matrix of a graph.
+    A : array-like, shape (n_vertices, n_vertices)
+        Adjacency or affinity matrix of a graph.
 
     method : string, optional, default: 'D'
         Method to compute the shortest path.
@@ -42,7 +84,11 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
 
     """
     if n_jobs == 1:
+<<<<<<< HEAD
         G = csgraph.shortest_path(adjacency, method=method,
+=======
+        G = shortest_path(A, method=method,
+>>>>>>> master
                           unweighted=unweighted, directed=directed, indices=None)
         if indices is not None:
             G = G.T[indices].T
@@ -61,15 +107,23 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
         if method == 'FW':
             raise ValueError('The Floyd-Warshall algorithm cannot be used with parallel computations.')
         if indices is None:
-            indices = np.arange(adjacency.shape[0])
+            indices = np.arange(A.shape[0])
         elif np.issubdtype(type(indices), np.integer):
             indices = np.array([indices])
         n = len(indices)
+<<<<<<< HEAD
         local_function = partial(csgraph.shortest_path,
                                 adjacency, method, directed, False, unweighted, False)
         if n_jobs == 1 or n == 1:
             try:
                 G = csgraph.shortest_path(adjacency, method, directed, False,
+=======
+        local_function = partial(shortest_path,
+                                A, method, directed, False, unweighted, False)
+        if n_jobs == 1 or n == 1:
+            try:
+                res = shortest_path(A, method, directed, False,
+>>>>>>> master
                                                 unweighted, False, indices)
             except csgraph.NegativeCycleError:
                 raise ValueError(
@@ -93,6 +147,7 @@ def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, i
     return G
 
 
+<<<<<<< HEAD
 def knn_spearman_r(data_graph, embedding_graph, path_method='D', subsample_idx=None, unweighted=False, n_jobs=1):
     # data_graph is a (N,N) similarity matrix from the reference high-dimensional data
     # embedding_graph is a (N,N) similarity matrix from the lower dimensional embedding
@@ -171,6 +226,10 @@ def geodesic_correlation(data, emb, landmarks=None,
     else:
         emb_graph = emb.copy()
     # Define landmarks if applicable
+=======
+def local_score(data, emb, n_neighbors=5, metric='euclidean', n_jobs=-1, landmarks=None, landmark_method='random', use_k_geodesics=False, random_state=None, data_is_graph=False, emb_is_graph=False, cor_method='spearman', path_method='D', indices=None, unweighted=False, **kwargs):
+    random_state = check_random_state(random_state)
+>>>>>>> master
     if landmarks is not None:
         if isinstance(landmarks, int):
             landmark_indices = get_landmark_indices(
@@ -195,6 +254,7 @@ def geodesic_correlation(data, emb, landmarks=None,
         results = spearmanr(
             base_geodesics, embedding_geodesics).correlation
     else:
+<<<<<<< HEAD
         if verbose:
             print('Computing Kendall Tau for eigenbasis...')
         results = kendalltau(
@@ -273,4 +333,42 @@ def trustworthiness(X, X_embedded, n_neighbors=3, metric='euclidean', X_is_dista
                           (2.0 * n_samples - 3.0 * n_neighbors - 1.0)))
     return t
 
+=======
+        landmarks_ = None
+    if data_is_graph:
+        data_knn = data
+    else:
+        data_knn = kNN(data, n_neighbors=n_neighbors,
+                       metric=metric, n_jobs=n_jobs, **kwargs)
+    if emb_is_graph:
+        emb_knn = emb
+    else:
+        emb_knn = kNN(emb, n_neighbors=n_neighbors,
+                      metric='euclidean', n_jobs=n_jobs, **kwargs)
+        
+    data_geodesics = geodesic_distance(
+        data_knn, method=path_method, unweighted=unweighted, indices=indices, n_jobs=n_jobs)
+    emb_geodesics = geodesic_distance(
+        emb_knn, method=path_method, unweighted=unweighted, indices=indices, n_jobs=n_jobs)
+    if use_k_geodesics:
+        data_k_geodesics = subset_geodesic_distances(data_knn, data_geodesics).toarray()
+        emb_k_geodesics = subset_geodesic_distances(emb_knn, emb_geodesics).toarray()
+        # Symmetrize
+        data_k_geodesics = (data_k_geodesics + data_k_geodesics.T) / 2
+        emb_k_geodesics = (emb_k_geodesics + emb_k_geodesics.T) / 2
+        if cor_method == 'kendall':
+            res, _ = kendalltau(squareform(data_k_geodesics), squareform(emb_k_geodesics))
+        elif cor_method == 'spearman':
+            res, _ = spearmanr(squareform(data_k_geodesics), squareform(emb_k_geodesics))
+        else:
+            raise ValueError('\'cor_method\' must be either \'kendall\' or \'spearman\'.')
+    else:
+        if cor_method == 'kendall':
+            res, _ = kendalltau(squareform(data_geodesics), squareform(emb_geodesics))
+        elif cor_method == 'spearman':
+            res, _ = spearmanr(squareform(data_geodesics), squareform(emb_geodesics))
+        else:
+            raise ValueError('\'cor_method\' must be either \'kendall\' or \'spearman\'.')
+    return res
+>>>>>>> master
 

@@ -99,6 +99,10 @@ def get_indices_distances_from_sparse_matrix(X, n_neighbors):
     return _knn_indices, _knn_dists
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> master
 def print_eval_results(evaluation_dict, n_top=3):
       for estimate in evaluation_dict.keys():
             if estimate == 'EigenbasisLocal':
@@ -122,6 +126,7 @@ def print_eval_results(evaluation_dict, n_top=3):
                   i+=1
 
 
+<<<<<<< HEAD
 def eigsorted(cov):
     vals, vecs = np.linalg.eigh(cov)
     order = vals.argsort()[::-1]
@@ -147,3 +152,6 @@ def get_eccentricity(emb, laplacian, H_emb=None):
         ecc = np.sqrt(np.abs(1 - R))
         ecc_list.append(ecc)
     return ecc_list
+=======
+
+>>>>>>> master

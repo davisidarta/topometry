@@ -47,10 +47,7 @@ class RiemannMetric(object):
     associated with an embedding Y. The Riemannian metric is currently denoted
     by G, its dual by H, and the Laplacian by L. G at each point is the
     matrix inverse of H.
-    For performance, the following choices have been made:
-    * the class makes no defensive copies of L, Y
-    * no defensive copies of the array attributes H, G, Hvv, ....
-    * G is computed on request only
+
     In the future, this class will be extended to compute H only once,
     for mdimY dimensions, but to store multiple G's, with different dimensions.
     In the near future plans is also a "lazy" implementation, which will

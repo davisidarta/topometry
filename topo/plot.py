@@ -382,24 +382,46 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
+<<<<<<< HEAD
 
 
 def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
+=======
+def get_ellipse_eccentricity(emb, L=None, G=None):
+    if G is None:
+        from topo.eval import RiemannMetric
+        rmetric = RiemannMetric(emb, L)
+        G = rmetric.get_rmetric()
+    N = np.shape(emb)[0]
+    result = []
+    for i in range(N):
+        cov = G[i, :, :] 
+        vals, vecs = eigsorted(cov)
+        # a is radius of major axis, b is radius minor axis
+        a, b = np.sqrt(np.absolute(vals))
+        result.append(np.sqrt(np.abs(1 - (b**2 / a**2))))
+    return result
+    
+
+def plot_riemann_metric(emb, L=None, H=None, n_plot=50, std=0.1, alpha=0.1, title=None, ax=None,
+                        labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
+>>>>>>> master
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
     Parameters
     ----------
     
-    emb: numpy.ndarray
+    emb: numpy.ndarray, shape = (n, n_dim)
         Embedding matrix.
     
-    laplacian: numpy.ndarray
+    L: numpy.ndarray
        Graph Laplacian matrix. Should be provided if H_emb is not provided.
     
-    H_emb: numpy.ndarray
-        Embedding matrix of the H. Should be provided if laplacian is not provided.
+    H : Dual Riemann metric, shape = (n, n_dim, n_dim)
+        The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
+        Computed with the class `topo.eval.rmetric.RiemannMetric`.
 
     n_plot: int (optional, default 50)
         Number of ellipses to plot.
@@ -418,7 +440,7 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, a
 
     figsize: tuple (optional, default (8,8))
         Figure size.
-    
+
     random_state: int (optional, default None)
         Random state for sampling points to plot ellipses of.
 
@@ -433,11 +455,15 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, a
 
 
     """
+<<<<<<< HEAD
 
     if H_emb is None:
+=======
+    if H is None:
+>>>>>>> master
         from topo.eval import RiemannMetric
-        rmetric = RiemannMetric(emb, laplacian)
-        H_emb = rmetric.get_dual_rmetric()
+        rmetric = RiemannMetric(emb, L)
+        H = rmetric.get_dual_rmetric()
 
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
@@ -457,7 +483,7 @@ def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, a
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size)
     for i in range(n_plot):
         ii = sample_points[i]
-        cov = H_emb[ii, :, :]
+        cov = H[ii, :, :]
         if labels is not None:
             plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none', color=colors[labels[ii]],
                              alpha=alpha)
@@ -477,7 +503,7 @@ def draw_edges(ax, data, kernel, color='black', **kwargs):
     
 
 
-def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15, title='Eigenbasis local scores'):
+def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, title='Scores'):
     keys = scores.keys()
     values = scores.values()
     cmap = get_cmap(len(keys), name='tab20')
@@ -496,13 +522,21 @@ def plot_scores(scores, return_plot=True, log=False, figsize=(20,8), fontsize=15
     else:
         return fig
 
+<<<<<<< HEAD
 
 def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
+=======
+def plot_all_scores(evaluation_dict, log=True, figsize=(8,8), fontsize=20):
+>>>>>>> master
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
 
+<<<<<<< HEAD
 def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), fontsize=10, title='DC', **kwargs):
+=======
+def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), title='DC', **kwargs):
+>>>>>>> master
     plt.figure(figsize=figsize)
     plt.subplots_adjust(
         left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
@@ -510,7 +544,11 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     plot_num = 1
     for i in range(0, n_eigenvectors):
         plt.subplot(1, n_eigenvectors, plot_num)
+<<<<<<< HEAD
         plt.title(title+ ' ' + str(plot_num), fontsize=fontsize)
+=======
+        plt.title(title+ ' ' + str(plot_num))
+>>>>>>> master
         plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
         plot_num += 1
         plt.xticks(())
@@ -518,6 +556,7 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     return plt.show()
 
 
+<<<<<<< HEAD
 def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title = 'FSA', histtype='step', stacked=True, density=True, log=False, title_fontsize=22, legend_fontsize=15):
     fig, ax = plt.subplots(1,1)
     fig.set_figwidth(6)
@@ -539,6 +578,18 @@ def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title
     ax.set_xlabel('Estimated intrinsic dimension', fontsize=legend_fontsize)
     ax.set_ylabel('Frequency', fontsize=legend_fontsize)
     ax.legend(prop={'size': 10})
+=======
+def plot_dimensionality_histograms_single(id_list, bins=50, histtype='step', stacked=True, density=True, log=False, title='I.D. estimates'):
+    fig, ax = plt.subplots(1,1)
+    n, bins, patches  = ax.hist(id_list, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log)
+    sigma = np.std(id_list)
+    mu = np.mean(id_list)
+    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
+        np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
+    ax.set_title(title)
+    ax.legend(prop={'size': 10})
+    fig.tight_layout()
+>>>>>>> master
     plt.show()
 
 def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
@@ -561,6 +612,7 @@ def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', s
     plt.show()
 
 
+<<<<<<< HEAD
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw=None, cbarlabel="", cbar_fontsize=12, shrink=0.6, cb_pad=0.3, **kwargs):
     """
@@ -679,3 +731,6 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
+=======
+
+>>>>>>> master
