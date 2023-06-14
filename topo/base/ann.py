@@ -19,7 +19,6 @@ def kNN(X, Y=None,
         n_neighbors=5,
         metric='euclidean',
         n_jobs=-1,
-<<<<<<< HEAD
         backend='hnswlib',
         low_memory=True,
         M=15,
@@ -27,8 +26,6 @@ def kNN(X, Y=None,
         efC=50,
         efS=50,
         n_trees=50,
-=======
->>>>>>> master
         return_instance=False,
         verbose=False, **kwargs):
 
@@ -71,7 +68,6 @@ def kNN(X, Y=None,
         Number of threads to be used in computation. Defaults to 1. Set to -1 to use all available CPUs.
         Most algorithms are highly scalable to multithreading.
 
-<<<<<<< HEAD
     M : int (optional, default 30).
         defines the maximum number of neighbors in the zero and above-zero layers during HSNW
         (Hierarchical Navigable Small World Graph). However, the actual default maximum number
@@ -91,10 +87,6 @@ def kNN(X, Y=None,
     symmetrize : bool (optional, default True).
         Whether to symmetrize the output of approximate nearest neighbors search. The default is True
         and uses additive symmetrization, i.e. knn = ( knn + knn.T ) / 2 .
-=======
-    return_instance : bool (optional, default False).
-        Whether to also return the backend instance (i.e. the nearest-neighbors class). The default is False.
->>>>>>> master
 
     **kwargs : dict (optional, default {}).
         Additional parameters to be passed to the backend approximate nearest-neighbors library.

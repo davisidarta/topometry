@@ -382,31 +382,10 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-<<<<<<< HEAD
 
 
 def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
-=======
-def get_ellipse_eccentricity(emb, L=None, G=None):
-    if G is None:
-        from topo.eval import RiemannMetric
-        rmetric = RiemannMetric(emb, L)
-        G = rmetric.get_rmetric()
-    N = np.shape(emb)[0]
-    result = []
-    for i in range(N):
-        cov = G[i, :, :] 
-        vals, vecs = eigsorted(cov)
-        # a is radius of major axis, b is radius minor axis
-        a, b = np.sqrt(np.absolute(vals))
-        result.append(np.sqrt(np.abs(1 - (b**2 / a**2))))
-    return result
-    
-
-def plot_riemann_metric(emb, L=None, H=None, n_plot=50, std=0.1, alpha=0.1, title=None, ax=None,
-                        labels=None, pt_size=1, cmap='Spectral',  figsize=(12,12), random_state=None, **kwargs):
->>>>>>> master
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
@@ -544,11 +523,7 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     plot_num = 1
     for i in range(0, n_eigenvectors):
         plt.subplot(1, n_eigenvectors, plot_num)
-<<<<<<< HEAD
         plt.title(title+ ' ' + str(plot_num), fontsize=fontsize)
-=======
-        plt.title(title+ ' ' + str(plot_num))
->>>>>>> master
         plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
         plot_num += 1
         plt.xticks(())
@@ -556,7 +531,6 @@ def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20'
     return plt.show()
 
 
-<<<<<<< HEAD
 def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title = 'FSA', histtype='step', stacked=True, density=True, log=False, title_fontsize=22, legend_fontsize=15):
     fig, ax = plt.subplots(1,1)
     fig.set_figwidth(6)
@@ -578,18 +552,6 @@ def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title
     ax.set_xlabel('Estimated intrinsic dimension', fontsize=legend_fontsize)
     ax.set_ylabel('Frequency', fontsize=legend_fontsize)
     ax.legend(prop={'size': 10})
-=======
-def plot_dimensionality_histograms_single(id_list, bins=50, histtype='step', stacked=True, density=True, log=False, title='I.D. estimates'):
-    fig, ax = plt.subplots(1,1)
-    n, bins, patches  = ax.hist(id_list, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log)
-    sigma = np.std(id_list)
-    mu = np.mean(id_list)
-    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-        np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-    ax.set_title(title)
-    ax.legend(prop={'size': 10})
-    fig.tight_layout()
->>>>>>> master
     plt.show()
 
 def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
