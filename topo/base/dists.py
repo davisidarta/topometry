@@ -1053,14 +1053,14 @@ if _have_numba:
         else:
             return {}
 
-    @numba.jit()
+    @numba.jit(nopython=False)
     def categorical_distance(x, y):
         if x == y:
             return 0.0
         else:
             return 1.0
 
-    @numba.jit()
+    @numba.jit(nopython=False)
     def hierarchical_categorical_distance(x, y, cat_hierarchy=[{}]):
         n_levels = float(len(cat_hierarchy))
         for level, cats in enumerate(cat_hierarchy):
@@ -1073,7 +1073,7 @@ if _have_numba:
     def ordinal_distance(x, y, support_size=1.0):
         return abs(x - y) / support_size
 
-    @numba.jit()
+    @numba.jit(nopython=False)
     def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
         lo = int(min(x, y))
         hi = int(max(x, y))
