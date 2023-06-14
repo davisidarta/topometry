@@ -33,6 +33,7 @@ If you haven't already, [install](installation.md) *topometry* and start using i
 * To see how TopOMetry can be integrated into different single-cell workflows, check the [RNA velocity tutorial](f_scvelo.md) using [scVelo](https://scvelo.readthedocs.io/)
 * To use TopOMetry to embedd to non-euclidean spaces (similarly to [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html)), see the [tutorial on non-Euclidean spaces](h_non_euclidean.md).
 
+All of the tutorials are also freely available as Jupyter Notebooks in this [separate repository](https://github.com/davisidarta/topometry-notebooks).
 
 -------------
 
