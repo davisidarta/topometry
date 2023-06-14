@@ -13,5 +13,3 @@ sphinx-rtd-theme
 sphinx-autoapi
 mock
 topometry
-
-
