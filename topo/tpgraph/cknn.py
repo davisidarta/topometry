@@ -89,7 +89,7 @@ def cknn_graph(X, n_neighbors=10,
                   verbose=verbose,
                   **kwargs)
 
-    median_k = np.floor(n_neighbors / 2).astype(int)
+    median_k = np.floor(n_neighbors / 2).astype(np.int32)
     adap_sd = np.zeros(N)
     for i in np.arange(len(adap_sd)):
         adap_sd[i] = np.sort(knn.data[knn.indptr[i]: knn.indptr[i + 1]])[
@@ -109,19 +109,19 @@ def cknn_graph(X, n_neighbors=10,
         A[dd, dd] = False
     if weighted is None:
         if return_densities:
-            return A.astype(int), A.astype(np.float), adap_sd
+            return A.astype(np.int32), A.astype(np.float32), adap_sd
         else:
-            return A.astype(int), A.astype(np.float)
+            return A.astype(np.int32), A.astype(np.float32)
     else:
         if weighted:
             if return_densities:
-                return A.astype(np.float), adap_sd
+                return A.astype(np.float32), adap_sd
             else:
-                return A.astype(np.float)
+                return A.astype(np.float32)
         else:
             if return_densities:
-                return A.astype(int), adap_sd
+                return A.astype(np.int32), adap_sd
             else:
-                return A.astype(int)
+                return A.astype(np.int32)
 
 
