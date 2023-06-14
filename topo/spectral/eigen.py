@@ -387,15 +387,18 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             Eigenvalues of the matrix. Returned only if return_evals is True.
     
         """
-        if return_evals is None:
-            return_evals = self.return_evals
-
         if self.eigenvectors is None:
             return ValueError('The estimator has not been fitted yet.')
-        if return_evals:
+        if self.method == 'DM' or self.method == 'msDM':
+            if return_evals:
                 return self.embedding, self.eigenvalues
+            else:
+                return self.embedding
         else:
-            return self.embedding
+            if return_evals:
+                return self.eigenvectors, self.eigenvalues
+            else:
+                return self.eigenvectors
 
 
     def transform(self, X=None):
@@ -446,7 +449,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         """
         if self.eigenvectors is None:
             self.fit(X)
-        return self.transform()
+        return self.transform(X)
 
     def spectral_layout(self, X, laplacian_type='normalized', return_evals=False):
         """Given a graph compute the spectral embedding of the graph. This function calls specialized

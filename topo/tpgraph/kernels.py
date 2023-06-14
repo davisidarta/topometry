@@ -386,6 +386,10 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.knn_ = None
         self.dens_dict = None
         self.anisotropy = anisotropy
+        self._have_hnswlib = None
+        self._have_nmslib = None
+        self._have_annoy = None
+        self._have_faiss = None
 
     def __repr__(self):
         if self._K is not None:
@@ -415,6 +419,73 @@ class Kernel(BaseEstimator, TransformerMixin):
             msg = msg + kernel_msg
         return msg
 
+    def _parse_backend(self):
+        try:
+            import hnswlib
+            self._have_hnswlib = True
+        except ImportError:
+            self._have_hnswlib = False
+        try:
+            import nmslib
+            self._have_nmslib = True
+        except ImportError:
+            self._have_nmslib = False
+        try:
+            import annoy
+            self._have_annoy = True
+        except ImportError:
+            self._have_annoy = False
+        try:
+            import faiss
+            self._have_faiss = True
+        except ImportError:
+            self._have_faiss = False
+
+        if self.backend == 'hnswlib':
+            if not self._have_hnswlib:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
+                else:
+                    self.backend = 'sklearn'
+        elif self.backend == 'nmslib':
+            if not self._have_nmslib:
+                if self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
+                else:
+                    self.backend = 'sklearn'
+        elif self.backend == 'annoy':
+            if not self._have_annoy:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_faiss:
+                    self.backend = 'faiss'
+                else:
+                    self.backend = 'sklearn'
+        elif self.backend == 'faiss':
+            if not self._have_faiss:
+                if self._have_nmslib:
+                    self.backend = 'nmslib'
+                elif self._have_hnswlib:
+                    self.backend = 'hnswlib'
+                elif self._have_annoy:
+                    self.backend = 'annoy'
+                else:
+                    self.backend = 'sklearn'
+        else:
+            print(
+                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+            self.backend == 'sklearn'
+
     def fit(self, X, recompute=False, **kwargs):
         """
         Fits the kernel matrix to the data.
@@ -438,6 +509,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             The kernel matrix.
 
         """
+        self._parse_backend()
         self.random_state = check_random_state(self.random_state)
         if self.fuzzy:
             self.cknn = False

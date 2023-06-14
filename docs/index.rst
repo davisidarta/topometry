@@ -67,9 +67,8 @@ meaning they can be easily pipelined.
     a_mnist
     b_newsgroups
     c_classes
-    d_id_estimatation
+    d_id_estimation
     e_evaluations
-    f_scvelo_pancreas
     h_non_euclidean
 
 .. toctree::
