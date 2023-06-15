@@ -284,7 +284,7 @@ class Projector(BaseEstimator, TransformerMixin):
             if not _HAS_MCTSNE:
                 from sklearn.manifold import TSNE
             self.estimator_ = TSNE(n_components=self.n_components,
-                                   metric='precomputed', n_iter=self.num_iters, **kwargs)
+                                   metric='precomputed', n_iter=self.num_iters)
             self.Y_ = self.estimator_.fit_transform(K)
 
         elif self.projection_method == 'MAP':
@@ -328,7 +328,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 metric = 'angular'
             else:
                 metric = self.metric
-            self.estimator_ = trimap.TriMAP(
+            self.estimator_ = trimap.TRIMAP(
                 n_components=self.n_components, distance=self.metric, n_iters=self.num_iters, verbose=self.verbose, **kwargs)
             self.Y_ = self.estimator_.fit_transform(X=X, init=self.init_Y_)
 
