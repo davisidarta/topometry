@@ -8,36 +8,36 @@ from topo.base.ann import kNN
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
 
-def geodesic_distance(adjacency, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, random_state=None):
-    """
-    Subsets the geodesic distance matrix to only include distances up to the k-th
-    nearest neighbor distance for each point.
+# def subset_geodesic_distance(knn_dists, indices=None, n_jobs=-1, random_state=None):
+#     """
+#     Subsets the geodesic distance matrix to only include distances up to the k-th
+#     nearest neighbor distance for each point.
 
-    Parameters:
-    -----------
-    knn_dists: scipy.sparse.csr_matrix
-        Precomputed k-nearest-neighbors distances matrix.
-    geodesic_dists: scipy.sparse.csr_matrix
-        Geodesic distances matrix.
+#     Parameters:
+#     -----------
+#     knn_dists: scipy.sparse.csr_matrix
+#         Precomputed k-nearest-neighbors distances matrix.
+#     geodesic_dists: scipy.sparse.csr_matrix
+#         Geodesic distances matrix.
 
-    Returns:
-    --------
-    subset_geodesics: scipy.sparse.csr_matrix
-        Subsetted geodesic distances matrix.
-    """
-    n_points = knn_dists.shape[0]
-    # Compute the maximum distance to consider for each point
-    max_dist = knn_dists.max(axis=1).toarray()
-    # Subset the geodesic distances matrix
-    subset_geodesics = lil_matrix(geodesic_dists.shape, dtype=np.float32)
-    for i in range(n_points):
-        mask = (geodesic_dists[i,:] <= max_dist[i,:]).flatten()
-        subset_geodesics[i,mask] = geodesic_dists[i,mask]
-    subset_geodesics = subset_geodesics.tocsr()
-    return subset_geodesics
+#     Returns:
+#     --------
+#     subset_geodesics: scipy.sparse.csr_matrix
+#         Subsetted geodesic distances matrix.
+#     """
+#     n_points = knn_dists.shape[0]
+#     # Compute the maximum distance to consider for each point
+#     max_dist = knn_dists.max(axis=1).toarray()
+#     # Subset the geodesic distances matrix
+#     subset_geodesics = lil_matrix(geodesic_dists.shape, dtype=np.float32)
+#     for i in range(n_points):
+#         mask = (geodesic_dists[i,:] <= max_dist[i,:]).flatten()
+#         subset_geodesics[i,mask] = geodesic_dists[i,mask]
+#     subset_geodesics = subset_geodesics.tocsr()
+#     return subset_geodesics
 
 
-def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, subset_to_knn=True, random_state=None):
+def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=None, n_jobs=-1, random_state=None):
     """
     Compute the geodesic distance matrix from an adjacency (or an affinity) matrix.
     The default behavior is to subset the geodesic distance matrix to only include distances up
@@ -75,7 +75,7 @@ def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=N
 
     """
     if n_jobs == 1:
-        G = csgraph.shortest_path(adjacency, method=method,
+        G = csgraph.shortest_path(A, method=method,
                           unweighted=unweighted, directed=directed, indices=None)
         if indices is not None:
             G = G.T[indices].T
@@ -99,10 +99,10 @@ def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=N
             indices = np.array([indices])
         n = len(indices)
         local_function = partial(csgraph.shortest_path,
-                                adjacency, method, directed, False, unweighted, False)
+                                A, method, directed, False, unweighted, False)
         if n_jobs == 1 or n == 1:
             try:
-                G = csgraph.shortest_path(adjacency, method, directed, False,
+                G = csgraph.shortest_path(A, method, directed, False,
                                                 unweighted, False, indices)
             except csgraph.NegativeCycleError:
                 raise ValueError(
