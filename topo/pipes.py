@@ -170,7 +170,7 @@ def eval_models_layouts(TopOGraph, X,
         if 'gc' in methods:
             if TopOGraph.verbosity > 0:
                 print('Computing geodesics for eigenbasis \'{}...\''.format(key))
-            emb_graph = kNN(TopOGraph.EigenbasisDict[key].transform(), n_neighbors=n_neighbors,
+            emb_graph = kNN(TopOGraph.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
                             metric=metric,
                             n_jobs=n_jobs,
                             backend=TopOGraph.backend,
@@ -189,13 +189,13 @@ def eval_models_layouts(TopOGraph, X,
             gc.collect()
         if 'gs' in methods:
             EigenbasisGSResults[key] = global_score(
-                X, TopOGraph.EigenbasisDict[key].transform())
+                X, TopOGraph.EigenbasisDict[key].results())
             if TopOGraph.verbosity > 0:
                 print('Computed global score for eigenbasis {}'.format(key))
             gc.collect()
         if 'tw' in methods:
             EigenbasisTWResults[key] = trustworthiness(data_pdist,
-                                                        TopOGraph.EigenbasisDict[key].transform(), n_neighbors=n_neighbors,
+                                                        TopOGraph.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
                                                         n_jobs=n_jobs, X_is_distance=True, metric=metric)
             gc.collect()
 
