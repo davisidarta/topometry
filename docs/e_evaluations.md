@@ -585,7 +585,7 @@ To solve this issue, we need to discover _which_ regions of the manifold are pre
 
 We visualize the Riemannian metric with ellipses. If no distortion ocurred at all during the embedding, the ellipse will have zero [eccentricity](https://en.wikipedia.org/wiki/Eccentricity_(mathematics)) (i.e. it will be a circle). If distortion ocurred preferentially at one direction, the axis of the ellipse will be elongated along that direction (i.e. it will have a higher eccentricity). Keep in mind this only works in two dimensions!
 
-![RM at a glance](https://github.com/davisidarta/topometry/tree/master/docs/img/RM_in_a_glance.png)
+![RM at a glance](img/RM_in_a_glance.png)
 
 
 Quantifying this eccentricity allows us to add this information to the _AnnData_ object to check if any cell types are preferentially distorted.
