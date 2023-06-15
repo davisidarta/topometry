@@ -305,7 +305,7 @@ Before we move on to geodesic correlation, let's see how we can use TopOMetry to
 from topo.eval.local_scores import trustworthiness as tw
 
 print('PCA trustworthiness: ', tw(X_dists, pca_Y, X_is_distance=True))
-print('msDM (topometry) trustworthiness: ', tw(X_dists, tg.EigenbasisDict['msDM with bw_adaptive'].transform(), X_is_distance=True))
+print('msDM (topometry) trustworthiness: ', tw(X_dists, tg.EigenbasisDict['msDM with bw_adaptive'].results(), X_is_distance=True))
 ```
 
     PCA trustworthiness:  0.8997163696060038
