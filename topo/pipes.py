@@ -10,8 +10,8 @@ from topo.eval.local_scores import geodesic_distance, geodesic_correlation, trus
 
 
 
-def global_score(data, emb):
-    global_scores_pca = global_score_pca(data, emb)
+def global_score(data, emb, X_is_pca=False):
+    global_scores_pca = global_score_pca(data, emb, X_is_pca=X_is_pca)
     return global_scores_pca
 
 def eval_models_layouts(TopOGraph, X,
@@ -149,6 +149,27 @@ def eval_models_layouts(TopOGraph, X,
         base_graph = TopOGraph.base_knn_graph
 
     gc.collect()
+    # Run PCA
+    from sklearn.decomposition import PCA
+    if TopOGraph.verbosity >= 1:
+        print('Computing PCA for comparison...')
+    import numpy as np
+    if issparse(X) == True:
+        if isinstance(X, csr_matrix):
+            data = X.todense()
+            gc.collect()
+    if issparse(X) == False:
+        if not isinstance(X, np.ndarray):
+            import pandas as pd
+            if isinstance(X, pd.DataFrame):
+                data = np.asarray(X.values.T)
+            else:
+                return print('Uknown data format.')
+        else:
+            data = X
+    gc.collect()
+    # Now with PCA
+    pca_emb = PCA(n_components=n_pcs).fit_transform(data)
     # Create empty dicts for the results
     EigenbasisTWResults = {}
     EigenbasisGCResults = {}
@@ -189,7 +210,7 @@ def eval_models_layouts(TopOGraph, X,
             gc.collect()
         if 'gs' in methods:
             EigenbasisGSResults[key] = global_score(
-                X, TopOGraph.EigenbasisDict[key].results())
+                pca_emb, TopOGraph.EigenbasisDict[key].results(), X_is_pca=True)
             if TopOGraph.verbosity > 0:
                 print('Computed global score for eigenbasis {}'.format(key))
             gc.collect()
@@ -227,33 +248,14 @@ def eval_models_layouts(TopOGraph, X,
             gc.collect()
         if 'gs' in methods:
             ProjectionGSResults[key] = global_score(
-                X, TopOGraph.ProjectionDict[key])
+                pca_emb, TopOGraph.ProjectionDict[key], X_is_pca=True)
             gc.collect()
         if 'tw' in methods:
             ProjectionTWResults[key] = trustworthiness(data_pdist,
                                                         TopOGraph.ProjectionDict[key], n_neighbors=n_neighbors, 
                                                         n_jobs=n_jobs, X_is_distance=True, metric=metric)
             gc.collect()
-    from sklearn.decomposition import PCA
-    if TopOGraph.verbosity >= 1:
-        print('Computing PCA for comparison...')
-    import numpy as np
-    if issparse(X) == True:
-        if isinstance(X, csr_matrix):
-            data = X.todense()
-            gc.collect()
-    if issparse(X) == False:
-        if not isinstance(X, np.ndarray):
-            import pandas as pd
-            if isinstance(X, pd.DataFrame):
-                data = np.asarray(X.values.T)
-            else:
-                return print('Uknown data format.')
-        else:
-            data = X
-    gc.collect()
-    # Now with PCA
-    pca_emb = PCA(n_components=n_pcs).fit_transform(data)
+
     gc.collect()
     if 'gc' in methods:
         if TopOGraph.verbosity > 0:
@@ -307,7 +309,7 @@ def eval_models_layouts(TopOGraph, X,
                 gc.collect()
             if 'gs' in methods:
                 EigenbasisGSResults[key] = global_score(
-                    X, additional_eigenbases[key])
+                    pca_emb, additional_eigenbases[key], X_is_pca=True)
                 if TopOGraph.verbosity > 0:
                     print('Computed global score for eigenbasis {}'.format(key))
                 gc.collect()
@@ -341,7 +343,7 @@ def eval_models_layouts(TopOGraph, X,
                 gc.collect()
             if 'gs' in methods:
                 ProjectionGSResults[key] = global_score(
-                    X, additional_projections[key])
+                    pca_emb, additional_projections[key], X_is_pca=True)
                 if TopOGraph.verbosity > 0:
                     print('Computed global score for eigenbasis {}'.format(key))
                 gc.collect()
