@@ -19,19 +19,21 @@ def global_score_pca(X, Y, X_is_pca=False):
     X: Instance matrix
     Y: Embedding
     """
+    if X_is_pca:
+        Y_pca = X
+    else:
+        if issparse(X) == True:
+            if isinstance(X, np.ndarray):
+                X = csr_matrix(X)
+        if issparse(X) == False:
+            if isinstance(X, np.ndarray):
+                X = csr_matrix(X)
+            else:
+                import pandas as pd
+                if isinstance(X, pd.DataFrame):
+                    X = csr_matrix(X.values.T)
 
-    if issparse(X) == True:
-        if isinstance(X, np.ndarray):
-            X = csr_matrix(X)
-    if issparse(X) == False:
-        if isinstance(X, np.ndarray):
-            X = csr_matrix(X)
-        else:
-            import pandas as pd
-            if isinstance(X, pd.DataFrame):
-                X = csr_matrix(X.values.T)
-
-    n_dims = Y.shape[1]
+        n_dims = Y.shape[1]
     Y_pca = TruncatedSVD(n_components=n_dims).fit_transform(X)
     gs_pca = global_loss_(X, Y_pca)
     gs_emb = global_loss_(X, Y)
