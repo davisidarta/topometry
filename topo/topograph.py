@@ -888,7 +888,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if projection_method is None:
             projection_method = self.projection_method
 
-        if projection_method in ['MAP', 'UMAP', 'MDE', 'Isomap']:
+        if projection_method in ['MAP', 'UMAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
             metric = 'precomputed'
             input = self.graph_kernel.P
             key = self.current_graphkernel

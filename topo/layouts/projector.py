@@ -285,7 +285,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 from sklearn.manifold import TSNE
             self.estimator_ = TSNE(n_components=self.n_components,
                                    metric='precomputed', n_iter=self.num_iters)
-            self.Y_ = self.estimator_.fit_transform(K)
+            self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'MAP':
             self.Y_ = fuzzy_embedding(K, n_components=self.n_components, init=self.init_Y_,
@@ -329,7 +329,7 @@ class Projector(BaseEstimator, TransformerMixin):
             else:
                 metric = self.metric
             self.estimator_ = trimap.TRIMAP(
-                n_components=self.n_components, distance=self.metric, n_iters=self.num_iters, verbose=self.verbose, **kwargs)
+                n_dims=self.n_components, distance=self.metric, n_iters=self.num_iters, verbose=self.verbose, **kwargs)
             self.Y_ = self.estimator_.fit_transform(X=X, init=self.init_Y_)
 
         elif self.projection_method == 'IsomorphicMDE':
