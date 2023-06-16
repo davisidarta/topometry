@@ -33,7 +33,7 @@ def global_score_pca(X, Y, X_is_pca=False):
                 if isinstance(X, pd.DataFrame):
                     X = csr_matrix(X.values.T)
 
-        n_dims = Y.shape[1]
+    n_dims = Y.shape[1]
     Y_pca = TruncatedSVD(n_components=n_dims).fit_transform(X)
     gs_pca = global_loss_(X, Y_pca)
     gs_emb = global_loss_(X, Y)
