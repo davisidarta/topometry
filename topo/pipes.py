@@ -204,7 +204,7 @@ def eval_models_layouts(TopOGraph, X,
                                             )
             gc.collect()
             if TopOGraph.verbosity > 0:
-                print('Computing Spearman R for eigenbasis \'{}...\''.format(key))
+                print('Computing geodesic correlation for eigenbasis \'{}...\''.format(key))
             EigenbasisGCResults[key], _ = spearmanr(
                 base_geodesics, embedding_geodesics)
             gc.collect()
@@ -218,6 +218,8 @@ def eval_models_layouts(TopOGraph, X,
             EigenbasisTWResults[key] = trustworthiness(data_pdist,
                                                         TopOGraph.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
                                                         n_jobs=n_jobs, X_is_distance=True, metric=metric)
+            if TopOGraph.verbosity > 0:
+                print('Computed trustworthiness for projection {}'.format(key))
             gc.collect()
 
     ProjectionTWResults = {}
@@ -242,18 +244,22 @@ def eval_models_layouts(TopOGraph, X,
                 )
             gc.collect()
             if TopOGraph.verbosity > 0:
-                print('Computing Spearman R for projection \'{}...\''.format(key))
+                print('Computing Sgeodesic correlation for projection \'{}...\''.format(key))
             ProjectionGCResults[key], _ = spearmanr(
                 base_geodesics, embedding_geodesics)
             gc.collect()
         if 'gs' in methods:
             ProjectionGSResults[key] = global_score(
                 pca_emb, TopOGraph.ProjectionDict[key], X_is_pca=True)
+            if TopOGraph.verbosity > 0:
+                print('Computed global score for projection {}'.format(key))
             gc.collect()
         if 'tw' in methods:
             ProjectionTWResults[key] = trustworthiness(data_pdist,
                                                         TopOGraph.ProjectionDict[key], n_neighbors=n_neighbors, 
                                                         n_jobs=n_jobs, X_is_distance=True, metric=metric)
+            if TopOGraph.verbosity > 0:
+                print('Computed trustworthiness for projection {}'.format(key))
             gc.collect()
 
     gc.collect()
@@ -283,6 +289,8 @@ def eval_models_layouts(TopOGraph, X,
                                                 pca_emb,
                                                 n_neighbors=TopOGraph.base_knn,
                                                 n_jobs=n_jobs, X_is_distance=True, metric=metric)
+        if TopOGraph.verbosity > 0:
+            print('Computed trustworthiness for projection {}'.format(key))
         gc.collect()
     if additional_eigenbases is not None:
         for key in additional_eigenbases.keys():
@@ -317,6 +325,8 @@ def eval_models_layouts(TopOGraph, X,
                 EigenbasisTWResults[key] = trustworthiness(data_pdist,
                                                             additional_eigenbases[key], n_neighbors=TopOGraph.base_knn,
                                                             n_jobs=n_jobs, X_is_distance=True, metric=metric)
+                if TopOGraph.verbosity > 0:
+                    print('Computed trustworthiness for eigenbasis {}'.format(key))
                 gc.collect()
     if additional_projections is not None:
         for key in additional_projections.keys():
@@ -337,7 +347,7 @@ def eval_models_layouts(TopOGraph, X,
                                                 )
                 gc.collect()
                 if TopOGraph.verbosity > 0:
-                    print('Computing Spearman R for eigenbasis \'{}...\''.format(key))
+                    print('Computing Spearman R for projection \'{}...\''.format(key))
                 ProjectionGCResults[key], _ = spearmanr(
                     base_geodesics, embedding_geodesics)
                 gc.collect()
@@ -345,12 +355,14 @@ def eval_models_layouts(TopOGraph, X,
                 ProjectionGSResults[key] = global_score(
                     pca_emb, additional_projections[key], X_is_pca=True)
                 if TopOGraph.verbosity > 0:
-                    print('Computed global score for eigenbasis {}'.format(key))
+                    print('Computed global score for projection {}'.format(key))
                 gc.collect()
             if 'tw' in methods:
                 ProjectionTWResults[key] = trustworthiness(data_pdist,
                                                             additional_projections[key], n_neighbors=TopOGraph.base_knn,
                                                             n_jobs=n_jobs, X_is_distance=True, metric=metric)
+                if TopOGraph.verbosity > 0:
+                    print('Computed trustworthiness for projection {}'.format(key))
                 gc.collect()
 
     res_dict = {'Eigenbasis - Trustworthiness' : EigenbasisTWResults,
