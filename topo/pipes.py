@@ -25,8 +25,8 @@ def eval_models_layouts(TopOGraph, X,
                         landmark_method='kmeans',
                         metric='euclidean',
                         n_pcs=30,
-                        cor_method='spearman',
                         landmarks=None,
+                        run_uncomputed_models=True,
                           **kwargs):
     """
     Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
@@ -113,7 +113,8 @@ def eval_models_layouts(TopOGraph, X,
     # Run models
     if TopOGraph.verbosity > 0:
         print('Running specified models...')
-    TopOGraph.run_models(X, kernels, eigenmap_methods, projections)
+    if run_uncomputed_models:
+        TopOGraph.run_models(X, kernels, eigenmap_methods, projections)
     # Define landmarks if applicable
     if landmarks is not None:
         if landmark_method == 'random':
