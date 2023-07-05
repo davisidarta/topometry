@@ -384,7 +384,7 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
 
 
 
-def plot_riemann_metric(emb, laplacian, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
+def plot_riemann_metric(emb, L, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
                         labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).

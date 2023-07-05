@@ -201,6 +201,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                  random_state=None,
                  return_evals=False,
                  estimate_eigengap=True,
+                 enforce_min_eigs=True,
                  verbose=False):
         self.n_components = n_components
         self.method = method
@@ -224,6 +225,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.return_evals = return_evals
         self.estimate_eigengap = estimate_eigengap
         self.eigengap = None
+        self.enforce_min_eigs = enforce_min_eigs
 
     def __repr__(self):
         if self.eigenvectors is not None:
@@ -330,13 +332,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             evecs = evecs[:, 1:]
         if self.estimate_eigengap:
             max_eigs = int(np.sum(evals > 0, axis=0))
-            first_diff = np.diff(evals)
-            eg = np.argmax(first_diff) + 1
-            if max_eigs == len(evals):
-                self.eigengap = max_eigs
+            if self.method not in ['LE', 'top', 'bottom']:
+                first_diff = np.diff(evals)
+                eg = np.argmax(first_diff) + 1
+                if max_eigs == len(evals):
+                    self.eigengap = max_eigs
+                else:
+                    self.eigengap = eg
             else:
-                self.eigengap = eg
-
+                self.eigengap = max_eigs
         if self.method in ['DM', 'msDM']:
             if symmetric:
                 evecs = self.D_inv_sqrt_.dot(evecs)
