@@ -42,8 +42,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     eigenmap_method : str (optional, default 'DM').
         Which eigenmap method to use. Defaults to 'DM', which is the diffusion maps method and will use the diffusion
         operator learned from the used kernel. Options include:
-        * 'DM' - uses the diffusion operator learned from the used kernel (TopOGraph.kernel.P). By default, uses
-        the multiscale Diffusion Maps version, which accounts for all possible diffusion timescales. Finds top eigenpairs (with highest eigenvalues).
+        * 'msDM' - uses the diffusion operator learned from the used kernel (TopOGraph.base_kernel.P) using the multiscale version of Diffusion Maps version,
+          which accounts for all possible diffusion timescales. Finds top eigenpairs (with highest eigenvalues).
+        * 'DM' - uses the diffusion operator learned from the used kernel (TopOGraph.base_kernel.P). Finds top eigenpairs (with highest eigenvalues).
         * 'LE' - uses the graph Laplacian learned from the used kernel (TopOGraph.kernel.L). Finds bottom eigenpairs (with lowest eigenvalues).
         * 'top' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds top eigenpairs (with highest eigenvalues).
         * 'bottom' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds bottom eigenpairs (with lowest eigenvalues).
