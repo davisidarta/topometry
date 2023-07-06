@@ -184,9 +184,9 @@ def eval_models_layouts(TopOGraph, X,
         base_geodesics = squareform(geodesic_distance(base_graph, directed=False, n_jobs=n_jobs))
     if 'tw' in methods:
         if isinstance(X, csr_matrix):
-            data_pdist = pairwise_distances(X.toarray(), metric=metric, n_jobs=n_jobs)
+            data_pdist = pairwise_distances(X.toarray(), metric=TopOGraph.base_metric, n_jobs=n_jobs)
         else:
-            data_pdist = pairwise_distances(X, metric=metric, n_jobs=n_jobs)
+            data_pdist = pairwise_distances(X, metric=TopOGraph.base_metric, n_jobs=n_jobs)
     gc.collect()
     for key in TopOGraph.EigenbasisDict.keys():
         if 'gc' in methods:
