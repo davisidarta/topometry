@@ -1,10 +1,10 @@
 #####################################
-# Author: Davi Sidarta-Oliveira
-# School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta[at]fcm[dot]unicamp[dot]com
+# Author: David S Oliveira
+# University of Oxford
+# contact: david.oliveira[at]dpag[dot]ox[dot]ac[dot]uk
 # License: MIT
 ######################################
-# Being clear about laplacian-type operators and spectral decompositions
+# Clearly defining laplacian-type operators and spectral decompositions
 
 from warnings import warn
 import numpy as np
