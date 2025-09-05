@@ -1,4 +1,17 @@
-# topometry.eval.rmetric.py
+######################################
+# Riemannian metric estimation and visualization tools for TopOMetry
+#
+# Inspired by earlier work on Riemann metric estimation in the Megaman library
+# by Marina Meila and collaborators (https://github.com/mmp2/megaman).
+# Original Matlab function: megaman/geometry/rmetric.py by Dominique Perrault-Joncas.
+#
+# This code is a clean re-implementation with extensive new functionality,
+# design, and visualization features. It is not a direct derivative of Megaman.
+#
+# Author: Davi Sidarta V. Rodrigues de Oliveira <david.oliveira@dpag.ox.ac.uk>
+#         University of Oxford
+# License: MIT
+######################################
 
 import numpy as np
 import warnings
