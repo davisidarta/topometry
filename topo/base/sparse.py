@@ -416,6 +416,35 @@ def sparse_cosine(ind1, data1, ind2, data2):
 
 
 @numba.njit()
+def sparse_poincare(ind1, data1, ind2, data2):
+    uu = 0.0
+    for i in range(data1.shape[0]):
+        uu += data1[i] * data1[i]
+
+    vv = 0.0
+    for i in range(data2.shape[0]):
+        vv += data2[i] * data2[i]
+
+    alpha = 1.0 - uu
+    beta = 1.0 - vv
+
+    if alpha <= 0.0 or beta <= 0.0:
+        return np.inf
+
+    aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
+    duv = 0.0
+    for i in range(aux_data.shape[0]):
+        duv += aux_data[i] * aux_data[i]
+
+    arg = 1.0 + 2.0 * duv / (alpha * beta)
+
+    if arg <= 1.0:
+        return np.inf
+
+    return np.arccosh(arg)
+
+
+@numba.njit()
 def sparse_hellinger(ind1, data1, ind2, data2):
     aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
     result = 0.0
@@ -597,6 +626,7 @@ sparse_named_distances = {
     "canberra": sparse_canberra,
     "ll_dirichlet": sparse_ll_dirichlet,
     'braycurtis': sparse_bray_curtis,
+    "poincare": sparse_poincare,
     # Binary distances
     "hamming": sparse_hamming,
     "jaccard": sparse_jaccard,
