@@ -44,7 +44,7 @@ def arr_intersect(ar1, ar2):
 @numba.njit()
 def sparse_sum(ind1, data1, ind2, data2):
     result_ind = arr_union(ind1, ind2)
-    result_data = np.zeros(result_ind.shape[0], dtype=np.float32)
+    result_data = np.zeros(result_ind.shape[0], dtype=data1.dtype)
 
     i1 = 0
     i2 = 0
@@ -110,7 +110,7 @@ def sparse_diff(ind1, data1, ind2, data2):
 @numba.njit()
 def sparse_mul(ind1, data1, ind2, data2):
     result_ind = arr_intersect(ind1, ind2)
-    result_data = np.zeros(result_ind.shape[0], dtype=np.float32)
+    result_data = np.zeros(result_ind.shape[0], dtype=data1.dtype)
 
     i1 = 0
     i2 = 0
@@ -274,16 +274,17 @@ def sparse_hamming(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_canberra(ind1, data1, ind2, data2):
+    dtype = data1.dtype
     abs_data1 = np.abs(data1)
     abs_data2 = np.abs(data2)
     denom_inds, denom_data = sparse_sum(ind1, abs_data1, ind2, abs_data2)
-    denom_data = 1.0 / denom_data
+    denom_data = dtype.type(1.0) / denom_data
     numer_inds, numer_data = sparse_diff(ind1, data1, ind2, data2)
     numer_data = np.abs(numer_data)
 
     val_inds, val_data = sparse_mul(numer_inds, numer_data, denom_inds, denom_data)
 
-    return np.sum(val_data)
+    return dtype.type(np.sum(val_data))
 
 
 @numba.njit()
@@ -437,37 +438,41 @@ def sparse_hellinger(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_correlation(ind1, data1, ind2, data2, n_features):
+    dtype = data1.dtype
+    zero = dtype.type(0.0)
+    one = dtype.type(1.0)
 
-    mu_x = 0.0
-    mu_y = 0.0
-    dot_product = 0.0
+    mu_x = zero
+    mu_y = zero
+    dot_product = zero
 
     if ind1.shape[0] == 0 and ind2.shape[0] == 0:
-        return 0.0
+        return zero
     elif ind1.shape[0] == 0 or ind2.shape[0] == 0:
-        return 1.0
+        return one
 
     for i in range(data1.shape[0]):
         mu_x += data1[i]
     for i in range(data2.shape[0]):
         mu_y += data2[i]
 
-    mu_x /= n_features
-    mu_y /= n_features
+    n_features_dtype = dtype.type(n_features)
+    mu_x /= n_features_dtype
+    mu_y /= n_features_dtype
 
-    shifted_data1 = np.empty(data1.shape[0], dtype=np.float32)
-    shifted_data2 = np.empty(data2.shape[0], dtype=np.float32)
+    shifted_data1 = np.empty(data1.shape[0], dtype=dtype)
+    shifted_data2 = np.empty(data2.shape[0], dtype=dtype)
 
     for i in range(data1.shape[0]):
         shifted_data1[i] = data1[i] - mu_x
     for i in range(data2.shape[0]):
         shifted_data2[i] = data2[i] - mu_y
 
-    norm1 = np.sqrt(
-        (norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2)
+    norm1 = dtype.type(
+        np.sqrt((norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2))
     )
-    norm2 = np.sqrt(
-        (norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2)
+    norm2 = dtype.type(
+        np.sqrt((norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2))
     )
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1, ind2, shifted_data2)
@@ -486,14 +491,14 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
             dot_product -= shifted_data2[i] * (mu_x)
 
     all_indices = arr_union(ind1, ind2)
-    dot_product += mu_x * mu_y * (n_features - all_indices.shape[0])
+    dot_product += mu_x * mu_y * dtype.type(n_features - all_indices.shape[0])
 
-    if norm1 == 0.0 and norm2 == 0.0:
-        return 0.0
-    elif dot_product == 0.0:
-        return 1.0
+    if norm1 == zero and norm2 == zero:
+        return zero
+    elif dot_product == zero:
+        return one
     else:
-        return 1.0 - (dot_product / (norm1 * norm2))
+        return one - (dot_product / (norm1 * norm2))
 
 
 @numba.njit()
