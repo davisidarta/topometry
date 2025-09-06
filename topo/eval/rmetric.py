@@ -382,7 +382,7 @@ def plot_riemann_metric_global(
     choose_strong_first=True,
     deformation_vals=None,
     deformation_kwargs=None,
-    respect_existing_limits=True, 
+    respect_existing_limits=True,
 ):
     """
     Draw grid-averaged indicatrices with:
@@ -400,22 +400,20 @@ def plot_riemann_metric_global(
         raise RuntimeError("matplotlib is required for plotting.")
     from matplotlib import cm, colors as mcolors
     from topo.eval.rmetric import (
-        RiemannMetric, _center as _ct, _symmetrize as _sz, _project_spd, _scaling_values
+        RiemannMetric, _symmetrize as _sz, _project_spd, _scaling_values
     )
 
-    # Keep the *original* embedding coordinates for plotting/grid/limits
     Y_plot = np.asarray(Y, dtype=float)
     L = _sz(L)
     if Y_plot.shape[1] != 2:
         raise ValueError("plot_riemann_metric_global expects 2D embeddings.")
 
-    # Compute metric per cell (RiemannMetric centers internally for stability)
     if G_emb is None:
         G_emb = RiemannMetric(Y_plot, L).get_rmetric()
     G_emb = np.asarray(G_emb)
     G_emb = np.stack([_project_spd(G_emb[i]) for i in range(G_emb.shape[0])], axis=0)
 
-    # Deformation per cell (for color)
+    # Deformation (for colors)
     if deformation_vals is None:
         kwargs = dict(center="median", diffusion_t=0, normalize="symmetric",
                       clip_percentile=2.0, return_limits=True)
@@ -433,18 +431,30 @@ def plot_riemann_metric_global(
     if ax is None:
         ax = plt.gca()
 
-    # Save current limits if asked to respect them (overlay case)
-    xlim0, ylim0 = ax.get_xlim(), ax.get_ylim()
-
-    # Grid over the *original* embedding extent
+    # Establish target axes limits EARLY; we will fit ellipses inside these
     x0, y0 = Y_plot.min(0); x1, y1 = Y_plot.max(0)
     span = max(x1 - x0, y1 - y0)
+    pad = 0.06 * span
+    if respect_existing_limits:
+        xL, xR = ax.get_xlim()
+        yB, yT = ax.get_ylim()
+        # if axes are at defaults (0,1), fall back to embedding limits
+        if (xL, xR) == (0.0, 1.0) and (yB, yT) == (0.0, 1.0):
+            xL, xR = x0 - pad, x1 + pad
+            yB, yT = y0 - pad, y1 + pad
+            ax.set_xlim(xL, xR); ax.set_ylim(yB, yT)
+    else:
+        xL, xR = x0 - pad, x1 + pad
+        yB, yT = y0 - pad, y1 + pad
+        ax.set_xlim(xL, xR); ax.set_ylim(yB, yT)
+
+    # Grid over the original extent
     gx = np.linspace(x0, x1, max(2, int(grid_res)))
     gy = np.linspace(y0, y1, max(2, int(grid_res)))
     XX, YY = np.meshgrid(gx, gy)
     grid_pts = np.c_[XX.ravel(), YY.ravel()]
 
-    # Neighbors of each grid point (use original coordinates)
+    # Neighbors of each grid point
     k_eff = min(max(2, int(k_avg)), Y_plot.shape[0])
     if _HAVE_SK:
         nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto").fit(Y_plot)
@@ -454,11 +464,11 @@ def plot_riemann_metric_global(
         d2 = np.sum(diffs * diffs, axis=2)
         inds = np.argsort(d2, axis=1)[:, :k_eff]
 
-    # Average local metric + deformation at grid points
+    # Averages at grid points
     G_avg = np.mean(G_emb[inds], axis=1)
     deform_grid = np.mean(deform_vals[inds], axis=1)
 
-    # Base size and color normalization
+    # Sizes and colors
     base = (0.05 * span) if scale_base == "auto" else float(scale_base)
     base = max(base, 1e-6)
     vmin_eff = vmin if vmin is not None else vmin_auto
@@ -466,10 +476,10 @@ def plot_riemann_metric_global(
     norm = mcolors.Normalize(vmin=vmin_eff, vmax=vmax_eff)
     mapper = cm.get_cmap(cmap)
 
-    # Estimate ellipse sizes (precompute) + thinning to reduce overlaps
     scales = _scaling_values(G_avg, mode=scale_mode)
     min_axis = 0.2 * base
 
+    # Thinning to reduce overlaps
     keep = []
     taken = np.zeros(grid_pts.shape[0], dtype=bool)
     order = np.argsort(-np.abs(deform_grid)) if choose_strong_first else np.arange(grid_pts.shape[0])
@@ -483,30 +493,43 @@ def plot_riemann_metric_global(
         d2 = np.sum((grid_pts[keep] - grid_pts[j])**2, axis=1)
         if np.all(np.sqrt(d2) >= min_sep):
             keep.append(j); taken[j] = True
-
     keep = np.array(keep, dtype=int)
 
-    # Optional background points (use original coordinates)
+    # Optional background points
     if show_points:
         kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 3)
         if scatter_kw: kw.update(scatter_kw)
         ax.scatter(Y_plot[:, 0], Y_plot[:, 1], **kw)
 
-    # Draw thinned ellipses with deformation-driven colors (positions in original coords)
+    # Draw ellipses, scaling them to stay INSIDE the axes box.
+    # Use rotation-safe constraint via circumscribed circle radius r = max(a, b).
     for i in keep:
         Gi = 0.5 * (G_avg[i] + G_avg[i].T)
         w, v = np.linalg.eigh(Gi)
         w = np.clip(w, 1e-12, None)
         idx = np.argsort(w)[::-1]
+
         a = np.sqrt(w[idx[0]]) * scale_gain * base
         b = np.sqrt(w[idx[-1]]) * scale_gain * base
         a = max(a * (0.5 + 0.5 * scales[i]), min_axis)
         b = max(b * (0.5 + 0.5 * scales[i]), min_axis)
         theta = np.degrees(np.arctan2(v[:, idx[0]][1], v[:, idx[0]][0]))
 
+        cx, cy = grid_pts[i, 0], grid_pts[i, 1]
+        r = max(a, b)  # circumscribed circle radius (conservative)
+
+        # Allowed radius so ellipse (circle upper bound) stays within axes box
+        allowed = min(cx - xL, xR - cx, cy - yB, yT - cy)
+        if allowed <= 0:
+            # outside bounds; skip drawing
+            continue
+        s_edge = min(1.0, allowed / r)
+        a *= s_edge
+        b *= s_edge
+
         fc = mapper(norm(deform_grid[i]))
         e = Ellipse(
-            (grid_pts[i, 0], grid_pts[i, 1]),
+            (cx, cy),
             width=2 * a,
             height=2 * b,
             angle=theta,
@@ -519,14 +542,7 @@ def plot_riemann_metric_global(
         e.set_clip_on(True)
         ax.add_patch(e)
 
-    # Axes aesthetics — either keep prior limits (overlay) or set from original embedding
-    if respect_existing_limits:
-        ax.set_xlim(xlim0); ax.set_ylim(ylim0)
-    else:
-        pad = 0.06 * span
-        ax.set_xlim(x0 - pad, x1 + pad)
-        ax.set_ylim(y0 - pad, y1 + pad)
-
+    # Aesthetics (limits already set)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(False)
     for spine in ax.spines.values():
@@ -540,6 +556,7 @@ def plot_riemann_metric_global(
     cb.set_label("Contraction  ←  centered log det(G)  →  Expansion")
 
     return ax
+
 
 
 def calculate_deformation(
@@ -642,6 +659,9 @@ def plot_metric_contraction_expansion(
     diffusion_op=None,
     re_center_after_diffusion=True,
     plot_strong_last=True,
+    legend_fontsize=9,         # NEW: control fontsize of colorbar label
+    title="Local contraction / expansion",  # NEW: optional title
+    title_fontsize=11,         # NEW: control fontsize of title
 ):
     if plt is None:
         raise RuntimeError("matplotlib is required for plotting.")
@@ -686,9 +706,13 @@ def plot_metric_contraction_expansion(
 
     if show_colorbar:
         cb = plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
-        cb.set_label("Contraction  ←  centered log det(G)  →  Expansion")
+        cb.set_label("Contraction  ←  log det(G)  →  Expansion", fontsize=legend_fontsize)
+
+    if title:
+        ax.set_title(title, fontsize=title_fontsize)
 
     return ax, vals
+
 
 # Backward-compatibility shim (kept to avoid import errors in older code)
 def get_eccentricity(emb, laplacian, G_emb=None):

@@ -27,12 +27,13 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14
     A simple plot of the eigenspectrum decay.
 
     """
-    fig = plt.figure(figsize=figsize, wspace=wspace)
+    fig, ax = plt.subplots(1,2, figsize=figsize)
+    fig.subplots_adjust(left=0.08, right=0.98, wspace=wspace)
     max_eigs = int(np.sum(evals > 0, axis=0))
     first_diff = np.diff(evals)
     sec_diff = np.diff(first_diff)
     eigengap = np.argmax(first_diff) + 1
-    ax1 = fig.add_subplot(1, 2, 1)
+    ax1 = ax[0]
     if title is not None:
         plt.suptitle(title, fontsize=fontsize)
     ax1.plot(range(0, len(evals)), evals, 'b')
@@ -52,7 +53,7 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14
         plt.suptitle('Spectrum decay and eigengap (%i)' %
                       int(max_eigs), fontsize=fontsize)
     ax1.legend(prop={'size': 12}, fontsize=label_fontsize, loc='best')
-    ax2 = fig.add_subplot(1, 2, 2)
+    ax2 = ax[1]
     ax2.set_yscale('log')
     ax2.scatter(range(0, len(first_diff)), np.abs(first_diff))
     ax2.set_ylabel('Eigenvalues first derivatives (abs)', fontsize=label_fontsize)
