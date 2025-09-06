@@ -19,6 +19,7 @@ import warnings
 try:
     import matplotlib.pyplot as plt
     from matplotlib.patches import Ellipse
+    from matplotlib import cm, colors as mcolors
 except Exception:
     plt = None
     Ellipse = None
@@ -211,6 +212,47 @@ def _scaling_values(G, mode="anisotropy", eps=1e-8):
         return np.ones_like(s)
     return s / (rng + eps)
 
+def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=None):
+    if c is None:
+        return None
+    try:
+        arr = np.asarray(c)
+        if arr.ndim == 1 and arr.shape[0] == n and np.issubdtype(arr.dtype, np.number):
+            norm = mcolors.Normalize(vmin=None if vmin is None else float(vmin),
+                                     vmax=None if vmax is None else float(vmax))
+            mapper = cm.get_cmap(cmap)
+            rgba = mapper(norm(arr))
+            if default_alpha is not None:
+                rgba[:, 3] = default_alpha
+            return rgba
+        if arr.ndim == 2 and arr.shape[0] == n and arr.shape[1] in (3, 4):
+            rgba = np.zeros((n, 4), float)
+            rgba[:, :arr.shape[1]] = arr
+            if arr.shape[1] == 3:
+                rgba[:, 3] = 1.0 if default_alpha is None else default_alpha
+            if default_alpha is not None:
+                rgba[:, 3] = default_alpha
+            return rgba
+    except Exception:
+        pass
+    # Try list of color specs or categorical labels
+    try:
+        # If elements are valid color specs, convert each
+        rgba = np.array([mcolors.to_rgba(ci) for ci in c], float)
+        if rgba.shape[0] == n:
+            if default_alpha is not None:
+                rgba[:, 3] = default_alpha
+            return rgba
+    except Exception:
+        pass
+    # Treat as categorical labels
+    labels, inv = np.unique(np.asarray(c), return_inverse=True)
+    base = cm.get_cmap("tab20" if len(labels) > 10 else "tab10")
+    palette = np.array([base(i / max(1, len(labels) - 1)) for i in range(len(labels))], float)
+    rgba = palette[inv]
+    if default_alpha is not None:
+        rgba[:, 3] = default_alpha
+    return rgba
 
 def plot_riemann_metric_localized(
     Y,
@@ -219,14 +261,22 @@ def plot_riemann_metric_localized(
     n_plot=1500,
     scale_mode="anisotropy",
     scale_gain=1.0,
-    scale_base="auto",   # base ellipse size in data units; "auto" = 5% of max span
+    scale_base="auto",
     alpha=0.25,
-    edgecolor=None,      # outline for visibility on light/dark bg
+    edgecolor=None,
     facecolor=None,
     ax=None,
     seed=7,
     zorder=2,
     show_points=True,
+    colors=None,              # new: per-sample colors (numeric, categorical, or color specs)
+    cmap="viridis",
+    vmin=None,
+    vmax=None,
+    point_alpha=0.6,
+    ellipse_alpha=None,
+    point_size=6,
+    scatter_kw=None,
 ):
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
@@ -237,8 +287,6 @@ def plot_riemann_metric_localized(
     if G_emb is None:
         r = RiemannMetric(Y, L)
         G_emb = r.get_rmetric()
-
-    # Pre-project G to SPD to avoid repeated eigs
     G_emb = np.asarray(G_emb)
     G_emb = np.stack([_project_spd(G_emb[i]) for i in range(G_emb.shape[0])], axis=0)
 
@@ -260,24 +308,40 @@ def plot_riemann_metric_localized(
     if edgecolor is None:
         edgecolor = "k"
 
-    if show_points:
-        ax.scatter(Y[:, 0], Y[:, 1], s=3, c="0.3", alpha=0.12, zorder=zorder - 2)
+    rgba_all = _prepare_colors(colors, n, cmap=cmap, vmin=vmin, vmax=vmax,
+                               default_alpha=point_alpha)
 
-    min_axis = 0.2 * base  # ensure visibility
+    if show_points:
+        if rgba_all is not None:
+            kw = dict(s=point_size, zorder=zorder - 2)
+            if scatter_kw: kw.update(scatter_kw)
+            ax.scatter(Y[:, 0], Y[:, 1], c=rgba_all, **kw)
+        else:
+            kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 2)
+            if scatter_kw: kw.update(scatter_kw)
+            ax.scatter(Y[:, 0], Y[:, 1], **kw)
+
+    min_axis = 0.2 * base
     for i in idx:
         a, b, theta = _ellipse_from_G(G_emb[i], scale=scale_gain * base)
         a = max(a * (0.5 + 0.5 * scales[i]), min_axis)
         b = max(b * (0.5 + 0.5 * scales[i]), min_axis)
         if not (np.isfinite(a) and np.isfinite(b)):
             continue
+        fc = facecolor
+        ec = edgecolor
+        if rgba_all is not None:
+            r, g, bcol, a_in = rgba_all[i]
+            fc = (r, g, bcol, alpha if ellipse_alpha is None else ellipse_alpha)
+            ec = (r, g, bcol, 1.0 if ellipse_alpha is None else ellipse_alpha)
         e = Ellipse(
             (Y[i, 0], Y[i, 1]),
             width=2 * a,
             height=2 * b,
             angle=theta,
-            facecolor=facecolor,
-            edgecolor=edgecolor,
-            alpha=alpha,
+            facecolor=fc if rgba_all is not None else facecolor,
+            edgecolor=ec,
+            alpha=None if rgba_all is not None else alpha if ellipse_alpha is None else ellipse_alpha,
             linewidth=0.3,
             zorder=zorder,
         )
@@ -289,7 +353,6 @@ def plot_riemann_metric_localized(
     ax.set_ylim(y0 - pad, y1 + pad)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(False)
-    # remove frame cleanly
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
@@ -304,13 +367,16 @@ def plot_riemann_metric_global(
     k_avg=16,
     scale_mode="anisotropy",
     scale_gain=1.0,
-    scale_base="auto",   # base ellipse size in data units; "auto" = 5% of max span
+    scale_base="auto",
     alpha=0.35,
     edgecolor=None,
     facecolor=None,
     ax=None,
-    zorder=2,
-    show_points=False,
+    zorder=3,               # ensure ellipses sit above points
+    show_points=True,       # embedding points first; ellipses drawn on top
+    point_alpha=0.25,
+    point_size=4,
+    scatter_kw=None,
 ):
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
@@ -321,8 +387,6 @@ def plot_riemann_metric_global(
     if G_emb is None:
         r = RiemannMetric(Y, L)
         G_emb = r.get_rmetric()
-
-    # Pre-project to SPD for stability
     G_emb = np.asarray(G_emb)
     G_emb = np.stack([_project_spd(G_emb[i]) for i in range(G_emb.shape[0])], axis=0)
 
@@ -340,7 +404,6 @@ def plot_riemann_metric_global(
     XX, YY = np.meshgrid(gx, gy)
     grid_pts = np.c_[XX.ravel(), YY.ravel()]
 
-    # neighbors of each grid point
     k_eff = min(max(2, int(k_avg)), Y.shape[0])
     if _HAVE_SK:
         nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto").fit(Y)
@@ -350,7 +413,6 @@ def plot_riemann_metric_global(
         d2 = np.sum(diffs * diffs, axis=2)
         inds = np.argsort(d2, axis=1)[:, :k_eff]
 
-    # average local metric at grid points
     G_avg = np.mean(G_emb[inds], axis=1)
 
     base = (0.05 * span) if scale_base == "auto" else float(scale_base)
@@ -358,7 +420,9 @@ def plot_riemann_metric_global(
     scales = _scaling_values(G_avg, mode=scale_mode)
 
     if show_points:
-        ax.scatter(Y[:, 0], Y[:, 1], s=3, c="0.3", alpha=0.10, zorder=zorder - 2)
+        kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 3)
+        if scatter_kw: kw.update(scatter_kw)
+        ax.scatter(Y[:, 0], Y[:, 1], **kw)
 
     min_axis = 0.2 * base
     for i, gp in enumerate(grid_pts):
