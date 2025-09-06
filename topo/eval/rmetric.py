@@ -369,92 +369,326 @@ def plot_riemann_metric_global(
     scale_gain=1.0,
     scale_base="auto",
     alpha=0.35,
-    edgecolor=None,
-    facecolor=None,
+    edgecolor="k",
+    cmap="coolwarm",
+    vmin=None, vmax=None,
     ax=None,
-    zorder=3,               # ensure ellipses sit above points
-    show_points=True,       # embedding points first; ellipses drawn on top
+    zorder=3,
+    show_points=True,
     point_alpha=0.25,
     point_size=4,
     scatter_kw=None,
+    min_sep_factor=0.9,
+    choose_strong_first=True,
+    deformation_vals=None,
+    deformation_kwargs=None,
+    respect_existing_limits=True, 
 ):
+    """
+    Draw grid-averaged indicatrices with:
+      • Poisson-like thinning to reduce ellipse overlap (min center separation).
+      • Ellipse facecolor driven by local expansion/contraction (centered logdet).
+
+    Coloring:
+      deformation at a grid site = average of per-cell deformation of its k_avg neighbors.
+      vmin/vmax can be supplied or inferred (symmetric clipping).
+
+    Non-overlap:
+      greedy selection of grid sites with pairwise spacing >= min_sep_factor * base.
+    """
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
-    Y = _center(Y)
-    L = _symmetrize(L)
-    if Y.shape[1] != 2:
+    from matplotlib import cm, colors as mcolors
+    from topo.eval.rmetric import (
+        RiemannMetric, _center as _ct, _symmetrize as _sz, _project_spd, _scaling_values
+    )
+
+    # Keep the *original* embedding coordinates for plotting/grid/limits
+    Y_plot = np.asarray(Y, dtype=float)
+    L = _sz(L)
+    if Y_plot.shape[1] != 2:
         raise ValueError("plot_riemann_metric_global expects 2D embeddings.")
+
+    # Compute metric per cell (RiemannMetric centers internally for stability)
     if G_emb is None:
-        r = RiemannMetric(Y, L)
-        G_emb = r.get_rmetric()
+        G_emb = RiemannMetric(Y_plot, L).get_rmetric()
     G_emb = np.asarray(G_emb)
     G_emb = np.stack([_project_spd(G_emb[i]) for i in range(G_emb.shape[0])], axis=0)
 
+    # Deformation per cell (for color)
+    if deformation_vals is None:
+        kwargs = dict(center="median", diffusion_t=0, normalize="symmetric",
+                      clip_percentile=2.0, return_limits=True)
+        if deformation_kwargs: kwargs.update(deformation_kwargs)
+        deform_vals, (vmin_auto, vmax_auto) = calculate_deformation(Y_plot, L, G_emb=G_emb, **kwargs)
+    else:
+        deform_vals = np.asarray(deformation_vals)
+        a = np.nanmax(np.abs(np.clip(
+            deform_vals,
+            np.nanpercentile(deform_vals, 2.0),
+            np.nanpercentile(deform_vals, 98.0)
+        )))
+        vmin_auto, vmax_auto = -a, a
+
     if ax is None:
         ax = plt.gca()
-    if facecolor is None:
-        facecolor = "C1"
-    if edgecolor is None:
-        edgecolor = "k"
 
-    x0, y0 = Y.min(0); x1, y1 = Y.max(0)
+    # Save current limits if asked to respect them (overlay case)
+    xlim0, ylim0 = ax.get_xlim(), ax.get_ylim()
+
+    # Grid over the *original* embedding extent
+    x0, y0 = Y_plot.min(0); x1, y1 = Y_plot.max(0)
     span = max(x1 - x0, y1 - y0)
     gx = np.linspace(x0, x1, max(2, int(grid_res)))
     gy = np.linspace(y0, y1, max(2, int(grid_res)))
     XX, YY = np.meshgrid(gx, gy)
     grid_pts = np.c_[XX.ravel(), YY.ravel()]
 
-    k_eff = min(max(2, int(k_avg)), Y.shape[0])
+    # Neighbors of each grid point (use original coordinates)
+    k_eff = min(max(2, int(k_avg)), Y_plot.shape[0])
     if _HAVE_SK:
-        nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto").fit(Y)
+        nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto").fit(Y_plot)
         _, inds = nn.kneighbors(grid_pts, return_distance=True)
     else:
-        diffs = grid_pts[:, None, :] - Y[None, :, :]
+        diffs = grid_pts[:, None, :] - Y_plot[None, :, :]
         d2 = np.sum(diffs * diffs, axis=2)
         inds = np.argsort(d2, axis=1)[:, :k_eff]
 
+    # Average local metric + deformation at grid points
     G_avg = np.mean(G_emb[inds], axis=1)
+    deform_grid = np.mean(deform_vals[inds], axis=1)
 
+    # Base size and color normalization
     base = (0.05 * span) if scale_base == "auto" else float(scale_base)
     base = max(base, 1e-6)
-    scales = _scaling_values(G_avg, mode=scale_mode)
+    vmin_eff = vmin if vmin is not None else vmin_auto
+    vmax_eff = vmax if vmax is not None else vmax_auto
+    norm = mcolors.Normalize(vmin=vmin_eff, vmax=vmax_eff)
+    mapper = cm.get_cmap(cmap)
 
+    # Estimate ellipse sizes (precompute) + thinning to reduce overlaps
+    scales = _scaling_values(G_avg, mode=scale_mode)
+    min_axis = 0.2 * base
+
+    keep = []
+    taken = np.zeros(grid_pts.shape[0], dtype=bool)
+    order = np.argsort(-np.abs(deform_grid)) if choose_strong_first else np.arange(grid_pts.shape[0])
+    min_sep = min_sep_factor * base
+
+    for j in order:
+        if taken[j]:
+            continue
+        if not keep:
+            keep.append(j); taken[j] = True; continue
+        d2 = np.sum((grid_pts[keep] - grid_pts[j])**2, axis=1)
+        if np.all(np.sqrt(d2) >= min_sep):
+            keep.append(j); taken[j] = True
+
+    keep = np.array(keep, dtype=int)
+
+    # Optional background points (use original coordinates)
     if show_points:
         kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 3)
         if scatter_kw: kw.update(scatter_kw)
-        ax.scatter(Y[:, 0], Y[:, 1], **kw)
+        ax.scatter(Y_plot[:, 0], Y_plot[:, 1], **kw)
 
-    min_axis = 0.2 * base
-    for i, gp in enumerate(grid_pts):
-        a, b, theta = _ellipse_from_G(G_avg[i], scale=scale_gain * base)
+    # Draw thinned ellipses with deformation-driven colors (positions in original coords)
+    for i in keep:
+        Gi = 0.5 * (G_avg[i] + G_avg[i].T)
+        w, v = np.linalg.eigh(Gi)
+        w = np.clip(w, 1e-12, None)
+        idx = np.argsort(w)[::-1]
+        a = np.sqrt(w[idx[0]]) * scale_gain * base
+        b = np.sqrt(w[idx[-1]]) * scale_gain * base
         a = max(a * (0.5 + 0.5 * scales[i]), min_axis)
         b = max(b * (0.5 + 0.5 * scales[i]), min_axis)
-        if not (np.isfinite(a) and np.isfinite(b)):
-            continue
+        theta = np.degrees(np.arctan2(v[:, idx[0]][1], v[:, idx[0]][0]))
+
+        fc = mapper(norm(deform_grid[i]))
         e = Ellipse(
-            (gp[0], gp[1]),
+            (grid_pts[i, 0], grid_pts[i, 1]),
             width=2 * a,
             height=2 * b,
             angle=theta,
-            facecolor=facecolor,
+            facecolor=fc,
             edgecolor=edgecolor,
             alpha=alpha,
-            linewidth=0.3,
+            linewidth=0.4,
             zorder=zorder,
         )
         e.set_clip_on(True)
         ax.add_patch(e)
 
-    pad = 0.06 * span
-    ax.set_xlim(x0 - pad, x1 + pad)
-    ax.set_ylim(y0 - pad, y1 + pad)
+    # Axes aesthetics — either keep prior limits (overlay) or set from original embedding
+    if respect_existing_limits:
+        ax.set_xlim(xlim0); ax.set_ylim(ylim0)
+    else:
+        pad = 0.06 * span
+        ax.set_xlim(x0 - pad, x1 + pad)
+        ax.set_ylim(y0 - pad, y1 + pad)
+
     ax.set_aspect("equal", adjustable="box")
     ax.grid(False)
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
+
+    # Colorbar
+    mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+    mappable.set_array([])
+    cb = plt.colorbar(mappable, ax=ax, fraction=0.046, pad=0.04)
+    cb.set_label("Contraction  ←  centered log det(G)  →  Expansion")
+
     return ax
 
+
+def calculate_deformation(
+    Y,
+    L,
+    G_emb=None,
+    center="median",            # {'median','mean', float}
+    use_dual=False,             # if True, compute with dual metric H so that val = -logdet(H)
+    diffusion_t=0,              # integer steps of graph diffusion smoothing on the scalar field
+    diffusion_op=None,          # optional Markov operator P; if None and diffusion_t>0, built from L
+    re_center_after_diffusion=True,
+    clip_percentile=2.0,        # robust clipping for color limits
+    normalize="symmetric",      # {'symmetric','none'}
+    return_limits=True,
+):
+    """
+    Returns:
+        vals : (n,) centered log-det(G) [<0 contraction, >0 expansion]
+        (vmin, vmax) : effective color limits (if return_limits)
+    """
+    if plt is None:
+        # still allow compute w/o plotting backend
+        pass
+
+    from topo.eval.rmetric import (
+        RiemannMetric, _center as _ct, _symmetrize as _sz,
+        _ensure_array as _ea
+    )
+    Y = _ct(Y); L = _sz(L)
+    if G_emb is None:
+        G_emb = RiemannMetric(Y, L).get_rmetric()
+
+    if use_dual:
+        # equivalently: val = -logdet(H)
+        lam = np.linalg.eigvalsh(G_emb)  # treat input as H if provided
+        lam = np.clip(lam, 1e-12, None)
+        logdet = -np.sum(np.log(lam), axis=1)
+    else:
+        lam = np.linalg.eigvalsh(G_emb)
+        lam = np.clip(lam, 1e-12, None)
+        logdet = np.sum(np.log(lam), axis=1)
+
+    # center
+    if isinstance(center, str):
+        ckey = center.lower()
+        ref = np.nanmedian(logdet) if ckey == "median" else np.nanmean(logdet)
+    else:
+        ref = float(center)
+    vals = logdet - ref
+
+    # optional diffusion smoothing
+    if int(diffusion_t) > 0:
+        if diffusion_op is None:
+            # build random-walk from L
+            Ld = _ea(L)
+            d = np.clip(np.diag(Ld).astype(float), 1e-12, None)
+            W = np.diag(d) - Ld
+            P = (W / d[:, None])
+        else:
+            P = diffusion_op
+        v = vals.copy()
+        for _ in range(int(diffusion_t)):
+            v = P @ v
+        vals = v
+        if re_center_after_diffusion:
+            if isinstance(center, str) and center.lower() == "median":
+                vals -= np.nanmedian(vals)
+            else:
+                vals -= np.nanmean(vals)
+
+    # robust color limits
+    lo = np.nanpercentile(vals, clip_percentile)
+    hi = np.nanpercentile(vals, 100.0 - clip_percentile)
+    vals_clipped = np.clip(vals, lo, hi)
+    if normalize == "symmetric":
+        a = np.nanmax(np.abs(vals_clipped))
+        vmin_eff, vmax_eff = -a, a
+    else:
+        vmin_eff, vmax_eff = lo, hi
+
+    return (vals, (vmin_eff, vmax_eff)) if return_limits else vals
+
+
+def plot_metric_contraction_expansion(
+    Y,
+    L,
+    G_emb=None,
+    center="median",
+    normalize="symmetric",
+    clip_percentile=2.0,
+    s=6,
+    alpha=0.9,
+    cmap="coolwarm",
+    vmin=None, vmax=None,
+    show_colorbar=True,
+    ax=None,
+    zorder=1,
+    use_dual=False,
+    diffusion_t=0,
+    diffusion_op=None,
+    re_center_after_diffusion=True,
+    plot_strong_last=True,
+):
+    if plt is None:
+        raise RuntimeError("matplotlib is required for plotting.")
+
+    from topo.eval.rmetric import _center as _ct, _symmetrize as _sz
+    Y = _ct(Y); L = _sz(L)
+    if Y.shape[1] != 2:
+        raise ValueError("plot_metric_contraction_expansion expects a 2D embedding (n,2).")
+
+    vals, (vmin_eff_auto, vmax_eff_auto) = calculate_deformation(
+        Y, L, G_emb=G_emb, center=center, use_dual=use_dual,
+        diffusion_t=diffusion_t, diffusion_op=diffusion_op,
+        re_center_after_diffusion=re_center_after_diffusion,
+        clip_percentile=clip_percentile, normalize=normalize, return_limits=True
+    )
+    vmin_eff = vmin if vmin is not None else vmin_eff_auto
+    vmax_eff = vmax if vmax is not None else vmax_eff_auto
+
+    if ax is None:
+        ax = plt.gca()
+
+    order = np.arange(vals.shape[0])
+    if plot_strong_last:
+        order = np.argsort(np.abs(vals))
+
+    sc = ax.scatter(
+        Y[order, 0], Y[order, 1],
+        c=vals[order],
+        s=s,
+        alpha=alpha,
+        cmap=cmap,
+        vmin=vmin_eff, vmax=vmax_eff,
+        zorder=zorder,
+    )
+
+    x0, y0 = Y.min(0); x1, y1 = Y.max(0)
+    span = max(x1 - x0, y1 - y0); pad = 0.06 * span
+    ax.set_xlim(x0 - pad, x1 + pad); ax.set_ylim(y0 - pad, y1 + pad)
+    ax.set_aspect("equal", adjustable="box"); ax.grid(False)
+    for sp in ax.spines.values(): sp.set_visible(False)
+    ax.set_xticks([]); ax.set_yticks([])
+
+    if show_colorbar:
+        cb = plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
+        cb.set_label("Contraction  ←  centered log det(G)  →  Expansion")
+
+    return ax, vals
 
 # Backward-compatibility shim (kept to avoid import errors in older code)
 def get_eccentricity(emb, laplacian, G_emb=None):

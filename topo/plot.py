@@ -11,7 +11,7 @@ except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=10):
+def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14, wspace=0.3):
     """
     Plot the eigenspectrum decay and its first derivatives.
 
@@ -27,7 +27,7 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=10
     A simple plot of the eigenspectrum decay.
 
     """
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize, wspace=wspace)
     max_eigs = int(np.sum(evals > 0, axis=0))
     first_diff = np.diff(evals)
     sec_diff = np.diff(first_diff)
