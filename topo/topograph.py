@@ -1,7 +1,6 @@
 # TopOMetry high-level API - the TopOGraph class
 #
-# Author: Davi Sidarta-Oliveira <davisidarta(at)gmail(dot)com>
-# School of Medical Sciences, University of Campinas, Brazil
+# Author: David S Oliveira <david.oliveira(at)dpag(dot)ox(dot)ac(dot)uk>
 #
 import time
 import numpy as np
@@ -240,13 +239,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',
-                 laplacian_type='random_walk',
+                 laplacian_type='normalized',
                  projection_method='MAP',
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
                  graph_metric='euclidean',
                  alpha=1.0,
-                 diff_t=None,
+                 diff_t=1,
                  semi_aniso=False,
                  delta=1.0,
                  sigma=0.1,

@@ -301,177 +301,132 @@ def mle_global(K, id_local=None, n_neighbors=15, k1=1):
     return 1.0 / np.mean(1.0 / id_local)
 
 
-
-
-# EXPERIMENTAL
-def local_eigengap_experimental(X, max_n_components=30, n_neighbors=30, metric='cosine', verbose=False, **kwargs):
-    # Construct neighborhood graph
-    graph = kNN(X, n_neighbors=n_neighbors, metric=metric, **kwargs)
-    # Compute graph Laplacian
-    diff_op = diffusion_operator(graph)
-    if verbose:
-        print('Started evaluating locally...')
-    # Compute local intrinsic dimensionality
-    max_n_components = 50  # number of eigenvalues to compute
-    local_dim = np.zeros((graph.shape[0], max_n_components))
-    for i in range(graph.shape[0]):
-        indices = graph.indices[graph.indptr[i]:graph.indptr[i+1]]
-        P = diff_op[indices][:, indices]
-        evals, evecs = eigsh(P, k=max_n_components, which='LM')
-        max_eigs = int(np.sum(evals > 0, axis=0))
-        first_diff = np.diff(evals)
-        eigengap = np.argmax(first_diff) + 1
-        if max_eigs == len(evals):
-            # Could not find a discrete eigengap crossing 0
-            use_eigengap = eigengap
-        else:
-            # Found a discrete eigengap crossing 0
-            use_eigengap = max_eigs
-        local_dim[i] = use_eigengap
-    return local_dim
-
-def automated_sizing(
-    X,
-    k=100,
-    backend='hnswlib',
-    metric='euclidean',
-    n_jobs=-1,
-    min_components=32,
-    max_components=512,
-    headroom=0.2,
-    random_state=None,
-    use_median=False,
-    return_details=False,
-    **knn_kwargs,
-):
-    n = X.shape[0]
-    k = int(min(max(2, k), max(2, n - 1)))
-    K = kNN(
-        X,
-        n_jobs=n_jobs,
-        n_neighbors=k,
-        metric=metric,
-        backend=backend,
-        random_state=random_state,
-        **knn_kwargs,
-    )
-    local = mle_local(K, n_neighbors=k)
-    local = np.asarray(local, dtype=float)
-    local = np.clip(local, 1.0, np.inf)
-    if use_median:
-        gid = float(np.nanmedian(local))
-    else:
-        gid = float(mle_global(K, id_local=local, n_neighbors=k))
-    with_headroom = gid * (1.0 + float(headroom))
-    upper_cap = min(int(max_components), max(2, n - 2))
-    n_components = int(np.ceil(np.clip(with_headroom, int(min_components), upper_cap)))
-    if return_details:
-        return n_components, {
-            'local_id_mle': local,
-            'global_id_mle': gid,
-            'selected_n_components': n_components,
-        }
-    return n_components
-   
-
 def automated_scaffold_sizing(
     X,
-    ks=(15, 30, 60),
+    method: str = 'fsa',           # 'fsa' (quantile over ks) or 'mle' (global MLE at k)
+    ks=(15, 30, 60),               # for 'fsa': iterable of k; for 'mle': can pass an int k or an iterable (we'll use max)
     backend='hnswlib',
     metric='euclidean',
-    n_jobs=-1,
-    quantile=0.99,
-    min_components=16,
-    max_components=512,
-    headroom=0.15,
+    n_jobs: int = -1,
+    quantile: float = 0.99,        # only used for 'fsa'
+    min_components: int = 16,
+    max_components: int = 512,
+    headroom: float = 0.15,
     random_state=None,
-    return_details=False,
+    use_median: bool = False,      # only used for 'mle': global id via median of locals (else Levina–Bickel global)
+    return_details: bool = False,
     **knn_kwargs,
 ):
     """
-    Estimate an automated number of spectral components for the scaffold using
-    robust FSA intrinsic dimensionality across cells.
+    Unified automated scaffold sizing.
 
-    Strategy:
-      1) Compute FSA local i.d. for a small set of neighborhood sizes ks.
-      2) Aggregate per-cell i.d. across ks via median (robust).
-      3) Take the upper quantile (e.g. 99th percentile) across cells to cover 99% of points.
-      4) Add a small headroom and clamp to [min_components, max_components] and ≤ n-2.
+    method='fsa':
+        - Compute local FSA i.d. for each k in `ks`, take per-cell median across ks,
+          then take the upper `quantile` across cells, add `headroom`, clamp to bounds.
 
-    Parameters
-    ----------
-    X : ndarray or csr_matrix, shape (n_samples, n_features)
-    ks : iterable of int
-        Neighborhood sizes to probe (kept small for speed).
-    backend : str
-        kNN backend (e.g., 'hnswlib', 'faiss', 'nmslib', 'annoy', 'sklearn').
-    metric : str
-        Distance metric for kNN construction.
-    n_jobs : int
-        Parallelism for kNN backends that support it.
-    quantile : float in (0,1)
-        Upper-quantile coverage of per-cell i.d. (e.g., 0.99 → covers 99% of cells).
-    min_components, max_components : int
-        Bounds for returned number of components.
-    headroom : float
-        Fractional extra margin added to the quantile estimate.
-    random_state : int or np.random.RandomState or None
-        RNG seed for backends that support it.
-    return_details : bool
-        If True, also return diagnostic details.
+    method='mle':
+        - Use a single neighborhood size k (if `ks` is an int; if iterable, use max(ks)).
+        - Compute local MLE i.d. at k, then global i.d. via:
+            * median of locals if `use_median=True`
+            * Levina–Bickel harmonic-mean estimator (mle_global) otherwise.
+        - Add `headroom`, clamp to bounds.
 
     Returns
     -------
     n_components : int
-        Recommended number of spectral components.
-    details : dict (optional, if return_details=True)
-        {
-          'per_k_local_id': {k: np.ndarray (n,)},
-          'robust_cell_id': np.ndarray (n,),
-          'quantile_value': float,
-          'selected_n_components': int
-        }
+    details : dict (if return_details=True)
     """
-    if isinstance(ks, int):
-        ks = (ks,)
-    ks = tuple(sorted({int(k) for k in ks if int(k) > 1}))
-    if len(ks) == 0:
-        ks = (15, 30, 60)
-
+    method = str(method).lower().strip()
     n = X.shape[0]
-    per_k_local = {}
-    for k in ks:
-        k_eff = min(k, max(2, n - 1))
+
+    def _cap_int(v, lo, hi):
+        return int(np.ceil(np.clip(float(v), int(lo), int(hi))))
+
+    upper_cap = min(int(max_components), max(2, n - 2))
+
+    if method == 'fsa':
+        # Normalize ks
+        if isinstance(ks, int):
+            ks_use = (ks,)
+        else:
+            ks_use = tuple(sorted({int(k) for k in ks if int(k) > 1}))
+        if len(ks_use) == 0:
+            ks_use = (15, 30, 60)
+
+        per_k_local = {}
+        for k in ks_use:
+            k_eff = min(int(k), max(2, n - 1))
+            K = kNN(
+                X,
+                n_jobs=n_jobs,
+                n_neighbors=k_eff,
+                metric=metric,
+                backend=backend,
+                random_state=random_state,
+                **knn_kwargs,
+            )
+            d_local = fsa_local(K, n_neighbors=k_eff)
+            per_k_local[k_eff] = np.asarray(d_local, dtype=float)
+
+        ids_matrix = np.vstack([per_k_local[k] for k in sorted(per_k_local)]).T  # (n, len(ks))
+        robust_cell_id = np.nanmedian(ids_matrix, axis=1)
+        robust_cell_id = np.clip(robust_cell_id, 1.0, np.inf)
+
+        qv = float(np.nanpercentile(robust_cell_id, 100.0 * float(quantile)))
+        with_headroom = qv * (1.0 + float(headroom))
+        n_components = _cap_int(with_headroom, min_components, upper_cap)
+
+        if return_details:
+            return n_components, {
+                'method': 'fsa',
+                'ks': ks_use,
+                'per_k_local_id': per_k_local,
+                'robust_cell_id': robust_cell_id,
+                'quantile_value': qv,
+                'selected_n_components': n_components,
+            }
+        return n_components
+
+    elif method == 'mle':
+        # Accept either an int or an iterable for ks; choose a single k
+        if isinstance(ks, int):
+            k_int = ks
+        else:
+            ks_list = [int(k) for k in ks] if ks is not None else []
+            k_int = max(ks_list) if len(ks_list) else 100  # sensible default
+        k_int = min(int(k_int), max(2, n - 1))
+
         K = kNN(
             X,
             n_jobs=n_jobs,
-            n_neighbors=k_eff,
+            n_neighbors=k_int,
             metric=metric,
             backend=backend,
             random_state=random_state,
             **knn_kwargs,
         )
-        d_local = fsa_local(K, n_neighbors=k_eff)
-        per_k_local[k_eff] = np.asarray(d_local, dtype=float)
+        local = np.asarray(mle_local(K, n_neighbors=k_int), dtype=float)
+        local = np.clip(local, 1.0, np.inf)
 
-    # robust per-cell estimate across ks
-    ids_matrix = np.vstack([per_k_local[k] for k in sorted(per_k_local)]).T  # (n, len(ks))
-    robust_cell_id = np.nanmedian(ids_matrix, axis=1)
+        if use_median:
+            gid = float(np.nanmedian(local))
+        else:
+            gid = float(mle_global(K, id_local=local, n_neighbors=k_int))
 
-    # clip pathologies and compute upper-quantile
-    robust_cell_id = np.clip(robust_cell_id, 1.0, np.inf)
-    qv = float(np.nanpercentile(robust_cell_id, 100.0 * quantile))
+        with_headroom = gid * (1.0 + float(headroom))
+        n_components = _cap_int(with_headroom, min_components, upper_cap)
 
-    # headroom and clamping
-    with_headroom = qv * (1.0 + float(headroom))
-    upper_cap = min(int(max_components), max(2, n - 2))
-    n_components = int(np.ceil(np.clip(with_headroom, int(min_components), upper_cap)))
+        if return_details:
+            return n_components, {
+                'method': 'mle',
+                'k': k_int,
+                'local_id_mle': local,
+                'global_id_mle': gid,
+                'selected_n_components': n_components,
+            }
+        return n_components
 
-    if return_details:
-        return n_components, {
-            'per_k_local_id': per_k_local,
-            'robust_cell_id': robust_cell_id,
-            'quantile_value': qv,
-            'selected_n_components': n_components,
-        }
-    return n_components
+    else:
+        raise ValueError("`method` must be one of {'fsa','mle'}.")
+
+
