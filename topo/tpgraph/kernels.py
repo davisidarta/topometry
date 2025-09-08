@@ -13,6 +13,8 @@ from scipy.spatial import procrustes
 from scipy.stats import rv_discrete
 from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import normalize as _l2_normalize_rows
+
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
 from topo.spectral._spectral import graph_laplacian, diffusion_operator
@@ -26,6 +28,41 @@ from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 
+
+def _maybe_l2_normalize_rows(X):
+    """
+    Return X with row-wise L2 normalization if possible.
+    Works for dense (ndarray) and CSR/CSC/COO sparse matrices.
+    """
+    try:
+        return _l2_normalize_rows(X, norm='l2', axis=1, copy=False)
+    except Exception:
+        # Fall back to a safe copy if in-place fails
+        return _l2_normalize_rows(X, norm='l2', axis=1, copy=True)
+
+def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
+    """Backends that expect unit-norm vectors for 'cosine' space."""
+    return backend in ('hnswlib', 'faiss')
+
+def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
+    """
+    Given triplets of cosine *distance* d = 1 - cos in [0, 2],
+    convert to angle θ = arccos(cos) with cos = 1 - d.
+    Returns in-place modified dists (angles in radians).
+    """
+    # cos = 1 - d
+    # clamp to [-1, 1] before arccos
+    cos_vals = 1.0 - dists
+    cos_vals = np.clip(cos_vals, -1.0, 1.0)
+    return np.arccos(cos_vals)
+
+def _ensure_nonneg_and_finite(arr, eps=0.0):
+    arr = np.where(np.isfinite(arr), arr, 0.0)
+    if eps > 0.0:
+        arr = np.maximum(arr, eps)
+    else:
+        arr = np.maximum(arr, 0.0)
+    return arr
 
 
 
@@ -41,7 +78,8 @@ def _adap_bw(K, n_neighbors):
 def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
                    expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
-                   backend='nmslib', n_jobs=-1, verbose=False, **kwargs):
+                   backend='nmslib', n_jobs=-1, verbose=False,
+                   use_angular=True, square_distances=True, **kwargs):
     """
     Compute a kernel matrix from a set of points.
 
@@ -120,18 +158,36 @@ def compute_kernel(X, metric='cosine',
     """
     dens_dict = {}
     N = np.shape(X)[0]
+    # initialize optional variables used only when expand_nbr_search=True
+    new_k = None
+    adap_sd_new = None
+    pm_new = None
+    new_K = None
     if n_jobs == -1:
         from joblib import cpu_count
         n_jobs = cpu_count()
     k = n_neighbors
+    # Sensible defaults for cosine-on-Z-scores (correlation geometry)
+    if metric == 'cosine':
+        # Only override if user didn't explicitly set these in kwargs
+        if 'use_angular' not in kwargs:
+            use_angular = True
+        if 'square_distances' not in kwargs:
+            square_distances = True
+        
     if metric == 'precomputed':
         K = X
         expand_nbr_search = False
     else:
+        # If using cosine with an ANN backend that requires unit vectors, normalize rows
+        X_for_knn = X
+        if (metric == 'cosine') and (not pairwise):
+            if _cosine_knn_requires_unit_vectors(backend):
+                X_for_knn = _maybe_l2_normalize_rows(X)
         if pairwise:
-            K = pairwise_distances(X, metric)
+            K = pairwise_distances(X_for_knn, metric)
         else:
-            K = kNN(X, metric=metric, n_neighbors=k,
+            K = kNN(X_for_knn, metric=metric, n_neighbors=k,
                     backend=backend, n_jobs=n_jobs, **kwargs)
         if return_densities:
             dens_dict['knn'] = K
@@ -183,32 +239,70 @@ def compute_kernel(X, metric='cosine',
                     dens_dict['expanded_neighborhood_graph'] = new_K
                     dens_dict['knn_expanded'] = new_K
         x, y, dists = find(K)
+
+        # If using cosine metric and 'use_angular', convert cosine distance (=1-cos) to angle (radians)
+        if metric == 'cosine' and use_angular:
+            dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
+
+        # Numerical guards for distances (important for arccos and exponent)
+        # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.
+        if metric == 'cosine' and not use_angular:
+            dists = np.clip(dists, 0.0, 2.0)
+        elif metric == 'cosine' and use_angular:
+            dists = np.clip(dists, 0.0, np.pi)
+        else:
+            dists = np.maximum(dists, 0.0)
         # Normalize distances
         if adaptive_bw:
             # Alpha decaying: the kernel adaptively decays depending on neighborhood density
             if alpha_decaying:
                 if expand_nbr_search:
-                    dists = (
-                        dists_new / (adap_sd_new[x] + 1e-10)) ** np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
+                    base = dists_new / (adap_sd_new[x] + 1e-10)
+                    expo = np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
                 else:
-                    dists = (dists / (adap_sd[x] + 1e-10)
-                             ) ** np.power(2, ((k - pm[x]) / pm[x]))
+                    base = dists / (adap_sd[x] + 1e-10)
+                    expo = np.power(2, ((k - pm[x]) / pm[x]))
+                d_scaled = np.power(base, expo)
             else:
                 if expand_nbr_search:
-                    dists = (dists_new / (adap_sd_new[x] + 1e-10))
+                    d_scaled = dists_new / (adap_sd_new[x] + 1e-10)
                 else:
-                    dists = (dists / (adap_sd[x] + 1e-10))
+                    d_scaled = dists / (adap_sd[x] + 1e-10)
+            if square_distances:
+                d_scaled = d_scaled ** 2
         else:
             if sigma is not None:
                 if sigma == 0:
                     sigma = 1e-10
-                dists = (dists / sigma) ** 2
-        W = csr_matrix((np.abs(np.exp(-dists)), (x, y)), shape=[N, N])
+                d_scaled = (dists / sigma)
+                if square_distances:
+                    d_scaled = d_scaled ** 2
+            else:
+                # Default scale if sigma is missing; keep distances as-is
+                d_scaled = dists
+
+        # Final kernel weights
+        W = csr_matrix((np.exp(-d_scaled), (x, y)), shape=[N, N])
+
+    # handle NaN/Inf robustly (set to 0 before symmetrizing)
+    W.data = _ensure_nonneg_and_finite(W.data, eps=0.0)
+
     if symmetrize:
         W = (W + W.T) / 2
-    #W[(np.arange(N), np.arange(N))] = 0
-    # handle nan
-    W.data = np.where(np.isnan(W.data), 1, W.data)
+
+    # handle NaNs/Infs robustly
+    W.data = np.where(np.isfinite(W.data), W.data, 0.0)
+
+    # --- only attach expanded-neighborhood diagnostics if they exist ---
+    if return_densities:
+        # existing density keys already set above stay as-is
+        if expand_nbr_search and (new_k is not None):
+            dens_dict['expanded_k_neighbor'] = new_k
+            dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
+            dens_dict['omega_nbr_expanded'] = pm_new
+            dens_dict['expanded_neighborhood_graph'] = new_K
+            dens_dict['knn_expanded'] = new_K
+
     if not return_densities:
         return W
     else:
@@ -337,7 +431,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                  n_landmarks=None,
                  cache_input=False,
                  verbose=False,
-                 random_state=None
+                 random_state=None,
+                 use_angular=True
                  ):
         self.n_neighbors = n_neighbors
         self.fuzzy = fuzzy
@@ -357,6 +452,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.cache_input = cache_input
         self.verbose = verbose
         self.random_state = random_state
+        self.use_angular = use_angular
         self.X = None
         self._K = None
         self.N = None
@@ -519,7 +615,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
                                                      n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
                                                      expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
-                                                     backend=self.backend, n_jobs=self.n_jobs, verbose=self.verbose, **kwargs)
+                                                     backend=self.backend, n_jobs=self.n_jobs, use_angular=self.use_angular, verbose=self.verbose, **kwargs)
         if self.metric != 'precomputed':
             self.knn_ = self.dens_dict['knn']
         if self.fuzzy:

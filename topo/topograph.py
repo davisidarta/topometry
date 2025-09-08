@@ -240,7 +240,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',
-                 laplacian_type='normalized',
+                 laplacian_type='random_walk',
                  projection_method='MAP',
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',

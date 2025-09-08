@@ -269,7 +269,7 @@ def plot_riemann_metric_localized(
     seed=7,
     zorder=2,
     show_points=True,
-    colors=None,              # new: per-sample colors (numeric, categorical, or color specs)
+    colors=None,              # per-sample colors (numeric, categorical, or color specs)
     cmap="viridis",
     vmin=None,
     vmax=None,
@@ -287,6 +287,8 @@ def plot_riemann_metric_localized(
     if G_emb is None:
         r = RiemannMetric(Y, L)
         G_emb = r.get_rmetric()
+
+    # Pre-project G to SPD to avoid repeated eigs
     G_emb = np.asarray(G_emb)
     G_emb = np.stack([_project_spd(G_emb[i]) for i in range(G_emb.shape[0])], axis=0)
 
@@ -297,10 +299,16 @@ def plot_riemann_metric_localized(
     if ax is None:
         ax = plt.gca()
 
+    # Establish target axes limits EARLY (we will fit ellipses inside these)
     x0, y0 = Y.min(0); x1, y1 = Y.max(0)
     span = max(x1 - x0, y1 - y0)
     base = (0.05 * span) if scale_base == "auto" else float(scale_base)
     base = max(base, 1e-6)
+    pad = 0.06 * span
+    xL, xR = x0 - pad, x1 + pad
+    yB, yT = y0 - pad, y1 + pad
+    ax.set_xlim(xL, xR)
+    ax.set_ylim(yB, yT)
 
     scales = _scaling_values(G_emb, mode=scale_mode)
     if facecolor is None:
@@ -328,35 +336,47 @@ def plot_riemann_metric_localized(
         b = max(b * (0.5 + 0.5 * scales[i]), min_axis)
         if not (np.isfinite(a) and np.isfinite(b)):
             continue
+
+        # Rotation-safe edge fitting: scale ellipse so its circumscribed circle fits in axes
+        cx, cy = Y[i, 0], Y[i, 1]
+        r = max(a, b)  # circumscribed circle radius (conservative bound)
+        allowed = min(cx - xL, xR - cx, cy - yB, yT - cy)
+        if allowed <= 0:
+            # Center is outside or on edge; skip to avoid drawing outside the box
+            continue
+        s_edge = min(1.0, allowed / r)
+        a *= s_edge
+        b *= s_edge
+
         fc = facecolor
         ec = edgecolor
         if rgba_all is not None:
-            r, g, bcol, a_in = rgba_all[i]
-            fc = (r, g, bcol, alpha if ellipse_alpha is None else ellipse_alpha)
-            ec = (r, g, bcol, 1.0 if ellipse_alpha is None else ellipse_alpha)
+            rch, gch, bch, a_in = rgba_all[i]
+            a_fill = alpha if ellipse_alpha is None else ellipse_alpha
+            fc = (rch, gch, bch, a_fill)
+            ec = (rch, gch, bch, 1.0 if ellipse_alpha is None else ellipse_alpha)
+
         e = Ellipse(
-            (Y[i, 0], Y[i, 1]),
+            (cx, cy),
             width=2 * a,
             height=2 * b,
             angle=theta,
             facecolor=fc if rgba_all is not None else facecolor,
             edgecolor=ec,
-            alpha=None if rgba_all is not None else alpha if ellipse_alpha is None else ellipse_alpha,
+            alpha=None if rgba_all is not None else (alpha if ellipse_alpha is None else ellipse_alpha),
             linewidth=0.3,
             zorder=zorder,
         )
-        e.set_clip_on(True)
+        e.set_clip_on(True)  # still clip (belt-and-braces), but scaling should keep it inside
         ax.add_patch(e)
 
-    pad = 0.06 * span
-    ax.set_xlim(x0 - pad, x1 + pad)
-    ax.set_ylim(y0 - pad, y1 + pad)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(False)
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
     return ax
+
 
 
 def plot_riemann_metric_global(
