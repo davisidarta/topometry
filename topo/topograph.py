@@ -167,8 +167,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  id_ks=50,
                  id_metric='euclidean',
                  id_quantile=0.99,
-                 id_min_components=16,
-                 id_max_components=512,
+                 id_min_components=32,
+                 id_max_components=1024,
                  id_headroom=0.5,
                  ):
         # Core config
@@ -366,13 +366,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # msDM-based sizing (both details)
         n = Z_ms.shape[0]
         max_cap = min(int(self.id_max_components), max(2, n - 2), int(self.n_eigs))
-        if max_cap < 32:
-            max_cap = 32  # ensure minimum for stability
+        if max_cap < 128:
+            max_cap = 128  # ensure minimum for stability
 
         # FSA (msDM)
         n_fsa, fsa_details = automated_scaffold_sizing(
             Z_ms,
-            method='fsa',
+            method='mle',
             ks=self.id_ks,
             backend=self.backend,
             metric=self.id_metric,

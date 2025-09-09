@@ -1,3 +1,4 @@
 from .global_scores import global_score_pca, global_score_laplacian
 from .local_scores import knn_spearman_r, knn_spearman_r, geodesic_distance, geodesic_correlation
 from .rmetric import RiemannMetric, get_eccentricity
+#from .topo_metrics import rank_diffusion_correlation, multiscale_diffusion_emd, spectral_procrustes,diffusion_knn_preservation,diffusion_trustworthiness,diffusion_continuity,diffusion_rank_biased_overlap,rowwise_js_similarity,sparse_neighborhood_f1,spectral_similarity,commute_time_trace_gap,topo_preserve_score

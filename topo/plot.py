@@ -504,6 +504,7 @@ def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
 
+
 def plot_eigenvectors(
     eigenvectors,
     n_eigenvectors=10,
@@ -512,39 +513,70 @@ def plot_eigenvectors(
     figsize=(23, 2),
     fontsize=10,
     title='DC',
-    orientation="horizontal",   # "horizontal" = row layout, "vertical" = column layout
+    orientation="horizontal",      # "horizontal" (1 row) or "vertical" (stacked rows)
+    row_height=0.8,                # inches per row when orientation="vertical"
+    width=8.0,                     # figure width (inches) for vertical layout
+    marker_base=6,                 # base marker size; auto-scales in vertical mode
     **kwargs,
 ):
+    X = np.asarray(eigenvectors)
+    n, m = X.shape
+    k = int(min(n_eigenvectors, m))
+
     if orientation not in ("horizontal", "vertical"):
         raise ValueError("orientation must be 'horizontal' or 'vertical'.")
 
     if orientation == "horizontal":
-        fig, axes = plt.subplots(1, n_eigenvectors, figsize=figsize,
-                                 constrained_layout=False)
-    else:  # vertical
-        fig, axes = plt.subplots(n_eigenvectors, 1, figsize=figsize,
-                                 constrained_layout=False)
+        # original-style strip of columns
+        fig, axes = plt.subplots(1, k, figsize=figsize, constrained_layout=False)
+        axes = np.atleast_1d(axes)
+        for i, ax in enumerate(axes):
+            ax.set_title(f"{title} {i+1}", fontsize=fontsize)
+            ax.scatter(np.arange(n), X[:, i], c=labels, cmap=cmap, s=marker_base, **kwargs)
+            ax.set_xticks([]); ax.set_yticks([])
+        plt.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.9, wspace=0.05)
+        plt.show()
+        return
 
-    # ensure axes is iterable
-    if n_eigenvectors == 1:
-        axes = [axes]
+    # --- Vertical (stacked) slender composition ---
+    # Compute a sane figure size: width × (rows * row_height)
+    fig_h = max(2.5, k * float(row_height))
+    fig_w = float(width)
+    fig, axes = plt.subplots(
+        k, 1,
+        figsize=(fig_w, fig_h),
+        sharex=True,
+        gridspec_kw=dict(hspace=0.05),
+        constrained_layout=False,
+    )
+    axes = np.atleast_1d(axes)
+
+    # Auto marker size so points don’t look gigantic when rows are slender
+    # heuristic: smaller points when many rows or many samples
+    s = kwargs.pop("s", None)
+    if s is None:
+        s = max(1.0, marker_base * (row_height / 0.8) * (3000 / max(300.0, n)))
+
+    # common x for all rows
+    x = np.arange(n)
 
     for i, ax in enumerate(axes):
-        if i >= n_eigenvectors:
-            break
-        ax.set_title(f"{title} {i+1}", fontsize=fontsize)
-        ax.scatter(
-            np.arange(eigenvectors.shape[0]),
-            eigenvectors[:, i],
-            c=labels,
-            cmap=cmap,
-            **kwargs,
-        )
-        ax.set_xticks([])
+        ax.scatter(x, X[:, i], c=labels, cmap=cmap, s=s, **kwargs)
+        # a slim, clean strip
         ax.set_yticks([])
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        # put a compact title label at the left of the strip
+        ax.text(-0.01, 0.5, f"{title} {i+1}", transform=ax.transAxes,
+                va="center", ha="right", fontsize=fontsize)
 
-    plt.tight_layout()
-    return plt.show()
+    axes[-1].set_xticks([])  # keep minimalist look; add ticks if you want
+    # slim margins; no tight_layout to avoid warnings
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.98, bottom=0.04)
+    plt.show()
+
 
 
 
