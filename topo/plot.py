@@ -504,20 +504,48 @@ def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
 
-def plot_eigenvectors(eigenvectors, n_eigenvectors=10, labels=None, cmap='tab20', figsize=(23,2), fontsize=10, title='DC', **kwargs):
-    plt.figure(figsize=figsize)
-    plt.subplots_adjust(
-        left=0.02, right=0.98, bottom=0.001, top=0.95, wspace=0.05, hspace=0.01
-    )
-    plot_num = 1
-    for i in range(0, n_eigenvectors):
-        plt.subplot(1, n_eigenvectors, plot_num)
-        plt.title(title+ ' ' + str(plot_num), fontsize=fontsize)
-        plt.scatter(range(0, eigenvectors.shape[0]), eigenvectors[:,i], c=labels, cmap=cmap, **kwargs)
-        plot_num += 1
-        plt.xticks(())
-        plt.yticks(())
+def plot_eigenvectors(
+    eigenvectors,
+    n_eigenvectors=10,
+    labels=None,
+    cmap='tab20',
+    figsize=(23, 2),
+    fontsize=10,
+    title='DC',
+    orientation="horizontal",   # "horizontal" = row layout, "vertical" = column layout
+    **kwargs,
+):
+    if orientation not in ("horizontal", "vertical"):
+        raise ValueError("orientation must be 'horizontal' or 'vertical'.")
+
+    if orientation == "horizontal":
+        fig, axes = plt.subplots(1, n_eigenvectors, figsize=figsize,
+                                 constrained_layout=False)
+    else:  # vertical
+        fig, axes = plt.subplots(n_eigenvectors, 1, figsize=figsize,
+                                 constrained_layout=False)
+
+    # ensure axes is iterable
+    if n_eigenvectors == 1:
+        axes = [axes]
+
+    for i, ax in enumerate(axes):
+        if i >= n_eigenvectors:
+            break
+        ax.set_title(f"{title} {i+1}", fontsize=fontsize)
+        ax.scatter(
+            np.arange(eigenvectors.shape[0]),
+            eigenvectors[:, i],
+            c=labels,
+            cmap=cmap,
+            **kwargs,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
     return plt.show()
+
 
 
 def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title = 'FSA', histtype='step', stacked=True, density=True, log=False, title_fontsize=22, legend_fontsize=15):

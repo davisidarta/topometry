@@ -3,6 +3,7 @@
 # Author: David S Oliveira <david.oliveira(at)dpag(dot)ox(dot)ac(dot)uk>
 #
 import time
+import warnings
 import numpy as np
 import gc
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -11,225 +12,131 @@ from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
-
+from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
+from typing import Optional, Union
 
 
 class TopOGraph(BaseEstimator, TransformerMixin):
     """
     Main TopOMetry class for learning topological similarities, bases, graphs, and layouts from high-dimensional data.
 
-    From data, learns topological similarity metrics, from these build orthonormal eigenbases and from these eigenbases learns
-    new topological graphs. Users can choose different adaptive kernels to achieve these topological representations,
-    which can approximate the Laplace-Beltrami Operator via their Laplacian or Diffusion operators.
+    The public API exposes a small set of named, stable objects:
+      • knn_X               : initial kNN graph in input space
+      • P_of_X              : diffusion operator on input space
+      • spectral_scaffold(multiscale=True|False) : msDM/DM coordinates
+      • knn_msZ / knn_Z     : kNN graphs on msDM/DM scaffolds (Z spaces)
+      • P_of_msZ / P_of_Z   : refined diffusion operators on msDM/DM scaffolds
+      • eigenvalues         : eigenvalues of the active eigenbasis (msDM by default)
+      • MAP / msMAP         : 2D MAP layouts from DM/msDM refined graphs
+      • PaCMAP / msPaCMAP   : 2D PaCMAP layouts from DM/msDM refined graphs
+      • global_id_mle(), global_id_fsa(), local_ids(): intrinsic-dimension details
 
-    The eigenbasis or their topological graphs can then be visualized with multiple existing layout optimization tools.
+    Legacy benchmarking and combinatorial exploration remain available through:
+      • BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict
+      • run_models(), eval_models_layouts()
 
     Parameters
     ----------
-    base_knn : int (optional, default 30).
-        Number of k-nearest-neighbors to use when learning topological similarities.
+    base_knn : int (optional, default 30)
+        k-nearest-neighbors for the base input space.
 
-    graph_knn : int (optional, default 30).
-        Similar to `base_knn`, but used to learning topological graphs from the orthogonal bases.
+    graph_knn : int (optional, default 30)
+        k-nearest-neighbors for the scaffold (Z) space.
 
-    n_eigs : int (optional, default 100).
-        Number of eigenpairs to compute. 
+    n_eigs : int (optional, default 100)
+        Number of eigenpairs to compute (basis size cap).
 
-    base_kernel : topo.tpgraph.Kernel (optional, default None).
-        An optional Kernel object already fitted with the data. If available, the original input data X is not required.
+    base_kernel : topo.tpgraph.Kernel (optional, default None)
+        If provided and already fitted, X is not required.
 
-    eigenmap_method : str (optional, default 'DM').
-        Which eigenmap method to use. Defaults to 'DM', which is the diffusion maps method and will use the diffusion
-        operator learned from the used kernel. Options include:
-        * 'msDM' - uses the diffusion operator learned from the used kernel (TopOGraph.base_kernel.P) using the multiscale version of Diffusion Maps version,
-          which accounts for all possible diffusion timescales. Finds top eigenpairs (with highest eigenvalues).
-        * 'DM' - uses the diffusion operator learned from the used kernel (TopOGraph.base_kernel.P). Finds top eigenpairs (with highest eigenvalues).
-        * 'LE' - uses the graph Laplacian learned from the used kernel (TopOGraph.kernel.L). Finds bottom eigenpairs (with lowest eigenvalues).
-        * 'top' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds top eigenpairs (with highest eigenvalues).
-        * 'bottom' - uses the kernel matrix (TopOGraph.kernel.K) as the affinity matrix. Finds bottom eigenpairs (with lowest eigenvalues).
+    eigenmap_method : {'DM','msDM','LE','top','bottom'} (DEPRECATED; kept for BC)
+        Deprecated. The class now *always* computes both DM and msDM. This argument is
+        accepted for backwards compatibility and stored internally as `_eigenmap_method`.
 
-    alpha : int or float (optional, default 1).
-         Anisotropy. Alpha in the diffusion maps literature. Controls how much the results are biased by data distribution.
-         Defaults to 1, which unbiases results from data underlying sampling distribution.
-
-    laplacian_type : str (optional, default 'random_walk').
-        Which Laplacian to use by default with the kernel. Defaults to 'random_walk', but 'normalized' is the most common.
-        Options include 'unnormalized' (also referred to as the combinatorial Laplacian), 'normalized', 'random_walk' and 'geometric'.
+    laplacian_type : {'unnormalized','normalized','random_walk','geometric'} (default 'normalized')
+        Laplacian for spectral computations/layout.
 
     base_kernel_version : str (optional, default 'bw_adaptive')
-        Which method to use for learning affinities to use in the eigenmap strategy. Defaults to 'bw_adaptive', which  employs an adaptive bandwidth. 
-        There are several other options available to learn affinities, including:
-        * 'fuzzy' - uses fuzzy simplicial sets as per [UMAP](). It is grounded on solid theory.
-        * 'cknn' - uses continuous k-nearest-neighbors as per [Berry et al.](). As 'fuzzy', it is grounded on solid theory, and is guaranteed
-        to approaximate the Laplace-Beltrami Operator on the underlying manifold.
-        * 'bw_adaptive' - uses an adaptive bandwidth without adaptive exponentiation. It is a locally-adaptive kernel similar
-        to that proposed by [Nadler et al.](https://doi.org/10.1016/j.acha.2005.07.004) and implemented in [Setty et al.](https://doi.org/10.1038/s41587-019-0068-4).
-        * 'bw_adaptive_alpha_decaying' - uses an adaptive bandwidth and an adaptive decaying exponentiation (alpha). This is the default.
-        * 'bw_adaptive_nbr_expansion' - first uses a simple adaptive bandwidth and then uses it to learn an adaptive number of neighbors
-        to expand neighborhood search to learn a second adaptive bandwidth kernel. The neighborhood expansion can impact runtime, although
-        this is not usually expressive for datasets under 10e6 samples. The neighborhood expansion was proposed in the TopOMetry paper.
-        * 'bw_adaptive_alpha_decaying_nbr_expansion' - first uses a simple adaptive bandwidth and then uses it to learn an adaptive number of neighbors
-        to expand neighborhood search to learn a second adaptive bandwidth kernel. The neighborhood expansion was proposed in the TopOMetry paper.
-        * 'gaussian' - uses a fixed Gaussian kernel with a fixed bandwidth. This is the most naive approach.
+        Kernel choice for the base graph (options include: 'bw_adaptive', 'fuzzy', 'cknn',
+        'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian').
 
-    graph_kernel_version : str (optional, default 'bw_adaptive_alpha_decaying')
-        Which method to use for learning affinities from the eigenbasis. Same as `base_kernel_version`, but for the graph construction
-        after learning an eigenbasis.
+    graph_kernel_version : str (optional, default 'bw_adaptive')
+        Kernel choice for the scaffold graphs (applies to both DM and msDM scaffolds).
 
-    backend : str (optional, default 'nmslib').
-        Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib', 'pynndescent','annoy', 'faiss' and 'sklearn'.
-        By default it will check what you have available, in this order.
+    backend : {'hnswlib','nmslib','annoy','faiss','sklearn'} (default 'hnswlib')
+        ANN backend.
 
     base_metric : str (optional, default 'cosine')
-        Distance metric for building an approximate kNN graph during topological basis construction. Defaults to
-        'cosine'. When using scaled data (zero mean and unit variance) the cosine similarity metric is highly recommended.
-        The 'hamming' and 'jaccard' distances are also available for string vectors. 
+        Distance metric for base kNN.
 
-        NOTE: not all k-nearest-neighbors backends have the same metrics available! The algorithm will expect you to input a metric compatible with your backend.
-        Example of accepted metrics in NMSLib(*), HNSWlib(**) and sklearn(***):
+    graph_metric : str (optional, default 'euclidean')
+        Distance metric for scaffold kNN.
 
-        * 'sqeuclidean' (**, ***)
+    diff_t : int (optional, default 1)
+        Diffusion time for DM (ignored for msDM).
 
-        * 'euclidean' (**, ***)
+    sigma : float (optional, default 0.1)
+        Bandwidth if 'gaussian' kernels are used.
 
-        * 'l1' (*)
+    delta : float (optional, default 1.0)
+        'cknn' radius parameter.
 
-        * 'lp' - requires setting the parameter ``p`` (*) - similar to Minkowski
+    n_jobs : int (optional, default 1)
+        Threads for kNN. Use -1 for all cores.
 
-        * 'cosine' (**, ***)
+    low_memory : bool (optional, default False)
+        If True, avoids caching large kernel objects in dicts.
 
-        * 'inner_product' (**)
+    eigen_tol : float (optional, default 1e-8)
+        Eigen solver tolerance.
 
-        * 'angular' (*)
+    eigensolver : {'arpack','lobpcg','amg','dense'} (default 'arpack')
+        Eigen solver choice.
 
-        * 'negdotprod' (*)
+    projection_method : str (optional, default 'MAP')
+        Default projection method for `.project()`.
 
-        * 'levenshtein' (*)
+    cache : bool (optional, default True)
+        Cache Kernel / Eigen objects in dicts.
 
-        * 'hamming' (*)
+    verbosity : int (optional, default 1)
+        0: silent; 1: major steps; 2+: include layout messages; 3: full debug for neighborhoods.
 
-        * 'jaccard' (*)
+    random_state : int or np.random.RandomState (optional, default 42)
 
-        * 'jansen-shan' (*)
-
-    graph_metric : str (optional, default 'euclidean').
-         Similar to `base_metric`, but used for building a new topological graph on top of the learned orthonormal eigenbasis.
-
-    sigma : float (optional, default None).
-        Scaling factor if using fixed bandwidth kernel (only used if `base_kernel_version` or `graph_kernel_version` is set to `gaussian`).
-
-    delta : float (optional, default 1.0).
-        A parameter of the 'cknn' kernel version. It is ignored if `graph_kernel_version` or `base_kernel_version` are not set to 'cknn'.
-        It is used to decide the local radius in the continuous kNN algorithm. The combination radius increases in proportion to this parameter.
-
-    low_memory : bool (optional, default False).
-        Whether to use a low-memory implementation of the algorithm. Everything will quite much run the same way, but the TopOGraph object will
-        not store the full kernel matrices obtained at each point of the algorithm. A few take-away points:
-
-        * If you are running a single model, you should always keep this set this to `False` unless you have very little memory available.
-        
-        * This parameter is particularly useful when analysing very large datasets, and for cross-validation of algorithmic combinations 
-        (e.g. different `base_kernel_version` and `graph_kernel_version`) when using the `TopOGraph.run_models_layouts()` function.
-        This is because the kernel matrices are stored in memory, and can be quite large. After defining the best algorithmic combination, recomputing only it costs a
-        fraction of the time and memory. 
-        
-
-    n_jobs : int (optional, default 1).
-        Number of threads to use in neighborhood calculations. Set this to as much as possible for speed. Setting to `-1` uses all available threads.
-
-    eigensolver : string (optional, default 'arpack').
-        Method for computing the eigendecomposition. Can be either 'arpack', 'lobpcg', 'amg' or 'dense'.
-        * 'dense' :
-            use standard dense matrix operations for the eigenvalue decomposition.
-            For this method, M must be an array or matrix type.
-            This method should be avoided for large problems.
-        * 'arpack' :
-            use arnoldi iteration in shift-invert mode. For this method,
-            M may be a dense matrix, sparse matrix, or general linear operator.
-        * 'lobpcg' :
-            Locally Optimal Block Preconditioned Conjugate Gradient Method.
-            A preconditioned eigensolver for large symmetric positive definite
-            (SPD) generalized eigenproblems.
-        * 'amg' :
-            Algebraic Multigrid solver (requires ``pyamg`` to be installed)
-            It can be faster on very large, sparse problems, but requires
-            setting a random seed for better reproducibility.
-
-    eigen_tol : float (optional, default 0.0).
-        Error tolerance for the eigenvalue solver. If 0, machine precision is used.
-
-    diff_t : int (optional, default None).
-        Time parameter for the diffusion operator, if `eigenmap_method` is 'DM'. Also works with 'eigenmap_method' being 'LE'. 
-        The diffusion operator or the graph Laplacian will be powered by t steps (a diffusion process). Ignored for other methods.
-        If None, the number of k-nearest neighbors is used.
-
-    semi_aniso : bool (optional, default False).
-        Whether to use semi-anisotropic diffusion, if `eigenmap_method` is 'DM'. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
-
-    projection_method : str (optional, default 'MAP').
-        Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box without need to import packages.
-        't-SNE' uses scikit-learn if the user does not have multicore-tsne and 'MAP' relies on code that is adapted from UMAP for efficiency.
-        Current options are:
-            * ['Isomap']() - one of the first manifold learning methods
-            * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
-            * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
-            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
-            * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations (requires installing `pacmap`)
-            * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets (requires installing `trimap`)
-            * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors (requires installing `pymde`)
-            * 'IsometricMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of pairwise distances (requires installing `pymde`)
-            * ['NCVis'](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - a UMAP-like method with blazing fast performance (requires installing `ncvis`)
-        These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
-
-    verbosity : int (optional, default 1).
-        Controls verbosity. 0 for no verbosity, 1 for minimal (prints warnings and runtimes of major steps), 2 for
-        medium (also prints layout optimization messages) and 3 for full (down to neighborhood search, useful for debugging).
-
-    cache :  bool (optional, default True).
-        Whether to cache kernel and eigendecomposition classes in the results dictionaries.
-        Set to `False` to avoid unnecessary duplications if you're using a single model with large data.
-
-    random_state : int or numpy.random.RandomState() (optional, default None).
-        A pseudo random number generator. Used in eigendecomposition when `eigensolver` is 'amg',
+    Intrinsic dimensionality (automated scaffold sizing)
+    ----------------------------------------------------
+    id_method : {'mle','fsa'} (default 'mle')
+        Method whose estimate selects scaffold size. (Both 'mle' and 'fsa' are computed and stored.)
+    id_ks : int or iterable (default 50)
+    id_metric : str (default 'euclidean')
+    id_quantile : float (default 0.99; for 'fsa' only)
+    id_min_components : int (default 16)
+    id_max_components : int (default 512)
+    id_headroom : float (default 0.5)
 
     Attributes
     ----------
-        BaseKernelDict : dict
-            A dictionary of base kernel classes, with keys being the kernel version and values being the kernel class.
+    knn_X : scipy.sparse.csr_matrix
+        Initial kNN graph on X (read-only property).
 
-        EigenbasisDict : dict
-            A dictionary of eigendecomposition classes, with keys referring to the kernel version and eigenmap method
-            and values being the eigendecomposition class.
+    P_of_X : scipy.sparse.csr_matrix
+        Diffusion operator on X (read-only property).
 
-        GraphKernelDict : dict  
-            A dictionary of graph kernel classes, with keys referring to the base kernel, eigendecomposition method,
-            and graph kernel version used, and and values being the kernel class.
+    knn_msZ / knn_Z : scipy.sparse.csr_matrix
+        kNN graphs on the msDM/DM scaffolds (read-only properties).
 
-        self.SpecLayout : np.ndarray (n_samples, n_components)
-            The spectral layout of the data.
+    P_of_msZ / P_of_Z : scipy.sparse.csr_matrix
+        Diffusion operators on the msDM/DM scaffolds (read-only properties).
 
-        self.ProjectionDict : dict
-            A dictionary of graph projection coordinates, with keys referring to the projection method and values being the projection class.
+    eigenvalues : np.ndarray
+        Eigenvalues of the active eigenbasis (msDM by default).
 
-        ClustersDict : dict
-            A dictionary of cluster labels, with keys referring to the eigenbasis used and values being the cluster labels.
+    MAP / msMAP / PaCMAP / msPaCMAP : np.ndarray (n_samples, 2)
+        Ready-to-plot embeddings.
 
-        current_basekernel : `topo.tpgraph.Kernel` object
-            The current base kernel class. 
-
-        current_eigenbasis : `topo.eigen.EigenDecomposition` object
-            The current eigendecomposition class.
-
-        current_graphkernel : `topo.tpgraph.Kernel` object
-            The current graph kernel class (Kernel class fitted on the eigendecomposition results).
-
-        global_dimensionality : float or None
-            The global dimensionality of the data, if it has been estimated.
-
-        local_dimensionality : np.ndarray (n_samples,)
-            The local pairwise dimensionality of the data, if it has been estimated.
-
-
+    BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict : dict
+        Legacy storage for advanced/benchmarking use-cases.
     """
 
     def __init__(self,
@@ -238,32 +145,38 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  n_eigs=100,
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
-                 eigenmap_method='DM',
+                 eigenmap_method='DM',  # deprecated
                  laplacian_type='normalized',
                  projection_method='MAP',
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
                  graph_metric='euclidean',
-                 alpha=1.0,
                  diff_t=1,
-                 semi_aniso=False,
                  delta=1.0,
                  sigma=0.1,
                  n_jobs=1,
                  low_memory=False,
-                 eigen_tol=1e-4,
+                 eigen_tol=1e-8,
                  eigensolver='arpack',
                  backend='hnswlib',
                  cache=True,
                  verbosity=1,
                  random_state=42,
+                 # ID defaults (both methods computed; `id_method` selects the size used)
+                 id_method='mle',
+                 id_ks=50,
+                 id_metric='euclidean',
+                 id_quantile=0.99,
+                 id_min_components=16,
+                 id_max_components=512,
+                 id_headroom=0.5,
                  ):
+        # Core config
         self.projection_method = projection_method
         self.diff_t = diff_t
         self.n_eigs = n_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
-        self.alpha = alpha
         self.n_jobs = n_jobs
         self.low_memory = low_memory
         self.backend = backend
@@ -273,26 +186,35 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.eigensolver = eigensolver
         self.base_kernel = base_kernel
         self.base_kernel_version = base_kernel_version
-        self.eigenmap_method = eigenmap_method
+        # deprecated, kept for BC
+        self._eigenmap_method = eigenmap_method
+        if eigenmap_method is not None:
+            warnings.warn(
+                "`eigenmap_method` is deprecated. TopOGraph now computes both DM and msDM scaffolds.",
+                DeprecationWarning
+            )
         self.graph_kernel_version = graph_kernel_version
         self.laplacian_type = laplacian_type
-        self.semi_aniso = semi_aniso
         self.eigenbasis = None
-        self.graph_kernel = None
         self.verbosity = verbosity
         self.sigma = sigma
         self.bases_graph_verbose = False
         self.layout_verbose = False
         self.delta = delta
         self.random_state = random_state
-        self.eigenbasis_knn_graph = None
+        self.cache = cache
+
+        # State containers
+        self.eigenbasis_knn_graph = None            # (legacy single) — kept for BC
         self.base_nbrs_class = None
         self.base_knn_graph = None
-        self.cache = cache
+
+        # Legacy/benchmarking stores
         self.BaseKernelDict = {}
         self.EigenbasisDict = {}
         self.GraphKernelDict = {}
         self.ProjectionDict = {}
+
         self.ClustersDict = {}
         self.n = None
         self.m = None
@@ -309,53 +231,72 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._have_nmslib = None
         self._have_annoy = None
         self._have_faiss = None
-        
+
+        # Automated scaffold sizing config
+        self.id_method = id_method
+        self.id_ks = id_ks
+        self.id_metric = id_metric
+        self.id_quantile = id_quantile
+        self.id_min_components = id_min_components
+        self.id_max_components = id_max_components
+        self.id_headroom = id_headroom
+
+        # ID details for both methods (always collected)
+        self._id_details = {'mle': None, 'fsa': None}
+        self._scaffold_components_dm = None
+        self._scaffold_components_ms = None
+
+        # Dual scaffold products
+        self._knn_msZ = None
+        self._knn_Z = None
+        self._kernel_msZ = None
+        self._kernel_Z = None
+
+    # ---------------------------------------------------------------------
+    # Representation & internals
+    # ---------------------------------------------------------------------
     def __repr__(self):
         if self.base_metric == 'precomputed':
-            msg = "TopOGraph object with precomputed distances from %i samples" % (
-                self.n) + " and:"
+            msg = "TopOGraph object with precomputed distances from %i samples" % (self.n) + " and:"
         elif (self.n is not None) and (self.m is not None):
-            msg = "TopOGraph object with %i samples and %i observations" % (
-                self.n, self.m) + " and:"
+            msg = "TopOGraph object with %i samples and %i observations" % (self.n, self.m) + " and:"
         else:
             msg = "TopOGraph object without any fitted data."
-        msg = msg + "\n . Base Kernels:"
+        msg += "\n . Base Kernels:"
         for keys in self.BaseKernelDict.keys():
-            msg = msg + " \n    %s - .BaseKernelDict['%s']" % (keys, keys)
-        msg = msg + "\n . Eigenbases:"
+            msg += " \n    %s - .BaseKernelDict['%s']" % (keys, keys)
+        msg += "\n . Eigenbases:"
         for keys in self.EigenbasisDict.keys():
-            msg = msg + " \n    %s - .EigenbasisDict['%s']" % (keys, keys)
-        msg = msg + "\n . Graph Kernels:"
+            msg += " \n    %s - .EigenbasisDict['%s']" % (keys, keys)
+        msg += "\n . Graph Kernels:"
         for keys in self.GraphKernelDict.keys():
-            msg = msg + " \n    %s - .GraphKernelDict['%s']" % (keys, keys)
-        msg = msg + "\n . Projections:"
+            msg += " \n    %s - .GraphKernelDict['%s']" % (keys, keys)
+        msg += "\n . Projections:"
         for keys in self.ProjectionDict.keys():
-            msg = msg + " \n    %s - .ProjectionDict['%s']" % (keys, keys)
-
-        msg = msg + " \n Active base kernel  -  .base_kernel"
-        msg = msg + " \n Active eigenbasis  -  .eigenbasis"
-        msg = msg + " \n Active graph kernel  -  .graph_kernel"
-
+            msg += " \n    %s - .ProjectionDict['%s']" % (keys, keys)
+        msg += " \n Active base kernel  -  .base_kernel"
+        msg += " \n Active eigenbasis  -  .eigenbasis"
+        msg += " \n Active graph kernel  -  .graph_kernel"
         return msg
 
     def _parse_backend(self):
         try:
-            import hnswlib
+            import hnswlib  # noqa: F401
             self._have_hnswlib = True
         except ImportError:
             self._have_hnswlib = False
         try:
-            import nmslib
+            import nmslib  # noqa: F401
             self._have_nmslib = True
         except ImportError:
             self._have_nmslib = False
         try:
-            import annoy
+            import annoy  # noqa: F401
             self._have_annoy = True
         except ImportError:
             self._have_annoy = False
         try:
-            import faiss
+            import faiss  # noqa: F401
             self._have_faiss = True
         except ImportError:
             self._have_faiss = False
@@ -401,9 +342,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 else:
                     self.backend = 'sklearn'
         else:
-            print(
-                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-            self.backend == 'sklearn'
+            print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+            self.backend = 'sklearn'
 
     def _parse_random_state(self):
         if self.random_state is None:
@@ -415,646 +355,724 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         else:
             print('RandomState error! No random state was defined!')
 
+    # ---------------------------------------------------------------------
+    # Intrinsic dimension (compute BOTH methods, always)
+    # ---------------------------------------------------------------------
+    def _compute_id_details(self, Z_ms, Z_dm):
+        """
+        Compute ID via both methods ('mle' and 'fsa') on msDM scaffold by default for sizing,
+        but store details for both methods. Also compute MLE on DM scaffold for reference.
+        """
+        # msDM-based sizing (both details)
+        n = Z_ms.shape[0]
+        max_cap = min(int(self.id_max_components), max(2, n - 2), int(self.n_eigs))
+        if max_cap < 32:
+            max_cap = 32  # ensure minimum for stability
+
+        # FSA (msDM)
+        n_fsa, fsa_details = automated_scaffold_sizing(
+            Z_ms,
+            method='fsa',
+            ks=self.id_ks,
+            backend=self.backend,
+            metric=self.id_metric,
+            n_jobs=self.n_jobs if self.n_jobs != -1 else None,
+            quantile=self.id_quantile,
+            min_components=int(self.id_min_components),
+            max_components=int(max_cap),
+            headroom=float(self.id_headroom),
+            random_state=self.random_state,
+            return_details=True,
+        )
+        self._id_details['fsa'] = fsa_details
+
+        # MLE (msDM) with use_median=True
+        n_mle_ms, mle_details_ms = automated_scaffold_sizing(
+            Z_ms,
+            method='mle',
+            ks=self.id_ks,
+            backend=self.backend,
+            metric=self.id_metric,
+            n_jobs=self.n_jobs if self.n_jobs != -1 else None,
+            min_components=int(self.id_min_components),
+            max_components=int(max_cap),
+            headroom=float(self.id_headroom),
+            random_state=self.random_state,
+            use_median=True,
+            return_details=True,
+        )
+        # tag scaffold
+        mle_details_ms['scaffold'] = 'msDM'
+        self._id_details['mle'] = mle_details_ms
+
+        # Also compute MLE on DM scaffold (for users who want to inspect differences)
+        try:
+            _, mle_details_dm = automated_scaffold_sizing(
+                Z_dm,
+                method='mle',
+                ks=self.id_ks,
+                backend=self.backend,
+                metric=self.id_metric,
+                n_jobs=self.n_jobs if self.n_jobs != -1 else None,
+                min_components=int(self.id_min_components),
+                max_components=int(max_cap),
+                headroom=float(self.id_headroom),
+                random_state=self.random_state,
+                use_median=True,
+                return_details=True,
+            )
+            mle_details_dm['scaffold'] = 'DM'
+            # store side-by-side for discovery
+            self._id_details['mle_dm'] = mle_details_dm
+        except Exception:
+            # optional; not required for sizing
+            pass
+
+        # Choose size for each scaffold independently using selected method
+        if str(self.id_method).lower().strip() == 'fsa':
+            self._scaffold_components_ms = int(n_fsa)
+            self._scaffold_components_dm = int(n_fsa)  # mirror for simplicity
+        else:
+            self._scaffold_components_ms = int(n_mle_ms)
+            self._scaffold_components_dm = int(n_mle_ms)
+
+        # ensure caps
+        self._scaffold_components_ms = int(max(2, min(self._scaffold_components_ms, max_cap)))
+        self._scaffold_components_dm = int(max(2, min(self._scaffold_components_dm, max_cap)))
+
+    # ---------------------------------------------------------------------
+    # High-level fit (builds everything) – dual scaffold
+    # ---------------------------------------------------------------------
     def fit(self, X=None, **kwargs):
         """
-        Learn distances, computes similarities with various kernels and applies eigendecompositions to them or their Laplacian or diffusion operators.
-        The learned operators approximate the Laplace-Beltrami Operator and learn the topology of the underlying manifold. The eigenbasis learned from
-        such eigendecomposition represents the data in a lower-dimensional space (with up to some hundreds dimensions),
-        where the euclidean distances between points are approximated by the geodesic distances on the manifold. Because the eigenbasis is equivalent
-        to a Fourier basis, one needs at least `n+1` to eigenvectors to represent a dataset that can be optimically divided into `n` clusters.
-
+        Build base kNN, base kernel P(X). Compute both msDM and DM eigenbases (dual scaffold).
+        Estimate intrinsic dimensionality (both FSA and MLE; store details). Size the scaffolds.
+        Build kNN and refined graphs/operators on each scaffold (msDM, DM). Prepare spectral init.
+        Compute standard projections (MAP and PaCMAP) on both scaffolds when available.
 
         Parameters
         ----------
-        X : High-dimensional data matrix.
-             Currently, supports only data from similar type (i.e. all bool, all float).
-             Not required if the `base_kernel` parameter is specified and corresponds to a fitted `topo.tpgraph.Kernel()` object.
+        X : array-like or sparse matrix
+            High-dimensional data (Z-score normalized is recommended).
 
-        **kwargs : Additional parameters to be passed to the `topo.base.ann.kNN()` function.
+        **kwargs : passed to `topo.base.ann.kNN()`
 
         Returns
         -------
-
-        TopoGraph object with a populated `TopOGraph.EigenbasisDict` dictionary. The keys of the dictionary are the names of the eigendecompositions
-        that were performed. The values are the corresponding `topo.base.eigen.Eigenbasis()` objects. The latest set eigenbasis is
-        also accessible through the `TopOGraph.eigenbasis` attribute.
-
-
+        self
         """
-        if self.base_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
-            raise ValueError(
-                "base_kernel_version must be one of ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']")
-        if self.graph_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
-            raise ValueError(
-                "graph_kernel_version must be one of ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']")
-        if self.eigenmap_method not in ['msDM', 'DM', 'LE', 'top', 'bottom']:
-            raise ValueError(
-                "eigenmap_method must be one of ['msDM', 'DM', 'LE', 'top', 'bottom']")
-        if (self.n_eigs - 1 > X.shape[0]) or (self.n_eigs - 1 > X.shape[1]):
-            raise ValueError(
-                "n_eigs must be less than the number of samples and observations in X")
+        # Basic checks
+        if self.base_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying',
+                                            'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
+            raise ValueError("Invalid base_kernel_version.")
+        if self.graph_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying',
+                                             'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
+            raise ValueError("Invalid graph_kernel_version.")
+        if (X is not None) and ((self.n_eigs - 1 > X.shape[0]) or (self.n_eigs - 1 > X.shape[1])):
+            raise ValueError("n_eigs must be less than the number of samples and observations in X")
         if not isinstance(self.n_eigs, int):
             raise ValueError("n_eigs must be an integer")
         if not isinstance(self.base_knn, int):
             raise ValueError("base_knn must be an integer")
         if not isinstance(self.graph_knn, int):
             raise ValueError("graph_knn must be an integer")
-        
+
         self._parse_backend()
         self._parse_random_state()
-        if self.diff_t is None:
-            self.diff_t = self.base_knn
-        if X is None:
-            if self.base_kernel is None:
-                raise ValueError('X was not passed!')
-            elif not isinstance(self.base_kernel, Kernel):
-                raise ValueError(
-                    'The specified base kernel is not a topo.tpgraph.Kernel object!')
-            else:
-                if self.base_kernel.knn_ is None:
-                    raise ValueError(
-                        'The specified base kernel has not been fitted!')
-                else:
-                    self.n = self.base_kernel.knn_.shape[0]
-                    self.m = self.base_kernel.knn_.shape[1]
-        else:
-            if self.base_metric == 'precomputed':
-                self.base_knn_graph = X.copy()
-            self.n = X.shape[0]
-            self.m = X.shape[1]
 
-        # parse other inputs
+        # n_jobs
         if self.n_jobs == -1:
-            from joblib import cpu_count
-            self.n_jobs = cpu_count()
+            try:
+                from joblib import cpu_count
+                self.n_jobs = cpu_count()
+            except Exception:
+                pass
 
+        # verbosity toggles
         if self.verbosity >= 2:
             self.layout_verbose = True
-            if self.verbosity == 3:
-                self.bases_graph_verbose = True
-            else:
-                self.bases_graph_verbose = False
+            self.bases_graph_verbose = (self.verbosity == 3)
         else:
             self.layout_verbose = False
 
-        if self.base_kernel is not None:
+        # X or pre-fitted base kernel
+        if X is None:
+            if self.base_kernel is None:
+                raise ValueError('X was not passed and no base_kernel provided.')
             if not isinstance(self.base_kernel, Kernel):
-                print(
-                    "WARNING: kernel must be an instance of the Kernel class. Creating a default kernel...")
-                self.base_kernel = None
-            if self.base_kernel.knn_ is not None:
-                self.base_knn_graph = self.base_kernel.knn_
+                raise ValueError('base_kernel must be a topo.tpgraph.Kernel instance.')
+            if self.base_kernel.knn_ is None:
+                raise ValueError('The specified base kernel has not been fitted!')
+            self.n = self.base_kernel.knn_.shape[0]
+            self.m = self.base_kernel.knn_.shape[1]
+        else:
+            if self.base_metric == 'precomputed':
+                self.base_knn_graph = X.copy()
+            self.n, self.m = X.shape[0], X.shape[1]
 
+        # Base kNN
         if self.base_knn_graph is None:
             if self.verbosity >= 1:
-                print('Computing neighborhood graph...')
-            start = time.time()
-            self.base_nbrs_class, self.base_knn_graph = kNN(X, n_neighbors=self.base_knn,
-                                                            metric=self.base_metric,
-                                                            n_jobs=self.n_jobs,
-                                                            backend=self.backend,
-                                                            return_instance=True,
-                                                            verbose=self.bases_graph_verbose, **kwargs)
-            end = time.time()
-            gc.collect()
-            self.runtimes['kNN'] = end - start
+                print('Computing neighborhood graph (X space)...')
+            t0 = time.time()
+            self.base_nbrs_class, self.base_knn_graph = kNN(
+                X,
+                n_neighbors=self.base_knn,
+                metric=self.base_metric,
+                n_jobs=self.n_jobs,
+                backend=self.backend,
+                return_instance=True,
+                verbose=self.bases_graph_verbose,
+                **kwargs
+            )
+            self.runtimes['kNN_X'] = time.time() - t0
             if self.verbosity >= 1:
-                print(' Base kNN graph computed in %f (sec)' % (end - start))
+                print(f' Base kNN computed in {self.runtimes["kNN_X"]:.3f} sec')
 
-        if self.base_kernel_version in self.BaseKernelDict.keys():
+        # Base kernel -> P(X)
+        if self.base_kernel_version in self.BaseKernelDict:
             self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
         else:
-            start = time.time()
-            self.base_kernel, self.BaseKernelDict = self._compute_kernel_from_version_knn(self.base_knn_graph,
-                                                                                          self.base_knn,
-                                                                                          self.base_kernel_version,
-                                                                                          self.BaseKernelDict,
-                                                                                          suffix='',
-                                                                                          low_memory=self.low_memory,
-                                                                                          data_for_expansion=X,
-                                                                                          base=True)
-            end = time.time()
-            gc.collect()
+            t0 = time.time()
+            self.base_kernel, self.BaseKernelDict = self._compute_kernel_from_version_knn(
+                self.base_knn_graph,
+                self.base_knn,
+                self.base_kernel_version,
+                self.BaseKernelDict,
+                suffix='',
+                low_memory=self.low_memory,
+                data_for_expansion=X,
+                base=True
+            )
+            self.runtimes['Kernel_X'] = time.time() - t0
             if self.verbosity >= 1:
-                print(' Fitted the ' + (self.base_kernel_version) +
-                      ' kernel in %f (sec)' % (end - start))
+                print(f' Base kernel ({self.base_kernel_version}) fitted in {self.runtimes["Kernel_X"]:.3f} sec')
 
+        # Compute BOTH msDM and DM eigenbases (always)
         if self.verbosity >= 1:
-            print('Computing eigenbasis...')
+            print('Computing eigenbases (DM and msDM)...')
 
-        if self.eigenmap_method == 'msDM':
-            basis_key = 'msDM with ' + str(self.base_kernel_version)
-            if basis_key in self.EigenbasisDict.keys():
-                self.eigenbasis = self.EigenbasisDict[basis_key]
-                self.current_eigenbasis = basis_key
-            else:
-                start = time.time()
-                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
-                                                     method=self.eigenmap_method,
-                                                     eigensolver=self.eigensolver,
-                                                     eigen_tol=self.eigen_tol,
-                                                     drop_first=True,
-                                                     weight=True,
-                                                     t=self.diff_t,
-                                                     random_state=self.random_state,
-                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
-                self.EigenbasisDict[basis_key] = self.eigenbasis
-                self.current_eigenbasis = basis_key
-                end = time.time()
-                gc.collect()
-                self.runtimes[basis_key] = end - start
-                if self.verbosity >= 1:
-                    print(' Fitted eigenbasis with multiscale Diffusion Maps from the ' +
-                          str(self.base_kernel_version) + ' kernel in %f (sec)' % (end - start))
-
-        if self.eigenmap_method == 'DM':
-            basis_key = 'DM with ' + str(self.base_kernel_version)
-            if basis_key in self.EigenbasisDict.keys():
-                self.eigenbasis = self.EigenbasisDict[basis_key]
-                self.current_eigenbasis = basis_key
-            else:
-                start = time.time()
-                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
-                                                     method=self.eigenmap_method,
-                                                     eigensolver=self.eigensolver,
-                                                     eigen_tol=self.eigen_tol,
-                                                     drop_first=True,
-                                                     weight=True,
-                                                     t=self.diff_t,
-                                                     random_state=self.random_state,
-                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
-                self.EigenbasisDict[basis_key] = self.eigenbasis
-                self.current_eigenbasis = basis_key
-                end = time.time()
-                gc.collect()
-                self.runtimes[basis_key] = end - start
-                if self.verbosity >= 1:
-                    print(' Fitted eigenbasis with Diffusion Maps from the ' +
-                          str(self.base_kernel_version) + ' kernel in %f (sec)' % (end - start))
-
-        elif self.eigenmap_method == 'LE':
-            basis_key = 'LE with ' + str(self.base_kernel_version)
-            if basis_key in self.EigenbasisDict.keys():
-                self.eigenbasis = self.EigenbasisDict[basis_key]
-                self.current_eigenbasis = basis_key
-            else:
-                start = time.time()
-                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
-                                                     method=self.eigenmap_method,
-                                                     eigensolver=self.eigensolver,
-                                                     eigen_tol=self.eigen_tol,
-                                                     drop_first=True,
-                                                     weight=True,
-                                                     t=self.diff_t,
-                                                     random_state=self.random_state,
-                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
-                self.EigenbasisDict[basis_key] = self.eigenbasis
-                self.current_eigenbasis = basis_key
-                end = time.time()
-                gc.collect()
-                self.runtimes[basis_key] = end - start
-                if self.verbosity >= 1:
-                    print(' Fitted eigenbasis with Laplacian Eigenmaps from the ' +
-                          str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
-
-        elif self.eigenmap_method == 'top':
-            basis_key = 'Top eigenpairs with ' + str(self.base_kernel_version)
-            if basis_key in self.EigenbasisDict.keys():
-                self.eigenbasis = self.EigenbasisDict[basis_key]
-                self.current_eigenbasis = basis_key
-            else:
-                start = time.time()
-                self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
-                                                     method=self.eigenmap_method,
-                                                     eigensolver=self.eigensolver,
-                                                     eigen_tol=self.eigen_tol,
-                                                     drop_first=True,
-                                                     weight=True,
-                                                     t=self.diff_t,
-                                                     random_state=self.random_state,
-                                                     verbose=self.bases_graph_verbose).fit(self.base_kernel)
-                self.EigenbasisDict[basis_key] = self.eigenbasis
-                self.current_eigenbasis = basis_key
-                end = time.time()
-                gc.collect()
-                self.runtimes[basis_key] = end - start
-                if self.verbosity >= 1:
-                    print(' Fitted eigenbasis with top eigenpairs from the ' +
-                          str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
-
-        elif self.eigenmap_method == 'bottom':
-            if basis_key in self.EigenbasisDict.keys():
-                self.eigenbasis = self.EigenbasisDict[basis_key]
-                self.current_eigenbasis = basis_key
-            else:
-                basis_key = 'Bottom eigenpairs with ' + \
-                    str(self.base_kernel_version)
-            start = time.time()
-            self.eigenbasis = EigenDecomposition(n_components=self.n_eigs,
-                                                 method=self.eigenmap_method,
-                                                 eigensolver=self.eigensolver,
-                                                 eigen_tol=self.eigen_tol,
-                                                 drop_first=True,
-                                                 weight=True,
-                                                 t=self.diff_t,
-                                                 random_state=self.random_state,
-                                                 verbose=self.bases_graph_verbose).fit(self.base_kernel)
-            basis_key = 'Bottom eigenpairs with ' + \
-                str(self.base_kernel_version)
-            self.EigenbasisDict[basis_key] = self.eigenbasis
-            self.current_eigenbasis = basis_key
-            end = time.time()
-            gc.collect()
-            self.runtimes[basis_key] = end - start
+        ms_key = 'msDM with ' + str(self.base_kernel_version)
+        if ms_key not in self.EigenbasisDict:
+            t0 = time.time()
+            ms_eig = EigenDecomposition(
+                n_components=self.n_eigs,
+                method='msDM',
+                eigensolver=self.eigensolver,
+                eigen_tol=self.eigen_tol,
+                drop_first=True,
+                weight=True,
+                t=self.diff_t,
+                random_state=self.random_state,
+                verbose=self.bases_graph_verbose
+            ).fit(self.base_kernel)
+            self.EigenbasisDict[ms_key] = ms_eig
+            self.runtimes[ms_key] = time.time() - t0
             if self.verbosity >= 1:
-                print(' Fitted eigenbasis with bottom eigenpairs from from the ' +
-                      str(self.base_kernel_version) + ' in %f (sec)' % (end - start))
+                print(f' msDM fitted in {self.runtimes[ms_key]:.3f} sec')
+        else:
+            ms_eig = self.EigenbasisDict[ms_key]
+
+        dm_key = 'DM with ' + str(self.base_kernel_version)
+        if dm_key not in self.EigenbasisDict:
+            t0 = time.time()
+            dm_eig = EigenDecomposition(
+                n_components=self.n_eigs,
+                method='DM',
+                eigensolver=self.eigensolver,
+                eigen_tol=self.eigen_tol,
+                drop_first=True,
+                weight=True,
+                t=self.diff_t,
+                random_state=self.random_state,
+                verbose=self.bases_graph_verbose
+            ).fit(self.base_kernel)
+            self.EigenbasisDict[dm_key] = dm_eig
+            self.runtimes[dm_key] = time.time() - t0
+            if self.verbosity >= 1:
+                print(f' DM fitted in {self.runtimes[dm_key]:.3f} sec')
+        else:
+            dm_eig = self.EigenbasisDict[dm_key]
+
+        # Active eigenbasis for BC/info (default msDM)
+        self.current_eigenbasis = ms_key
+        self.eigenbasis = self.EigenbasisDict[self.current_eigenbasis]
+
+        # Automated scaffold sizing (compute details for BOTH methods; size for each scaffold)
+        Z_ms = ms_eig.transform(X=None)
+        Z_dm = dm_eig.transform(X=None)
+        self._compute_id_details(Z_ms, Z_dm)
+        if self.verbosity >= 1:
+            print(f' Automated sizing -> msDM components: {self._scaffold_components_ms}; DM components: {self._scaffold_components_dm}')
+
+        # kNN in msZ
+        if self.verbosity >= 1:
+            print('Computing neighborhood graph (msZ space)...')
+        t0 = time.time()
+        ms_target = Z_ms[:, :self._scaffold_components_ms]
+        self._knn_msZ = kNN(
+            ms_target,
+            n_neighbors=self.graph_knn,
+            metric=self.graph_metric,
+            n_jobs=self.n_jobs,
+            backend=self.backend,
+            return_instance=False,
+            verbose=self.bases_graph_verbose,
+            **kwargs
+        )
+        self.runtimes['kNN_msZ'] = time.time() - t0
+        if self.verbosity >= 1:
+            print(f' msZ kNN computed in {self.runtimes["kNN_msZ"]:.3f} sec')
+
+        # kNN in Z (DM)
+        if self.verbosity >= 1:
+            print('Computing neighborhood graph (Z [DM] space)...')
+        t0 = time.time()
+        dm_target = Z_dm[:, :self._scaffold_components_dm]
+        self._knn_Z = kNN(
+            dm_target,
+            n_neighbors=self.graph_knn,
+            metric=self.graph_metric,
+            n_jobs=self.n_jobs,
+            backend=self.backend,
+            return_instance=False,
+            verbose=self.bases_graph_verbose,
+            **kwargs
+        )
+        self.runtimes['kNN_Z'] = time.time() - t0
+        if self.verbosity >= 1:
+            print(f' Z (DM) kNN computed in {self.runtimes["kNN_Z"]:.3f} sec')
+
+        # Graph kernel -> P(msZ)
+        t0 = time.time()
+        self._kernel_msZ, self.GraphKernelDict = self._compute_kernel_from_version_knn(
+            self._knn_msZ,
+            self.graph_knn,
+            self.graph_kernel_version,
+            self.GraphKernelDict,
+            suffix=' from ' + ms_key,
+            low_memory=self.low_memory,
+            data_for_expansion=Z_ms,
+            base=False
+        )
+        self.runtimes['Kernel_msZ'] = time.time() - t0
+        if self.verbosity >= 1:
+            print(f' Graph kernel (msZ/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_msZ"]:.3f} sec')
+
+        # Graph kernel -> P(Z) (DM)
+        t0 = time.time()
+        self._kernel_Z, self.GraphKernelDict = self._compute_kernel_from_version_knn(
+            self._knn_Z,
+            self.graph_knn,
+            self.graph_kernel_version,
+            self.GraphKernelDict,
+            suffix=' from ' + dm_key,
+            low_memory=self.low_memory,
+            data_for_expansion=Z_dm,
+            base=False
+        )
+        self.runtimes['Kernel_Z'] = time.time() - t0
+        if self.verbosity >= 1:
+            print(f' Graph kernel (Z/DM/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_Z"]:.3f} sec')
+
+        # Keep legacy single "current" graph kernel pointer (msDM by default)
+        self.graph_kernel = self._kernel_msZ
+        self.current_graphkernel = self.graph_kernel_version + ' from ' + ms_key
+
+        # Spectral layout (2D) using msZ by default (for convenient init)
+        _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+
+        # Projections: MAP & PaCMAP for BOTH scaffolds when available
+        for proj in ['MAP', 'PaCMAP']:
+            # msDM
+            try:
+                self.project(projection_method=proj, _use_msZ=True)
+            except Exception as e:
+                warnings.warn(f"Projection '{proj}' on msZ failed or requires extra dependency: {e}", RuntimeWarning)
+            # DM
+            try:
+                self.project(projection_method=proj, _use_msZ=False)
+            except Exception as e:
+                warnings.warn(f"Projection '{proj}' on Z (DM) failed or requires extra dependency: {e}", RuntimeWarning)
 
         return self
 
-    def fit_transform(self, X=None):
-        self.fit(X)
-        gc.collect()
-        return self.transform(X=None)
+    # ---------------------------------------------------------------------
+    # Public properties / getters (stable user API)
+    # ---------------------------------------------------------------------
+    @property
+    def knn_X(self):
+        """Initial kNN graph on X."""
+        if self.base_knn_graph is None:
+            raise AttributeError("knn_X is not available. Call .fit(X) first.")
+        return self.base_knn_graph
 
-    def eigenspectrum(self, eigenbasis_key=None, **kwargs):
+    @property
+    def P_of_X(self):
+        """Diffusion operator on X (from the base kernel)."""
+        if self.base_kernel is None:
+            raise AttributeError("P_of_X is not available. Call .fit(X) first.")
+        return self.base_kernel.P
+
+    def spectral_scaffold(self, multiscale: bool = True):
         """
-        Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
-        Useful to indirectly estimate the intrinsic dimensionality of a dataset.
+        Return spectral scaffold coordinates.
 
         Parameters
         ----------
-        `eigenbasis_key` : str (optional, default None).
-            If `None`, will use the default eigenbasis at `TopOGraph.eigenbasis`. Otherwise, uses the specified eigenbasis.
+        multiscale : bool (default True)
+            If True, returns msDM coordinates; else returns DM (fixed time `diff_t`) coordinates.
 
         Returns
         -------
-        A nice eigenspectrum decay plot ('scree plot').
-
+        np.ndarray, shape (n_samples, n_eigs)
         """
+        if multiscale:
+            key = 'msDM with ' + str(self.base_kernel_version)
+        else:
+            key = 'DM with ' + str(self.base_kernel_version)
+        if key not in self.EigenbasisDict:
+            raise AttributeError("Requested spectral scaffold not found. Ensure .fit() completed.")
+        return self.EigenbasisDict[key].transform(X=None)
+
+    @property
+    def eigenvalues(self):
+        """Eigenvalues of the active eigenbasis (msDM by default)."""
+        if self.current_eigenbasis is None:
+            raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
+        return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
+
+    # --- Dual scaffold accessors ---
+    @property
+    def knn_msZ(self):
+        """kNN graph in the msDM scaffold space."""
+        if self._knn_msZ is None:
+            raise AttributeError("knn_msZ is not available. Call .fit(X) first.")
+        return self._knn_msZ
+
+    @property
+    def knn_Z(self):
+        """kNN graph in the DM scaffold space."""
+        if self._knn_Z is None:
+            raise AttributeError("knn_Z is not available. Call .fit(X) first.")
+        return self._knn_Z
+
+    @property
+    def P_of_msZ(self):
+        """Diffusion operator on the msDM scaffold (refined graph kernel)."""
+        if self._kernel_msZ is None:
+            raise AttributeError("P_of_msZ is not available. Call .fit(X) first.")
+        return self._kernel_msZ.P
+
+    @property
+    def P_of_Z(self):
+        """Diffusion operator on the DM scaffold (refined graph kernel)."""
+        if self._kernel_Z is None:
+            raise AttributeError("P_of_Z is not available. Call .fit(X) first.")
+        return self._kernel_Z.P
+
+    # --- Intrinsic-dimension getters ---
+    def global_id_mle(self):
+        """Return the global intrinsic-dimension estimate from MLE (median-of-locals), msDM scaffold."""
+        det = self._id_details.get('mle', None)
+        if det is None:
+            raise AttributeError("MLE details not available. Call .fit(X) first.")
+        return float(det.get('global_id_mle', np.nan))
+
+    def global_id_fsa(self):
+        """Return the global intrinsic-dimension proxy from FSA (quantile over local estimates), msDM scaffold."""
+        det = self._id_details.get('fsa', None)
+        if det is None:
+            raise AttributeError("FSA details not available. Call .fit(X) first.")
+        # quantile of robust_cell_id before headroom; this is the global proxy used by FSA
+        return float(det.get('quantile_value', np.nan))
+
+    def local_ids(self):
+        """
+        Return local intrinsic-dimension arrays as a dict:
+            {'mle': <local_id_mle (msDM)>, 'fsa': <robust_cell_id (msDM)>}
+        """
+        out = {}
+        det_mle = self._id_details.get('mle', None)
+        det_fsa = self._id_details.get('fsa', None)
+        if det_mle is not None:
+            out['mle'] = det_mle.get('local_id_mle', None)
+        if det_fsa is not None:
+            out['fsa'] = det_fsa.get('robust_cell_id', None)
+        if not out:
+            raise AttributeError("Local ID details not available. Call .fit(X) first.")
+        return out
+
+    # --- Embedding getters (properties) ---
+    @property
+    def MAP(self):
+        """2D MAP layout computed on the DM refined graph (P_of_Z)."""
+        key = 'MAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
+        if key not in self.ProjectionDict:
+            raise AttributeError("MAP embedding not available. Call .fit(X) first.")
+        return self.ProjectionDict[key]
+
+    @property
+    def msMAP(self):
+        """2D MAP layout computed on the msDM refined graph (P_of_msZ)."""
+        key = 'MAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
+        if key not in self.ProjectionDict:
+            raise AttributeError("msMAP embedding not available. Call .fit(X) first.")
+        return self.ProjectionDict[key]
+
+    @property
+    def PaCMAP(self):
+        """2D PaCMAP layout computed on the DM refined graph (P_of_Z)."""
+        key = 'PaCMAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
+        if key not in self.ProjectionDict:
+            raise AttributeError("PaCMAP embedding not available. It may require `pacmap`. Call .fit(X) first.")
+        return self.ProjectionDict[key]
+
+    @property
+    def msPaCMAP(self):
+        """2D PaCMAP layout computed on the msDM refined graph (P_of_msZ)."""
+        key = 'PaCMAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
+        if key not in self.ProjectionDict:
+            raise AttributeError("msPaCMAP embedding not available. It may require `pacmap`. Call .fit(X) first.")
+        return self.ProjectionDict[key]
+
+    # Keep Y() for backwards compatibility with string aliases
+    def Y(self, key: str = 'ms_topoMAP'):
+        """
+        Return a 2D embedding by stable alias (backwards compatible).
+
+        Aliases
+        -------
+        'topoMAP'      -> MAP on DM refined graph (P_of_Z)
+        'ms_topoMAP'   -> MAP on msDM refined graph (P_of_msZ)
+        'topoPaCMAP'   -> PaCMAP on DM refined graph
+        'ms_topoPaCMAP'-> PaCMAP on msDM refined graph
+
+        Returns
+        -------
+        np.ndarray shape (n_samples, 2)
+        """
+        dm_tag = f"{self.graph_kernel_version} from DM with {self.base_kernel_version}"
+        ms_tag = f"{self.graph_kernel_version} from msDM with {self.base_kernel_version}"
+        mapping = {
+            'topoMAP':        f"MAP of {dm_tag}",
+            'ms_topoMAP':     f"MAP of {ms_tag}",
+            'topoPaCMAP':     f"PaCMAP of {dm_tag}",
+            'ms_topoPaCMAP':  f"PaCMAP of {ms_tag}",
+        }
+        if key in mapping and mapping[key] in self.ProjectionDict:
+            return self.ProjectionDict[mapping[key]]
+        if key in self.ProjectionDict:  # legacy passthrough
+            return self.ProjectionDict[key]
+        raise KeyError(f"Unknown or unavailable embedding alias '{key}'.")
+
+    # ---------------------------------------------------------------------
+    # Plot helpers, legacy APIs, benchmarking
+    # ---------------------------------------------------------------------
+    def eigenspectrum(self, eigenbasis_key=None, **kwargs):
+        """Scree plot helper (calls topo.plot.decay_plot)."""
         if eigenbasis_key is not None:
             if isinstance(eigenbasis_key, str):
                 if eigenbasis_key in self.EigenbasisDict.keys():
                     eigenbasis = self.EigenbasisDict[eigenbasis_key]
                 else:
-                    raise ValueError(
-                        'Eigenbasis key not in TopOGraph.EigenbasisDict.')
+                    raise ValueError('Eigenbasis key not in TopOGraph.EigenbasisDict.')
         else:
             eigenbasis = self.eigenbasis
         try:
-            import matplotlib.pyplot as plt
+            import matplotlib.pyplot as plt  # noqa: F401
         except ImportError:
             return print('Error: Matplotlib not found!')
         from topo.plot import decay_plot
         return decay_plot(evals=eigenbasis.eigenvalues, title=eigenbasis_key, **kwargs)
-    
+
     def plot_eigenspectrum(self, eigenbasis_key=None, **kwargs):
-        """
-        An anlias for `TopOGraph.eigenspectrum`. Visualize the eigenspectrum decay. Corresponds to a scree plot of information entropy.
-        Useful to indirectly estimate the intrinsic dimensionality of a dataset.
-
-        Parameters
-        ----------
-        `eigenbasis_key` : str (optional, default None).
-            If `None`, will use the default eigenbasis at `TopOGraph.eigenbasis`. Otherwise, uses the specified eigenbasis.
-
-        Returns
-        -------
-        A nice eigenspectrum decay plot ('scree plot').
-
-        """
+        """Alias for `eigenspectrum`."""
         return self.eigenspectrum(eigenbasis_key=eigenbasis_key, **kwargs)
 
     def list_eigenbases(self):
-        """
-        List the eigenbases in the `TopOGraph.EigenbasisDict`.
-
-        Returns
-        -------
-        A list of eigenbasis keys in the `TopOGraph.EigenbasisDict`.
-
-        """
+        """List keys in `EigenbasisDict` (legacy/benchmarking)."""
         return list(self.EigenbasisDict.keys())
 
     def transform(self, X=None, **kwargs):
         """
-        Learns new affinity, topological operators from chosen eigenbasis. This does not strictly follow scikit-learn's API,
-        no new data can be transformed with this method. Instead, this method is used to learn new topological operators
-        on top of the learned eigenbasis, analagous to spectral clustering methods.
-
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features), optional
-            New data to transform. This is not used in this method, but is included for compatibility with scikit-learn's API.
-
-
-        Returns
-        -------
-        scipy.sparse.csr.csr_matrix, containing the similarity matrix that encodes the topological graph.
-
+        DEPRECATED: all computations now happen during `.fit()`.
+        Returns the msDM graph kernel matrix for backward compatibility.
         """
-        if self.eigenbasis is not None:
-            eigenbasis = self.eigenbasis
-        else:
-            raise ValueError('No eigenbasis computed. Call .fit() first.')
-        if self.verbosity >= 1:
-            print('    Building topological graph from eigenbasis...')
-        if self.verbosity >= 1:
-            print('        Computing neighborhood graph...')
-        target = eigenbasis.transform(X=None)[:, 0:eigenbasis.eigengap]
-        start = time.time()
-        self.eigenbasis_knn_graph = kNN(target, n_neighbors=self.graph_knn,
-                                        metric=self.graph_metric,
-                                        n_jobs=self.n_jobs,
-                                        backend=self.backend,
-                                        return_instance=False,
-                                        verbose=self.bases_graph_verbose, **kwargs)
-        end = time.time()
-        gc.collect()
-        self.runtimes['Graph kNN'] = end - start
-        if self.verbosity >= 1:
-            print(' Computed in %f (sec)' % (end - start))
-        start = time.time()
-        self.graph_kernel, self.GraphKernelDict = self._compute_kernel_from_version_knn(self.eigenbasis_knn_graph,
-                                                                                        self.graph_knn,
-                                                                                        self.graph_kernel_version,
-                                                                                        self.GraphKernelDict,
-                                                                                        suffix=' from ' + self.current_eigenbasis,
-                                                                                        low_memory=self.low_memory,
-                                                                                        data_for_expansion=eigenbasis.transform(X=None),
-                                                                                        base=False)
-        
-        end = time.time()
-        gc.collect()
-        self.current_graphkernel = self.graph_kernel_version + \
-            ' from ' + self.current_eigenbasis
-        if self.verbosity >= 1:
-            print(' Fitted the ' + str(self.graph_kernel_version) +
-                  ' graph kernel in %f (sec)' % (end - start))
+        warnings.warn(
+            "TopOGraph.transform is deprecated; all computations occur in .fit(). Returning msDM graph kernel K.",
+            DeprecationWarning
+        )
+        if self._kernel_msZ is None:
+            raise ValueError('No graph kernel computed. Call .fit() first.')
+        return self._kernel_msZ.K
 
     def spectral_layout(self, graph=None, n_components=2):
         """
-
-        Performs a multicomponent spectral layout of the data and the target similarity matrix.
-
-        Parameters
-        ----------
-        graph : str indicating a `TopOGraph.EigenbasisDict` key or or array-like, optional.
-            Graph kernel to use for the spectral layout. Defaults to the active graph kernel (`TopOGraph.graph_kernel`).
-
-        n_components : int (optional, default 2).
-            Number of dimensions to embed into.
-
-        Returns
-        -------
-        np.ndarray containing the resulting embedding.
-
+        Multicomponent spectral layout of a (precomputed) graph kernel.
+        Stores result in `SpecLayout` and returns it (used for layout init).
         """
         if graph is None:
-            if self.graph_kernel is None:
-                raise ValueError(
-                    'No graph kernel computed. Call .fit() first.')
-            graph = self.graph_kernel.K
-        start = time.time()
+            if self._kernel_msZ is None:
+                raise ValueError('No graph kernel computed. Call .fit() first.')
+            graph = self._kernel_msZ.K
+        t0 = time.time()
         try:
-            spt_layout = spectral_layout(graph, n_components, self.random_state,
-                                        laplacian_type=self.laplacian_type, eigen_tol=self.eigen_tol, return_evals=False)
+            spt_layout = spectral_layout(
+                graph, n_components, self.random_state,
+                laplacian_type=self.laplacian_type, eigen_tol=self.eigen_tol, return_evals=False
+            )
             expansion = 10.0 / np.abs(spt_layout).max()
-            spt_layout = (spt_layout * expansion).astype(
-                np.float32
-            ) + self.random_state.normal(
+            spt_layout = (spt_layout * expansion).astype(np.float32) + self.random_state.normal(
                 scale=0.0001, size=[graph.shape[0], n_components]
             ).astype(np.float32)
-        except:
-            spt_layout = EigenDecomposition(
-                            n_components=n_components).fit_transform(graph)
-        end = time.time()
-        self.runtimes['Spectral'] = end - start
+        except Exception:
+            spt_layout = EigenDecomposition(n_components=n_components).fit_transform(graph)
+        self.runtimes['Spectral'] = time.time() - t0
         self.SpecLayout = spt_layout
-        gc.collect()
+        gc.collect
         return spt_layout
 
-    def project(self, n_components=2, init=None, projection_method=None, landmarks=None, landmark_method='kmeans', n_neighbors=None, num_iters=500, **kwargs):
+    def project(self, n_components=2, init=None, projection_method=None, landmarks=None,
+                landmark_method='kmeans', n_neighbors=None, num_iters=500, _use_msZ=True, **kwargs):
         """
-        Projects the data into a lower dimensional space using the specified projection method. Calls topo.layout.Projector().
+        Compute a 2D projection and store it in `ProjectionDict`.
 
         Parameters
         ----------
-        n_components : int (optional, default 2).
-            Number of dimensions to optimize the layout to. Usually 2 or 3 if you're into visualizing data.
+        _use_msZ : bool (internal, default True)
+            If True, use msDM refined graph; else use DM refined graph.
 
-        init : str or np.ndarray (optional, default None).
-            If passed as `str`, will use the specified layout as initialization. If passed as `np.ndarray`, will use the array as initialization.
-
-        projection_method : str (optional, default 'MAP').
-            Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses scikit-learn implementation
-            and 'MAP' relies on code that is adapted from UMAP. Current options are:
-            * 'Isomap'
-            * 't-SNE'
-            * 'MAP'
-            * 'UMAP'
-            * 'PaCMAP'
-            * 'TriMAP'
-            * 'IsomorphicMDE' - MDE with preservation of nearest neighbors
-            * 'IsometricMDE' - MDE with preservation of pairwise distances
-            * 'NCVis'
-            These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
-
-        landmarks : int or np.ndarray (optional, default None).
-            If passed as `int`, will obtain the number of landmarks. If passed as `np.ndarray`, will use the specified indexes in the array.
-            Any value other than `None` will result in only the specified landmarks being used in the layout optimization, and will
-            populate the Projector.landmarks_ slot.
-
-        landmark_method : str (optional, default 'kmeans').
-            The method to use for selecting landmarks. If `landmarks` is passed as an `int`, this will be used to select the landmarks.
-            Can be either 'kmeans' or 'random'.
-
-        num_iters : int (optional, default 1000).
-            Most (if not all) methods optimize the layout up to a limit number of iterations. Use this parameter to set this number.
-
-        **kwargs : dict (optional).
-            Additional keyword arguments to pass to the projection method during fit.
-
-        Returns
-        -------
-        np.ndarray containing the resulting embedding. Also stores it in the `TopOGraph.ProjectionDict` slot.
-
+        Notes
+        -----
+        For graph-based DR methods we pass precomputed affinities from the chosen refined graph:
+        {MAP, UMAP, Isomap, (Iso/Isomorphic)MDE, PaCMAP, NCVis, TriMAP, t-SNE}.
         """
         if n_neighbors is None:
             n_neighbors = self.graph_knn
-        elif not isinstance(n_neighbors,int):
+        elif not isinstance(n_neighbors, int):
             raise ValueError('n_neighbors must be an integer')
-        
+
         if projection_method is None:
             projection_method = self.projection_method
 
-        if projection_method in ['MAP', 'UMAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
+        # choose which refined graph to use
+        kernel_obj = self._kernel_msZ if _use_msZ else self._kernel_Z
+        if kernel_obj is None:
+            raise ValueError('Requested scaffold graph is not available; call .fit(X) first.')
+
+        # Precomputed affinity path for graph-based DR methods
+        if projection_method in ['MAP', 'UMAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap',
+                                 'PaCMAP', 'NCVis', 'TriMAP', 't-SNE']:
             metric = 'precomputed'
-            input = self.graph_kernel.P
-            key = self.current_graphkernel
+            input_mat = kernel_obj.P
+            tag = 'msDM' if _use_msZ else 'DM'
+            key = self.graph_kernel_version + ' from ' + tag + ' with ' + str(self.base_kernel_version)
         else:
             metric = self.graph_metric
-            input = self.eigenbasis.transform(X=None)
-            key = self.current_eigenbasis
+            # use corresponding scaffold coordinates
+            tag = 'msDM' if _use_msZ else 'DM'
+            eig_key = tag + ' with ' + str(self.base_kernel_version)
+            input_mat = self.EigenbasisDict[eig_key].transform(X=None)
+            key = eig_key
+
+        # init
         if init is not None:
             if isinstance(init, np.ndarray):
                 if np.shape(init)[1] != n_components:
-                    raise ValueError(
-                        'The specified initialization has the wrong number of dimensions.')
-                else:
-                    init_Y = init
+                    raise ValueError('The specified initialization has the wrong number of dimensions.')
+                init_Y = init
             elif isinstance(init, str):
                 if init in self.ProjectionDict.keys():
                     init_Y = self.ProjectionDict[init]
                 else:
-                    raise ValueError(
-                        'No projection found with the name ' + init + '.')
+                    raise ValueError('No projection found with the name ' + init + '.')
         else:
             if self.SpecLayout is not None:
                 if np.shape(self.SpecLayout)[1] != n_components:
-                    self.SpecLayout = self.spectral_layout(
-                            n_components=n_components)
+                    self.SpecLayout = self.spectral_layout(n_components=n_components)
             else:
-                self.SpecLayout = self.spectral_layout(
-                n_components=n_components)  
+                self.SpecLayout = self.spectral_layout(n_components=n_components)
             init_Y = self.SpecLayout
 
         projection_key = projection_method + ' of ' + key
-        start = time.time()
-        Y = Projector(n_components=n_components,
-                      projection_method=projection_method,
-                      metric=metric,
-                      n_neighbors=self.graph_knn,
-                      n_jobs=self.n_jobs,
-                      landmarks=landmarks,
-                      landmark_method=landmark_method,
-                      num_iters=num_iters,
-                      init=init_Y,
-                      nbrs_backend=self.backend,
-                      keep_estimator=False,
-                      random_state=self.random_state,
-                      verbose=self.layout_verbose).fit_transform(input, **kwargs)
-        end = time.time()
-        gc.collect()
-        self.runtimes[projection_key] = end - start
+        t0 = time.time()
+        Y = Projector(
+            n_components=n_components,
+            projection_method=projection_method,
+            metric=metric,
+            n_neighbors=self.graph_knn,
+            n_jobs=self.n_jobs,
+            landmarks=landmarks,
+            landmark_method=landmark_method,
+            num_iters=num_iters,
+            init=init_Y,
+            nbrs_backend=self.backend,
+            keep_estimator=False,
+            random_state=self.random_state,
+            verbose=self.layout_verbose
+        ).fit_transform(input_mat, **kwargs)
+        self.runtimes[projection_key] = time.time() - t0
         if self.verbosity >= 1:
-            print(' Computed ' + projection_method +
-                  ' in %f (sec)' % (end - start))
+            print(f' Computed {projection_method} ({ "msZ" if _use_msZ else "Z/DM" }) in {self.runtimes[projection_key]:.3f} sec')
         self.ProjectionDict[projection_key] = Y
         return Y
 
-    
     def run_models(self, X,
                    kernels=['fuzzy', 'cknn', 'bw_adaptive'],
                    eigenmap_methods=['DM', 'LE', 'top'],
                    projections=['Isomap', 'MAP']):
         """
-        Power function that runs all models in TopOMetry.
-        It iterates through the specified kernel versions, eigenmap methods and projection methods.
-        As expected, it can take a while to run, depending on how many kernels and methods you specify.
-        At least one kernel, one eigenmap method and one projection *must* be specified.
-
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features)
-            The input data. Use a sparse matrix for efficiency.
-
-        kernels : list of str (optional, default ['fuzzy', 'cknn', 'bw_adaptive']).
-            List of kernel versions to run. These will be used to learn an eigenbasis and to learn a new graph kernel from it.
-            Options are:
-            * 'fuzzy'
-            * 'cknn'
-            * 'bw_adaptive'
-            * 'bw_adaptive_alpha_decaying'
-            * 'bw_adaptive_nbr_expansion'
-            * 'bw_adaptive_alpha_decaying_nbr_expansion'
-            * 'gaussian'
-            Will not run all by default to avoid long waiting times in reckless calls.
-
-        eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
-            List of eigenmap methods to run. Options are:
-            * 'DM'
-            * 'LE'
-            * 'top'
-            * 'bottom'
-
-        projections : list of str (optional, default ['Isomap', 'MAP']).
-            List of projection methods to run. Options are the same of the `topo.layouts.Projector()` object:
-            * ['(L)Isomap']() - one of the first manifold learning methods
-            * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
-            * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
-            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
-            * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations
-            * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets
-            * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors
-            * 'IsometricMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of pairwise distances
-            * ['NCVis'](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - a UMAP-like method with blazing fast performance
-
-        Returns
-        -------
-        A `TopOGraph` object with results stored at different slots.
-            * Base kernel results are stored at `TopOGraph.BaseKernelDict`.
-            * Eigenbases results are stored at `TopOGraph.EigenbasisDict`.
-            * Graph kernel results learned from eigenbases are stored at `TopOGraph.GraphKernelDict`.
-            * Projection results are stored at `TopOGraph.ProjectionDict`.
+        Legacy power function that runs multiple models for benchmarking.
+        Preserved for backward compatibility.
         """
         for kernel in kernels:
             self.base_kernel_version = kernel
             for eig_method in eigenmap_methods:
-                self.eigenmap_method = eig_method
+                # kept for BC, but dual scaffold is always computed anyway
+                self._eigenmap_method = eig_method
                 self.fit(X)
                 gc.collect()
                 for kernel in kernels:
                     self.graph_kernel_version = kernel
-                    self.transform(X)
+                    _ = self.transform(X)  # BC; returns current (msZ) K
                     gc.collect()
                     for projection in projections:
-                        self.project(projection_method=projection)
+                        # compute on msZ and Z/DM
+                        self.project(projection_method=projection, _use_msZ=True)
+                        self.project(projection_method=projection, _use_msZ=False)
                         gc.collect()
 
+    # ---------------------------------------------------------------------
+    # I/O (pickle) – in-class helper kept for BC + module-level helpers below
+    # ---------------------------------------------------------------------
     def write_pkl(self, filename='topograph.pkl', remove_base_class=True):
+        """
+        Save the TopOGraph object to a pickle file (legacy helper).
+        """
         try:
             import pickle
         except ImportError:
-            return (print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`'))
+            return print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`')
 
         if self.base_nbrs_class is not None:
             if remove_base_class:
                 self.base_nbrs_class = None
             else:
-                raise ValueError(
-                    'TopOGraph cannot be pickled with the NMSlib base class.')
+                raise ValueError('TopOGraph cannot be pickled with the NMSlib base class.')
 
         with open(filename, 'wb') as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
         gc.collect()
         return print('TopOGraph saved at ' + filename)
 
-    # def memory_saver(self, save_temp=True):
-    #     """
-    #     Removes all the intermediate results from the `TopOGraph` object.
-    #     Optionally, also saves these results in a temporary file.
-
-    #     """
-    #     if save_temp:
-    #         import tempfile
-    #         import pickle
-    #         temp = tempfile.NamedTemporaryFile(delete=False)
-    #         self.write_pkl(filename=temp.name, remove_base_class=True)
-    #         self.temp_file = temp.name
-
-    #     self.base_nbrs_class = None
-    #     self.BaseKernelDict = {}
-    #     self.EigenbasisDict = {}
-    #     self.GraphKernelDict = {}
-    #     self.ProjectionDict = {}
-
-
-
-
-    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict, prefix='', suffix='', low_memory=False, base=True, data_for_expansion=None):
-        import gc
-        gc.collect()
+    # ---------------------------------------------------------------------
+    # Kernel builder (internal)
+    # ---------------------------------------------------------------------
+    def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict,
+                                         prefix='', suffix='', low_memory=False, base=True, data_for_expansion=None):
+        import gc as _gc
+        _gc.collect()
         kernel_key = kernel_version
         if prefix is not None:
             kernel_key = prefix + kernel_key
@@ -1064,6 +1082,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             kernel = results_dict[kernel_key]
             return kernel, results_dict
         else:
+            # Note: anisotropy fixed to 1.0 and semi_aniso fixed to False (kwargs removed)
             if kernel_version == 'cknn':
                 kernel = Kernel(metric="precomputed",
                                 n_neighbors=n_neighbors,
@@ -1077,12 +1096,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'fuzzy':
@@ -1098,12 +1117,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive':
@@ -1119,12 +1138,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_alpha_decaying':
@@ -1140,21 +1159,18 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_nbr_expansion':
                 if data_for_expansion is None:
-                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
-                if base:
-                    use_metric = self.base_metric
-                else:
-                    use_metric = self.graph_metric
+                    raise ValueError('data_for_expansion is None. Provide data for neighborhood expansion when using `bw_adaptive_nbr_expansion`.')
+                use_metric = self.base_metric if base else self.graph_metric
                 kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
@@ -1167,21 +1183,18 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'bw_adaptive_alpha_decaying_nbr_expansion':
                 if data_for_expansion is None:
-                    raise ValueError('data_for_expansion is None. Please provide data for neighborhood expansion when using the `bw_adaptive_nbr_expansion`.')
-                if base:
-                    use_metric = self.base_metric
-                else:
-                    use_metric = self.graph_metric
+                    raise ValueError('data_for_expansion is None. Provide data for neighborhood expansion when using `bw_adaptive_alpha_decaying_nbr_expansion`.')
+                use_metric = self.base_metric if base else self.graph_metric
                 kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
@@ -1194,12 +1207,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
 
             elif kernel_version == 'gaussian':
@@ -1215,20 +1228,572 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 backend=self.backend,
                                 n_jobs=self.n_jobs,
                                 laplacian_type=self.laplacian_type,
-                                semi_aniso=self.semi_aniso,
-                                anisotropy=self.alpha,
+                                semi_aniso=False,
+                                anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
                                 random_state=self.random_state).fit(knn)
-                gc.collect()
+                _gc.collect()
                 results_dict[kernel_key] = kernel
+
             if low_memory:
-                import gc
                 del results_dict[kernel_key]
-                gc.collect()
+                _gc.collect()
 
         return kernel, results_dict
 
+    # ===============================
+    # Convenience accessors / aliases
+    # ===============================
+    @property
+    def MAP(self):
+        """DM-scaffold (fixed-time) topoMAP embedding if available; else raises."""
+        return self.Y('topoMAP')
+
+    @property
+    def msMAP(self):
+        """msDM-scaffold (multiscale) topoMAP embedding if available; else raises."""
+        return self.Y('ms_topoMAP')
+
+    # ---------------------------------
+    # Intrinsic dimension access helpers
+    # ---------------------------------
+    def local_ids(self):
+        """
+        Return the local intrinsic dimensionalities computed during automated scaffold sizing,
+        when available. For 'mle', this corresponds to local MLEs; for 'fsa', per-k locals.
+
+        Returns
+        -------
+        dict or np.ndarray or None
+            - For MLE: np.ndarray of shape (n,), local id estimates.
+            - For FSA: dict {k -> np.ndarray (n,)} of local id per k, plus
+                'robust_cell_id' under self._id_details (see global getters).
+            - None if details are not available.
+        """
+        det = getattr(self, "_id_details", None)
+        if det is None:
+            return None
+        if det.get("method") == "mle":
+            return det.get("local_id_mle", None)
+        elif det.get("method") == "fsa":
+            return det.get("per_k_local_id", None)
+        return None
+
+    def global_id_mle(self):
+        """
+        Return the global MLE intrinsic dimensionality if computed.
+
+        Returns
+        -------
+        float or None
+        """
+        det = getattr(self, "_id_details", None)
+        if det is None:
+            return None
+        if det.get("method") == "mle":
+            return det.get("global_id_mle", None)
+        # If FSA was run, expose quantile-based robust estimate (with headroom) as a fallback
+        if det.get("method") == "fsa":
+            return float(det.get("selected_n_components", np.nan))
+        return None
+
+    def global_id_fsa(self):
+        """
+        Return the quantile-based FSA intrinsic dimensionality if computed.
+
+        Returns
+        -------
+        float or None
+        """
+        det = getattr(self, "_id_details", None)
+        if det is None:
+            return None
+        if det.get("method") == "fsa":
+            return float(det.get("selected_n_components", np.nan))
+        # If MLE was run, expose its selected components (with headroom) as a fallback
+        if det.get("method") == "mle":
+            return float(det.get("selected_n_components", np.nan))
+        return None
+
+    # ===============================
+    # Analysis helpers (no Scanpy I/O)
+    # ===============================
+
+    # ---- Spectral selectivity suite ----
+    # --- spectral_selectivity ---
+    def spectral_selectivity(
+        self,
+        Z=None,
+        evals=None,
+        multiscale: bool = True,
+        use_scaffold_components: bool = True,
+        weight_mode: str = "lambda_over_one_minus_lambda",
+        standardize: bool = True,
+        k_neighbors: int = 30,
+        metric: str = "euclidean",
+        smooth_P: Optional[str] = None,   # {'X','Z','msZ'} or None
+        smooth_t: int = 0,
+        out_prefix: str = "spectral",
+        return_dict: bool = True,
+        random_state: Optional[int] = None,
+    ):
+        
+        """
+        Compute per-sample spectral selectivity diagnostics:
+            - EAS (axis selectivity via spectral entropy)
+            - RayScore (sigmoid of radial z-score * EAS)
+            - LAC (local axial coherence = EVR1 of local PCA)
+            - axis (argmax energy axis), axis_sign, radius (||Z||2)
+
+        Parameters
+        ----------
+        Z : np.ndarray, optional
+            Scaffold coordinates (n, m). If None, uses `spectral_scaffold(multiscale)`.
+        evals : np.ndarray, optional
+            Eigenvalues for weighting. If None, uses the corresponding eigenvalues from the chosen scaffold.
+        multiscale : bool (default True)
+            Choose msDM (True) or DM (False) scaffold if Z is None.
+        use_scaffold_components : bool (default True)
+            If True, slice Z to the number chosen by automated scaffold sizing.
+        weight_mode : {'lambda_over_one_minus_lambda','lambda', 'none'}
+            Weighting of axes in EAS.
+        standardize : bool (default True)
+            Column-standardize Z before metrics.
+        k_neighbors : int (default 30)
+            Neighborhood size for local metrics (radiality, LAC).
+        metric : str (default 'euclidean')
+            Metric for neighborhood search.
+        smooth_P : {'X','Z','msZ', None} (default None)
+            Optional diffusion smoothing of scalar fields with P^t.
+        smooth_t : int (default 0)
+            Number of diffusion steps for smoothing (if smooth_P is not None).
+        out_prefix : str (default 'spectral')
+            Keys used when storing to `self.LocalScoresDict`.
+        return_dict : bool (default True)
+            If True, return a dictionary with results.
+        random_state : int or None
+            RNG for any randomized steps.
+
+        Returns
+        -------
+        dict or None
+            {'EAS','RayScore','LAC','axis','axis_sign','radius'} arrays if return_dict=True.
+        """
+        import numpy as _np
+        from sklearn.neighbors import NearestNeighbors as _NN
+
+        def _std_cols(A, eps=1e-12):
+            A = _np.asarray(A, float)
+            A = A - _np.nanmean(A, axis=0, keepdims=True)
+            sd = _np.nanstd(A, axis=0, keepdims=True)
+            return A / (sd + eps)
+
+        def _weights(_evals=None, m=None, mode="lambda_over_one_minus_lambda", eps=1e-12):
+            if _evals is None:
+                if m is None: return _np.ones(1, float)
+                return _np.ones(m, float)
+            ev = _np.asarray(_evals, float)
+            if mode == "lambda_over_one_minus_lambda":
+                return ev / (1.0 - ev + eps)
+            elif mode == "lambda":
+                return ev
+            else:
+                return _np.ones_like(ev)
+
+        def _EAS(Zs, w=None, eps=1e-12):
+            n, m = Zs.shape
+            if w is None: w = _np.ones(m, float)
+            E = (Zs**2) * w[None, :]
+            S = _np.sum(E, axis=1, keepdims=True) + eps
+            P = E / S
+            H = -_np.sum(P * _np.log(P + eps), axis=1)
+            Hmax = _np.log(m)
+            EAS = 1.0 - (H / (Hmax + eps))
+            kstar = _np.argmax(E, axis=1)
+            sign_kstar = _np.sign(Zs[_np.arange(n), kstar])
+            return EAS, kstar, sign_kstar, _np.sqrt((_np.square(Zs)).sum(1))
+
+        def _radiality(Zs, k=30, metric="euclidean", eps=1e-12):
+            n = Zs.shape[0]
+            nn = _NN(n_neighbors=min(k, n-1), metric=metric).fit(Zs)
+            _, idx = nn.kneighbors(Zs, return_distance=True)
+            nbr = idx[:, 1:] if idx.shape[1] > 1 else idx
+            r = _np.linalg.norm(Zs, axis=1)
+            r_med = _np.median(r[nbr], axis=1)
+            q75 = _np.percentile(r[nbr], 75, axis=1)
+            q25 = _np.percentile(r[nbr], 25, axis=1)
+            iqr = q75 - q25
+            z = (r - r_med) / (iqr + eps)
+            return z, r
+
+        def _LAC(Zs, k=30, metric="euclidean", eps=1e-12):
+            from numpy.linalg import svd as _svd
+            n = Zs.shape[0]
+            nn = _NN(n_neighbors=min(k, n-1), metric=metric).fit(Zs)
+            _, idx = nn.kneighbors(Zs, return_distance=True)
+            nbr = idx[:, 1:] if idx.shape[1] > 1 else idx
+            out = _np.zeros(n, float)
+            for i in range(n):
+                Znb = Zs[nbr[i]]
+                Znb = Znb - Znb.mean(0, keepdims=True)
+                _, s, _ = _svd(Znb, full_matrices=False)
+                num = (s[0]**2)
+                den = (s**2).sum() + eps
+                out[i] = num / den
+            return out
+
+        # Prepare Z and evals
+        if Z is None:
+            Z = self.spectral_scaffold(multiscale=multiscale)
+        if use_scaffold_components and getattr(self, "_scaffold_components", None) is not None:
+            Z = Z[:, :int(self._scaffold_components)]
+        if evals is None:
+            key = ('msDM' if multiscale else 'DM') + ' with ' + str(self.base_kernel_version)
+            ev = self.EigenbasisDict[key].eigenvalues
+            # eigenvalues include lambda_0; match columns (drop first if eigenvectors drop-first)
+            evals = ev[1:Z.shape[1]+1] if ev.shape[0] >= Z.shape[1] + 1 else ev[:Z.shape[1]]
+
+        Zs = _std_cols(Z) if standardize else _np.asarray(Z, float)
+        w = _weights(evals, m=Z.shape[1], mode=weight_mode)
+
+        # Metrics
+        EAS, kstar, sign_k, r = _EAS(Zs, w=w)
+        z_rad, _ = _radiality(Zs, k=k_neighbors, metric=metric)
+        LAC = _LAC(Zs, k=k_neighbors, metric=metric)
+        RayScore = (1.0 / (1.0 + _np.exp(-z_rad))) * EAS
+
+        # Optional diffusion smoothing of scalar fields
+        if smooth_P is not None and int(smooth_t) > 0:
+            P = self._select_P_operator(which=smooth_P)
+            def _smooth(v):
+                u = _np.asarray(v, float).copy()
+                for _ in range(int(smooth_t)):
+                    u = P @ u
+                return _np.asarray(u).ravel()
+            EAS = _smooth(EAS)
+            RayScore = _smooth(RayScore)
+            LAC = _smooth(LAC)
+
+        # Store to LocalScoresDict
+        self.LocalScoresDict[f'{out_prefix}_EAS'] = EAS
+        self.LocalScoresDict[f'{out_prefix}_RayScore'] = RayScore
+        self.LocalScoresDict[f'{out_prefix}_LAC'] = LAC
+        self.LocalScoresDict[f'{out_prefix}_axis'] = kstar.astype(int)
+        self.LocalScoresDict[f'{out_prefix}_axis_sign'] = (sign_k > 0).astype(int)
+        self.LocalScoresDict[f'{out_prefix}_radius'] = r
+
+        if return_dict:
+            return dict(EAS=EAS, RayScore=RayScore, LAC=LAC, axis=kstar, axis_sign=(sign_k > 0).astype(int), radius=r)
+
+    # ---- Graph diffusion filtering ----
+    def _select_P_operator(self, which: str = 'msZ'):
+        """
+        Internal: choose a diffusion operator.
+
+        Parameters
+        ----------
+        which : {'X','Z','msZ'}
+            - 'X'   : P_of_X (input space)
+            - 'Z'   : P_of_Z (DM-based refined operator)
+            - 'msZ' : P_of_msZ (msDM-based refined operator)
+        """
+        which = str(which).lower()
+        if which == 'x':
+            return self.P_of_X
+        elif which == 'z':
+            # DM-based refined graph (if available), else fallback to current
+            Pz = getattr(self, "P_of_Z", None)
+            if Pz is None:
+                raise ValueError("P_of_Z not available. Ensure DM-based refined graph has been computed.")
+            return Pz
+        elif which == 'msz':
+            Pms = getattr(self, "P_of_msZ", None)
+            if Pms is None:
+                # for backward compat, msZ is the default refined graph in current design
+                return self.P_of_Z
+            return Pms
+        else:
+            raise ValueError("`which` must be one of {'X','Z','msZ'}.")
+
+    def filter_signal(self, signal, t: int = 8, which: str = 'msZ'):
+        """
+        Diffusion-filter a 1D signal over the chosen graph operator.
+
+        Parameters
+        ----------
+        signal : array-like, shape (n,)
+            Scalar per-sample values to be smoothed.
+        t : int (default 8)
+            Number of diffusion steps (applications of P).
+        which : {'X','Z','msZ'} (default 'msZ')
+            Which operator to use (see `_select_P_operator`).
+
+        Returns
+        -------
+        np.ndarray, shape (n,)
+            Filtered signal.
+        """
+        import numpy as _np
+        P = self._select_P_operator(which)
+        y = _np.asarray(signal, float).copy().ravel()
+        for _ in range(int(t)):
+            y = P @ y
+        return _np.asarray(y).ravel()
+
+    # ---- Pseudotime estimation from spectral scaffold ----
+    def pseudotime(
+        self,
+        root: Optional[int] = None,
+        labels: Optional[np.ndarray] = None,
+        label_value: Optional[object] = None,
+        multiscale: bool = True,
+        k: int = 64,
+        weight_mode: str = "lambda_over_one_minus_lambda",
+        null_n_seeds: int = 0,
+        random_state: Optional[int] = 42,
+        return_null: bool = True,
+    ):
+
+        """
+        Compute a diffusion-based pseudotime on the chosen spectral scaffold.
+
+        Parameters
+        ----------
+        root : int or None
+            Index of the root cell. If None and `labels`/`label_value` is given,
+            a random root from that subset is chosen; otherwise a global random root is used.
+        labels : array-like or None
+            Per-sample labels for root selection (optional).
+        label_value : any or None
+            Choose root from samples where labels == label_value.
+        multiscale : bool (default True)
+            Use msDM scaffold if True, else DM.
+        k : int (default 64)
+            Number of spectral coordinates to use (after dropping the trivial one).
+        weight_mode : {'lambda_over_one_minus_lambda','lambda','none'}
+            Axis weighting for MSDD coordinates.
+        null_n_seeds : int (default 0)
+            If >0, compute null mean/std over randomized roots.
+        random_state : int or None
+            RNG seed.
+        return_null : bool (default True)
+            If True, return (mean,std) of null as well.
+
+        Returns
+        -------
+        dict
+            {'pseudotime','root', 'null_mean','null_std'} (the latter two present if requested)
+        """
+        import numpy as _np
+        rng = _np.random.default_rng(random_state)
+
+        # Scaffold + eigenvalues
+        Z = self.spectral_scaffold(multiscale=multiscale)
+        ev_key = ('msDM' if multiscale else 'DM') + ' with ' + str(self.base_kernel_version)
+        evals = self.EigenbasisDict[ev_key].eigenvalues
+        # Build MSDD coordinates Psi = phi_1..k * w
+        k_eff = int(min(k, Z.shape[1]-1))
+        lam = _np.asarray(evals[1:k_eff+1], float)
+        if weight_mode == "lambda_over_one_minus_lambda":
+            w = (lam / (1.0 - lam))[None, :]
+        elif weight_mode == "lambda":
+            w = lam[None, :]
+        else:
+            w = _np.ones((1, k_eff), float)
+        Psi = Z[:, 0:k_eff] * w
+
+        # Root selection
+        n = Psi.shape[0]
+        if root is None:
+            if labels is not None and label_value is not None:
+                lab = _np.asarray(labels)
+                pool = _np.where(lab == label_value)[0]
+                if pool.size > 0:
+                    root = int(rng.choice(pool))
+                else:
+                    root = int(rng.integers(0, n))
+            else:
+                root = int(rng.integers(0, n))
+
+        d2 = _np.sum((Psi - Psi[root, :])**2, axis=1)
+        pt = (d2 - d2.min()) / (d2.max() - d2.min() + 1e-12)
+
+        out = {'pseudotime': pt, 'root': int(root)}
+        if int(null_n_seeds) > 0 and return_null:
+            pts = _np.empty((int(null_n_seeds), n), dtype=float)
+            for s in range(int(null_n_seeds)):
+                r0 = int(rng.integers(0, n))
+                d2 = _np.sum((Psi - Psi[r0, :])**2, axis=1)
+                v = (d2 - d2.min()) / (d2.max() - d2.min() + 1e-12)
+                pts[s] = v
+            out['null_mean'] = pts.mean(axis=0)
+            out['null_std'] = pts.std(axis=0)
+        return out
+
+    # ---- Matrix imputation via diffusion ----
+    def impute(
+        self,
+        X,
+        t: int = 8,
+        which: str = 'msZ',
+        output: str = 'auto',   # {'auto','sparse','dense'}
+        dtype=np.float64,
+    ):
+        ...
+
+        """
+        Diffusion-based imputation using P^t.
+
+        Parameters
+        ----------
+        X : array-like or sparse matrix, shape (n_samples, n_features)
+            Data matrix to be imputed.
+        t : int (default 8)
+            Number of diffusion steps.
+        which : {'X','Z','msZ'} (default 'msZ')
+            Which diffusion operator to use.
+        output : {'auto','sparse','dense'} (default 'auto')
+            Output format. 'auto' preserves input sparsity.
+        dtype : numpy dtype (default float64)
+            Computation dtype.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix or np.ndarray
+            Imputed matrix.
+        """
+        import numpy as _np
+        import scipy.sparse as _sp
+
+        P = self._select_P_operator(which)
+        # make CSR view
+        if _sp.issparse(X):
+            Xc = X.tocsr(copy=True).astype(dtype)
+            for _ in range(int(t)):
+                Xc = P @ Xc
+            if output in ('auto', 'sparse'):
+                return Xc
+            return Xc.toarray()
+        else:
+            Xd = _np.asarray(X, dtype=dtype)
+            for _ in range(int(t)):
+                Xd = P @ Xd
+            if output in ('auto', 'dense'):
+                return Xd
+            # convert to sparse CSR
+            return _sp.csr_matrix(Xd)
+
+    # ---- Riemannian diagnostics (metric + scalars) ----
+    def riemann_diagnostics(
+        self,
+        Y: Optional[np.ndarray] = None,
+        L: Optional[np.ndarray] = None,
+        center: str = "median",
+        diffusion_t: int = 0,
+        diffusion_op: Optional[str] = None,  # {'X','Z','msZ'} or None
+        normalize: str = "symmetric",
+        clip_percentile: float = 2.0,
+        return_limits: bool = True,
+        compute_metric: bool = True,
+        compute_scalars: bool = True,
+        random_state: Optional[int] = 7,
+    ):
+        ...
+
+        """
+        Compute Riemann metric in 2D and derived scalars (anisotropy, log det G, deformation).
+
+        Parameters
+        ----------
+        Y : np.ndarray, shape (n,2), optional
+            2D embedding. If None, uses msMAP if available, else MAP.
+        L : array-like (Laplacian) or None
+            Graph Laplacian. If None, defaults to base-kernel Laplacian.
+        center : {'median','mean'}
+            Centering for deformation calculation.
+        diffusion_t : int (default 0)
+            Optional diffusion smoothing steps for deformation maps.
+        diffusion_op : {'X','Z','msZ', None}
+            Operator for smoothing scalar fields (if diffusion_t > 0).
+        normalize : str (default 'symmetric')
+            Normalization option passed to deformation routine.
+        clip_percentile : float (default 2.0)
+            Percentile for clipping in deformation calculation.
+        return_limits : bool (default True)
+            Return color-scale limits (vmin, vmax) alongside values.
+        compute_metric : bool (default True)
+            Compute local metric tensor G.
+        compute_scalars : bool (default True)
+            Compute anisotropy and logdet.
+
+        Returns
+        -------
+        dict
+            {
+                'G': ndarray of shape (n,2,2) if computed,
+                'anisotropy': ndarray (n,) if computed,
+                'logdetG': ndarray (n,) if computed,
+                'deformation': ndarray (n,),
+                'limits': (vmin,vmax) if return_limits
+            }
+        """
+        import numpy as _np
+        from topo.eval.rmetric import RiemannMetric, calculate_deformation
+
+        # Defaults
+        if Y is None:
+            try:
+                Y = self.msMAP
+            except Exception:
+                Y = self.MAP
+        if L is None:
+            # Base Laplacian for geometry (as in the demo)
+            L = self.base_kernel.L
+
+        # Metric
+        out = {}
+        if compute_metric:
+            G = RiemannMetric(Y, L).get_rmetric()
+            out['G'] = G
+        else:
+            G = None
+
+        # Scalars (anisotropy and logdet from G)
+        if compute_scalars:
+            if G is None:
+                G = RiemannMetric(Y, L).get_rmetric()
+                out['G'] = G
+            lam = _np.linalg.eigvalsh(G)
+            lam = _np.clip(lam, 1e-12, None)
+            out['anisotropy'] = _np.log(lam[:, -1] / lam[:, 0])
+            out['logdetG'] = _np.sum(_np.log(lam), axis=1)
+
+        # Deformation (centered log det(G) with optional diffusion smoothing)
+        P = None
+        if diffusion_t and diffusion_op is not None:
+            P = self._select_P_operator(diffusion_op)
+        deform_vals, limits = calculate_deformation(
+            Y, L,
+            center=center,
+            diffusion_t=int(max(0, diffusion_t)),
+            diffusion_op=P,
+            normalize=normalize,
+            clip_percentile=float(clip_percentile),
+            return_limits=True,
+        )
+        out['deformation'] = deform_vals
+        if return_limits:
+            out['limits'] = limits
+
+        # Cache for later reuse
+        self.RiemannMetricDict['last'] = out
+        return out
+
+
+    # ---------------------------------------------------------------------
+    # Evaluation helper (unchanged, BC)
+    # ---------------------------------------------------------------------
     def eval_models_layouts(self, X,
                             landmarks=None,
                             kernels=['cknn', 'bw_adaptive'],
@@ -1240,90 +1805,21 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                             n_neighbors=5, n_jobs=-1,
                             cor_method='spearman', **kwargs):
         """
-        Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
-        Compares results with PCA and PCA-derived layouts (i.e. t-SNE, UMAP etc).
-
-        Parameters
-        --------------
-
-        X : data matrix. Expects either numpy.ndarray or scipy.sparse.csr_matrix.
-
-        landmarks : optional (int, default None).
-            If specified, subsamples the TopOGraph object and/or data matrix X to a number of landmark samples
-            before computing results and scores. Useful if dealing with large datasets (>30,000 samples).
-
-        kernels : list of str (optional, default ['fuzzy', 'cknn', 'bw_adaptive_alpha_decaying']).
-            List of kernel versions to run and evaluate. These will be used to learn an eigenbasis and to learn a new graph kernel from it.
-            Options are:
-            * 'fuzzy'
-            * 'cknn'
-            * 'bw_adaptive'
-            * 'bw_adaptive_alpha_decaying'
-            * 'bw_adaptive_nbr_expansion'
-            * 'bw_adaptive_alpha_decaying_nbr_expansion'
-            * 'gaussian'
-            Will not run all by default to avoid long waiting times in reckless calls.
-
-        eigenmap_methods : list of str (optional, default ['msDM', 'DM', 'LE']).
-            List of eigenmap methods to run and evaluate. Options are:
-            * 'msDM' - multiscale diffusion maps
-            * 'DM' - diffusion maps
-            * 'LE' - Laplacian eigenmaps
-            * 'top' - top eingenfunctions (with largest eigenvalues)
-            * 'bottom' - bottom eigenfunctions (with smallest eigenvalues)
-
-        projections : list of str (optional, default ['Isomap', 'MAP']).
-            List of projection methods to run and evaluate. Options are the same of the `topo.layouts.Projector()` object:
-            * '(L)Isomap'
-            * 't-SNE'
-            * 'MAP'
-            * 'UMAP'
-            * 'PaCMAP'
-            * 'TriMAP'
-            * 'IsomorphicMDE' - MDE with preservation of nearest neighbors
-            * 'IsometricMDE' - MDE with preservation of pairwise distances
-            * 'NCVis'
-
-        additional_eigenbases : dict (optional, default None).
-            Dictionary containing named additional eigenbases (e.g. factor analysis, VAEs, ICA, etc) to be evaluated.
-
-        additional_projections : dict (optional, default None).
-            Dictionary containing named additional projections (e.g. t-SNE, UMAP, etc) to be evaluated.
-
-        n_neighbors : int (optional, default 5).
-            Number of nearest neighbors to use for the kNN graph.
-
-        n_jobs : int (optional, default -1).
-            Number of jobs to use for parallelization. If -1, uses all available cores.
-
-        cor_method : str (optional, default 'spearman').
-            Correlation method to use for local scores. Options are 'spearman' and 'kendall'.
-
-        landmark_method : str (optional, default 'random').
-            Method to use for landmark selection. Options are 'random' and 'kmeans'.
-
-        kwargs : dict (optional, default {}).
-            Additional keyword arguments to pass to the `topo.base.ann.kNN()` function.
-
-
-        Returns
-        -------
-
-        Populates the TopOGraph object and returns a dictionary of dictionaries with the results
-
-
+        Evaluate orthogonal bases, topological graphs and layouts against geodesic correlations
+        and a PCA baseline. Kept for backward compatibility.
         """
         from scipy.stats import spearmanr, kendalltau
         from scipy.spatial.distance import squareform
         from topo.utils._utils import get_landmark_indices
         from topo.eval.global_scores import global_score_pca
         from topo.eval.local_scores import geodesic_distance
-        # Run modselfels
+
         if self.verbosity > 0:
             print('Running specified models...')
         self.run_models(X, kernels, eigenmap_methods, projections)
         gc.collect()
-        # Define landmarks if applicable
+
+        # landmarks
         if landmarks is not None:
             if isinstance(landmarks, int):
                 landmark_indices = get_landmark_indices(
@@ -1333,191 +1829,151 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             elif isinstance(landmarks, np.ndarray):
                 landmark_indices = landmarks
             else:
-                raise ValueError(
-                    '\'landmarks\' must be either an integer or a numpy array.')
+                raise ValueError('\'landmarks\' must be either an integer or a numpy array.')
+        else:
+            landmark_indices = None
 
-        # Compute geodesics
-        gc.collect()
-        EigenbasisLocalResults = {}
-        EigenbasisGlobalResults = {}
+        # base geodesics
         if self.verbosity > 0:
             print('Computing base geodesics...')
-        if landmarks is not None:
-            base_graph = self.base_knn_graph[landmark_indices, :][:, landmark_indices]
-        else:
-            base_graph = self.base_knn_graph
-        base_geodesics = squareform(geodesic_distance(
-            base_graph, directed=False, n_jobs=n_jobs))
+        base_graph = self.base_knn_graph if landmark_indices is None else self.base_knn_graph[landmark_indices, :][:, landmark_indices]
+        base_geodesics = squareform(geodesic_distance(base_graph, directed=False, n_jobs=n_jobs))
         gc.collect()
+
+        # eigenbases
+        EigenbasisLocalResults = {}
+        EigenbasisGlobalResults = {}
         for key in self.EigenbasisDict.keys():
             if self.verbosity > 0:
-                print('Computing geodesics for eigenbasis \'{}...\''.format(key))
-            emb_graph = kNN(self.EigenbasisDict[key].results(), n_neighbors=n_neighbors,
-                            metric=self.base_metric,
-                            n_jobs=n_jobs,
-                            backend=self.backend,
-                            return_instance=False,
-                            verbose=False, **kwargs)
-            if landmarks is not None:
+                print(f"Computing geodesics for eigenbasis '{key}...'")
+            emb = self.EigenbasisDict[key].results()
+            emb_graph = kNN(emb, n_neighbors=n_neighbors, metric=self.base_metric, n_jobs=n_jobs,
+                            backend=self.backend, return_instance=False, verbose=False, **kwargs)
+            if landmark_indices is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-                gc.collect()
-            embedding_geodesics = squareform(geodesic_distance(
-                emb_graph, directed=False, n_jobs=n_jobs))
-            gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
             if cor_method == 'spearman':
-                if self.verbosity > 0:
-                    print('Computing Spearman R for eigenbasis \'{}...\''.format(key))
-                EigenbasisLocalResults[key], _ = spearmanr(
-                    base_geodesics, embedding_geodesics)
+                EigenbasisLocalResults[key], _ = spearmanr(base_geodesics, embedding_geodesics)
             else:
-                if self.verbosity > 0:
-                    print('Computing Kendall Tau for eigenbasis \'{}...\''.format(key))
-                EigenbasisLocalResults[key], _ = kendalltau(
-                    base_geodesics, embedding_geodesics)
-            gc.collect()
-            EigenbasisGlobalResults[key] = global_score_pca(
-                X, self.EigenbasisDict[key].results())
+                EigenbasisLocalResults[key], _ = kendalltau(base_geodesics, embedding_geodesics)
+            EigenbasisGlobalResults[key] = global_score_pca(X, emb)
             if self.verbosity > 0:
-                print('Finished for eigenbasis {}'.format(key))
+                print('Finished for eigenbasis', key)
             gc.collect()
+
+        # projections
         ProjectionLocalResults = {}
         ProjectionGlobalResults = {}
         for key in self.ProjectionDict.keys():
             if self.verbosity > 0:
-                print('Computing geodesics for projection \' {}...\''.format(key))
-            emb_graph = kNN(self.ProjectionDict[key],
-                            n_neighbors=n_neighbors,
-                            metric=self.graph_metric,
-                            n_jobs=n_jobs,
-                            backend=self.backend,
-                            return_instance=False,
-                            verbose=False, **kwargs)
-            if landmarks is not None:
+                print(f"Computing geodesics for projection '{key}...'")
+            emb_graph = kNN(self.ProjectionDict[key], n_neighbors=n_neighbors, metric=self.graph_metric,
+                            n_jobs=n_jobs, backend=self.backend, return_instance=False, verbose=False, **kwargs)
+            if landmark_indices is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-                gc.collect()
-            embedding_geodesics = squareform(geodesic_distance(
-                emb_graph, directed=False, n_jobs=n_jobs))
-            gc.collect()
+            embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
             if cor_method == 'spearman':
-                if self.verbosity > 0:
-                    print('Computing Spearman R for projection \'{}...\''.format(key))
-                ProjectionLocalResults[key], _ = spearmanr(
-                    base_geodesics, embedding_geodesics)
+                ProjectionLocalResults[key], _ = spearmanr(base_geodesics, embedding_geodesics)
             else:
-                if self.verbosity > 0:
-                    print('Computing Kendall Tau for projection \'{}...\''.format(key))
-                ProjectionLocalResults[key], _ = kendalltau(
-                    base_geodesics, embedding_geodesics)
+                ProjectionLocalResults[key], _ = kendalltau(base_geodesics, embedding_geodesics)
+            ProjectionGlobalResults[key] = global_score_pca(X, self.ProjectionDict[key])
             gc.collect()
-            ProjectionGlobalResults[key] = global_score_pca(
-                X, self.ProjectionDict[key])
-            gc.collect()
+
+        # PCA baseline
         from sklearn.decomposition import PCA
         if self.verbosity >= 1:
             print('Computing PCA for comparison...')
-        import numpy as np
-        if issparse(X) == True:
+        if issparse(X) is True:
             if isinstance(X, csr_matrix):
                 data = X.todense()
-        if issparse(X) == False:
+            else:
+                data = X
+        else:
             if not isinstance(X, np.ndarray):
                 import pandas as pd
                 if isinstance(X, pd.DataFrame):
                     data = np.asarray(X.values.T)
                 else:
-                    return print('Uknown data format.')
+                    return print('Unknown data format.')
             else:
                 data = X
         pca_emb = PCA(n_components=self.n_eigs).fit_transform(data)
-        gc.collect()
-        emb_graph = kNN(pca_emb,
-                        n_neighbors=n_neighbors,
-                        metric=self.graph_metric,
-                        n_jobs=n_jobs,
-                        backend=self.backend,
-                        return_instance=False,
-                        verbose=False, **kwargs)
-        gc.collect()
-        if landmarks is not None:
+        emb_graph = kNN(pca_emb, n_neighbors=n_neighbors, metric=self.graph_metric, n_jobs=n_jobs,
+                        backend=self.backend, return_instance=False, verbose=False, **kwargs)
+        if landmark_indices is not None:
             emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-            gc.collect()
-        embedding_geodesics = squareform(geodesic_distance(
-            emb_graph, directed=False, n_jobs=n_jobs))
-        gc.collect()
+        embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
         if self.verbosity > 0:
             print('Computing Spearman R for PCA...')
-        EigenbasisLocalResults['PCA'], _ = spearmanr(
-            base_geodesics, embedding_geodesics)
-        gc.collect()
+        EigenbasisLocalResults['PCA'], _ = spearmanr(base_geodesics, embedding_geodesics)
         ProjectionGlobalResults['PCA'] = global_score_pca(X, pca_emb)
-        gc.collect()
-        if additional_eigenbases is not None:
-            for key in additional_eigenbases.keys():
-                if self.verbosity > 0:
-                    print('Computing geodesics for additional eigenbasis \'{}...\''.format(key))
-                emb_graph = kNN(additional_eigenbases[key],
-                                n_neighbors=n_neighbors,
-                                metric=self.base_metric,
-                                n_jobs=n_jobs,
-                                backend=self.backend,
-                                return_instance=False,
-                                verbose=False, **kwargs)
-                gc.collect()
-                if landmarks is not None:
-                    emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-                    gc.collect()
-                embedding_geodesics = squareform(geodesic_distance(
-                    emb_graph, directed=False, n_jobs=n_jobs))
-                gc.collect()
-                if cor_method == 'spearman':
-                    if self.verbosity > 0:
-                        print('Computing Spearman R for additional eigenbasis \'{}...\''.format(key))
-                    EigenbasisLocalResults[key], _ = spearmanr(
-                        base_geodesics, embedding_geodesics)
-                else:
-                    if self.verbosity > 0:
-                        print('Computing Kendall Tau for additional eigenbasis \'{}...\''.format(key))
-                    EigenbasisLocalResults[key], _ = kendalltau(
-                        base_geodesics, embedding_geodesics)
-                gc.collect()
-                EigenbasisGlobalResults[key] = global_score_pca(
-                    X, additional_eigenbases[key])
-                if self.verbosity > 0:
-                    print('Finished for eigenbasis {}'.format(key))
-                gc.collect()
-        if additional_projections is not None:
-            for key in additional_projections.keys():
-                if self.verbosity > 0:
-                    print('Computing geodesics for additional projection \' {}...\''.format(key))
-                emb_graph = kNN(additional_projections[key],
-                                n_neighbors=n_neighbors,
-                                metric=self.graph_metric,
-                                n_jobs=n_jobs,
-                                backend=self.backend,
-                                return_instance=False,
-                                verbose=False, **kwargs)
-                if landmarks is not None:
-                    emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
-                embedding_geodesics = squareform(geodesic_distance(
-                    emb_graph, directed=False, n_jobs=n_jobs))
-                gc.collect()
-                if cor_method == 'spearman':
-                    if self.verbosity > 0:
-                        print('Computing Spearman R for additional projection \'{}...\''.format(key))
-                    ProjectionLocalResults[key], _ = spearmanr(
-                        base_geodesics, embedding_geodesics)
-                else:
-                    if self.verbosity > 0:
-                        print('Computing Kendall Tau for additional projection \'{}...\''.format(key))
-                    ProjectionLocalResults[key], _ = kendalltau(
-                        base_geodesics, embedding_geodesics)
-                gc.collect()
-                ProjectionGlobalResults[key] = global_score_pca(
-                    X, additional_projections[key])
-                gc.collect()
+
         res_dict = {'EigenbasisLocal': EigenbasisLocalResults,
                     'EigenbasisGlobal': EigenbasisGlobalResults,
                     'ProjectionLocal': ProjectionLocalResults,
                     'ProjectionGlobal': ProjectionGlobalResults}
-
         return res_dict
+
+
+# -----------------------------------------------------------------------------
+# Module-level pickle helpers (read/write TopOGraph objects)
+# -----------------------------------------------------------------------------
+
+def save_topograph(tg: TopOGraph, filename: str = 'topograph.pkl', remove_base_class: bool = True):
+    """
+    Save a TopOGraph object to a pickle file.
+
+    Parameters
+    ----------
+    tg : TopOGraph
+        The object to save.
+    filename : str
+        Destination path.
+    remove_base_class : bool
+        If True, clears `tg.base_nbrs_class` before pickling to avoid non-serializable ANN handles.
+    """
+    try:
+        import pickle
+    except ImportError:
+        print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`')
+        return
+
+    if not isinstance(tg, TopOGraph):
+        raise TypeError("`tg` must be a TopOGraph instance.")
+
+    if tg.base_nbrs_class is not None and remove_base_class:
+        tg.base_nbrs_class = None
+
+    with open(filename, 'wb') as f:
+        pickle.dump(tg, f, pickle.HIGHEST_PROTOCOL)
+    print(f'TopOGraph saved at {filename}')
+
+
+def load_topograph(filename: str) -> TopOGraph:
+    """
+    Load a TopOGraph object from a pickle file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to a previously pickled TopOGraph.
+
+    Returns
+    -------
+    TopOGraph
+        The loaded object.
+    """
+    try:
+        import pickle
+    except ImportError:
+        raise ImportError('Pickle is needed for loading the TopOGraph. Please install it with `pip3 install pickle`')
+
+    with open(filename, 'rb') as f:
+        obj = pickle.load(f)
+
+    if not isinstance(obj, TopOGraph):
+        warnings.warn("Loaded object is not a TopOGraph; returning as-is.", RuntimeWarning)
+        return obj
+    return obj
+
+
