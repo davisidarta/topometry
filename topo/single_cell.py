@@ -13,6 +13,7 @@ from scipy.sparse import issparse, csr_matrix
 from scipy.sparse.csgraph import connected_components
 import colorsys
 from matplotlib.backends.backend_pdf import PdfPages
+import textwrap
 
 try:
     import scanpy as sc
@@ -32,9 +33,45 @@ if _HAVE_SCANPY:
     )
     from topo.tpgraph.intrinsic_dim import IntrinsicDim
 
+    # Geometry metrics
+    from topo.eval.topo_metrics import (
+            rank_diffusion_correlation,
+            diffusion_knn_preservation,
+            rowwise_js_similarity,
+            sparse_neighborhood_f1,
+            spectral_procrustes,
+            topo_preserve_score,
+        )
+
+
     # -----------------------
     # Helpers (internal API)
     # -----------------------
+    def _first_non_none(*vals):
+        for v in vals:
+            if v is not None:
+                return v
+        return None
+    
+    def _safe_set_obsm(adata: "AnnData", key: str, val):
+        if val is None:
+            return
+        arr = np.asarray(val)
+        if arr.ndim == 1:
+            arr = arr[:, None]
+        if arr.shape[0] != adata.n_obs:
+            return
+        adata.obsm[key] = arr
+
+    def _safe_set_obsp(adata: "AnnData", key: str, val):
+        if val is None:
+            return
+        M = val
+        if not sp.issparse(M):
+            M = np.asarray(M)
+        if M.shape != (adata.n_obs, adata.n_obs):
+            return
+        adata.obsp[key] = M
 
     def _ensure_dir(path: str):
         os.makedirs(path, exist_ok=True)
@@ -49,21 +86,20 @@ if _HAVE_SCANPY:
     def _spectral_alignment_by_label(
         adata: AnnData,
         labels_key: str,
-        scaffold_key: str = "X_spectral_scaffold_ms",
+        scaffold_key: str = "X_ms_spectral_scaffold",
         standardize: bool = True,
         top_k: int = 3,
         out_key: str = "spectral_alignment_summary",
     ):
-        """Per-label: best 1D separating axis (Cohen's d) table (stored in adata.uns[out_key])."""
         def _cohens_d(x, g):
             a, b = x[g], x[~g]
             if a.size < 2 or b.size < 2: return np.nan
             da, db = a.mean(), b.mean()
             va, vb = a.var(ddof=1), b.var(ddof=1)
             n1, n2 = a.size, b.size
-            sp = np.sqrt(((n1-1)*va + (n2-1)*vb) / max(1, n1+n2-2))
-            if sp <= 0: return np.nan
-            return (da - db) / sp
+            spooled = np.sqrt(((n1-1)*va + (n2-1)*vb) / max(1, n1+n2-2))
+            if spooled <= 0: return np.nan
+            return (da - db) / spooled
 
         Z = np.asarray(adata.obsm[scaffold_key], float)
         Zs = _std_cols(Z) if standardize else Z
@@ -83,13 +119,11 @@ if _HAVE_SCANPY:
         return df
 
     def _eigvals_from_tg(tg: TopOGraph, variant: str = "msDM") -> np.ndarray:
-        """Return (sorted descending) positive eigenvalues for the chosen diffusion variant."""
         key = (("msDM with " + tg.base_kernel_version) if variant == "msDM"
                else ("DM with " + tg.base_kernel_version))
         try:
             _, evals = tg.EigenbasisDict[key].results(return_evals=True)
         except Exception:
-            # Fallback to any available
             for _k, obj in getattr(tg, "EigenbasisDict", {}).items():
                 try:
                     _, evals = obj.results(return_evals=True)
@@ -105,7 +139,6 @@ if _HAVE_SCANPY:
         return ev
 
     def _palette_from_obs(adata: AnnData, key: str):
-        """Return labels (Categorical), lut and color list aligned to obs order for a categorical obs key."""
         if key not in adata.obs:
             return None, None, None
         labels = adata.obs[key].astype("category")
@@ -132,11 +165,6 @@ if _HAVE_SCANPY:
                                          base_brightness: float = 0.25, max_brightness: float = 1.0,
                                          pt_key_out: str = "topo_pseudotime_component",
                                          color_key_out: str = "pseudotime_color_hex"):
-        """
-        Detect connected components on TopOMetry graph and create a brightness-modulated color per cell.
-        Pseudotime values are min-max scaled within each component, then mapped to brightness along
-        the base hue for the cell's cluster color (from `cluster_key`).
-        """
         P = getattr(tg, "P_of_msZ", None)
         if P is None:
             return None
@@ -156,9 +184,7 @@ if _HAVE_SCANPY:
         try:
             pt_full = adata.obs['topo_pseudotime'].values
         except Exception:
-            pt_out = tg.pseudotime(multiscale=True, k=64, null_n_seeds=0)
-            pt_full = pt_out['pseudotime']
-            adata.obs['topo_pseudotime'] = pt_full
+            return None
 
         pt_scaled = np.zeros_like(pt_full, dtype=float)
         for c in range(n_comp):
@@ -190,7 +216,6 @@ if _HAVE_SCANPY:
         return pt_key_out, color_key_out, n_comp
 
     def _composition_barplot(ax, adata: AnnData, column_key: str, color_key: str, invert: bool = False):
-        """Stacked normalized composition barplot on given axis, no seaborn dependency."""
         df = adata.obs.groupby([column_key, color_key]).size().unstack(fill_value=0)
         df = df.div(df.sum(axis=1), axis=0)
         if invert:
@@ -201,7 +226,6 @@ if _HAVE_SCANPY:
             ax.set_xlabel(column_key, fontsize=11); ax.set_ylabel("")
         ax.grid(False)
         ax.tick_params(axis='x', labelrotation=90, labelsize=8)
-        # legend outside
         handles, labels = ax.get_legend_handles_labels()
         if not handles:
             handles = [plt.Rectangle((0,0),1,1,fc='gray', ec='none')]
@@ -210,41 +234,907 @@ if _HAVE_SCANPY:
         for t in leg.get_texts():
             t.set_fontsize(8)
 
-    def _decay_plot_axes(ax_curve, ax_diff, evals: np.ndarray, title: str | None = None):
-        """Draw spectrum decay and abs(first derivative) on provided axes (no plt.show)."""
-        if title is not None:
-            ax_curve.set_title(title, fontsize=12)
-        if evals.size == 0:
-            ax_curve.text(0.5,0.5,"No eigenvalues", ha='center', va='center')
-            ax_diff.text(0.5,0.5,"No eigenvalues", ha='center', va='center')
+    def _decay_plot_axes_original(ax_curve, ax_diff, evals: np.ndarray, title: str | None = None):
+        if evals is None or len(evals) == 0:
+            ax_curve.axis('off'); ax_diff.axis('off')
+            ax_curve.text(0.5, 0.5, "No eigenvalues", ha='center', va='center')
             return
-        xs = np.arange(0, len(evals))
-        ax_curve.plot(xs, evals, 'b', lw=1)
-        ax_curve.set_ylabel('Eigenvalues', fontsize=10)
-        ax_curve.set_xlabel('Eigenvectors', fontsize=10)
+        max_eigs = int(np.sum(evals > 0, axis=0))
         first_diff = np.diff(evals)
-        sec_diff = np.diff(first_diff)
-        max_eigs = int(np.sum(evals > 0))
         eigengap = np.argmax(first_diff) + 1
+
+        if title is not None:
+            ax_curve.set_title(title, fontsize=14)
+        ax_curve.plot(range(0, len(evals)), evals, 'b')
+        ax_curve.set_ylabel('Eigenvalues', fontsize=12)
+        ax_curve.set_xlabel('Eigenvectors', fontsize=12)
         if max_eigs == len(evals):
-            ax_curve.vlines(eigengap, ymin=np.min(evals), ymax=np.max(evals), linestyles='--', lw=0.8)
+            ax_curve.vlines(eigengap, ax_curve.get_ylim()[0], ax_curve.get_ylim()[1], linestyles="--", label='Eigengap')
+            ax_curve.legend(prop={'size': 12}, fontsize=12, loc='best')
         else:
-            ax_curve.vlines(max_eigs, ymin=np.min(evals), ymax=np.max(evals), linestyles='--', lw=0.8)
-        ax_curve.grid(False)
+            ax_curve.vlines(max_eigs, ax_curve.get_ylim()[0], ax_curve.get_ylim()[1], linestyles="--", label='Eigengap')
+            ax_curve.legend(prop={'size': 12}, fontsize=12, loc='best')
 
         ax_diff.set_yscale('log')
-        ax_diff.scatter(np.arange(0, len(first_diff)), np.abs(first_diff), s=6)
-        ax_diff.set_ylabel('abs(first diff)', fontsize=10)
-        ax_diff.set_xlabel('Eigenvalues', fontsize=10)
+        ax_diff.scatter(range(0, len(first_diff)), np.abs(first_diff), s=8)
+        ax_diff.set_ylabel('Eigenvalues first derivatives (abs)', fontsize=12)
+        ax_diff.set_xlabel('Eigenvalues', fontsize=12)
+        ax_diff.tick_params(axis='y', labelleft=False)
         if max_eigs == len(evals):
-            ax_diff.vlines(eigengap, ymin=np.min(np.abs(first_diff[np.isfinite(first_diff)] + 1e-12)), ymax=np.max(np.abs(first_diff)), linestyles='--', lw=0.8)
+            ax_diff.vlines(eigengap, ax_diff.get_ylim()[0], ax_diff.get_ylim()[1], linestyles="--", label='Eigengap')
         else:
-            ax_diff.vlines(max_eigs, ymin=np.min(np.abs(first_diff[np.isfinite(first_diff)] + 1e-12)), ymax=np.max(np.abs(first_diff)), linestyles='--', lw=0.8)
-        ax_diff.grid(False)
+            ax_diff.vlines(max_eigs, ax_diff.get_ylim()[0], ax_diff.get_ylim()[1], linestyles="--", label='Eigengap')
+
+    def _plot_id_histograms_original(ax_fsa, ax_mle, id_est: IntrinsicDim | None):
+        def _one(ax, method_name: str):
+            if (id_est is None) or (method_name not in id_est.local_id) or (len(id_est.local_id[method_name]) == 0):
+                ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center'); return
+            for key in id_est.local_id[method_name].keys():
+                x = id_est.local_id[method_name][key]
+                label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(id_est.global_id[method_name][key])) + ' )'
+                ax.hist(x, bins=30, histtype='step', stacked=True, density=True, log=False, label=label)
+            ax.set_title(method_name.upper(), fontsize=14, pad=8)
+            ax.legend(prop={'size': 9}, fontsize=9)
+            ax.set_xlabel('Estimated intrinsic dimension', fontsize=11)
+            ax.set_ylabel('Frequency', fontsize=11)
+            ax.tick_params(axis='y', labelleft=False)
+        _one(ax_fsa, 'fsa')
+        _one(ax_mle, 'mle')
+
+    # ---------- PaCMAP ensuring ----------
+    def _ensure_pacmap(tg: TopOGraph):
+        dm_ok = False
+        ms_ok = False
+        try:
+            _ = tg.PaCMAP
+            dm_ok = getattr(tg, "PaCMAP", None) is not None
+        except Exception:
+            pass
+        try:
+            _ = tg.msPaCMAP
+            ms_ok = getattr(tg, "msPaCMAP", None) is not None
+        except Exception:
+            pass
+
+        if not (dm_ok and ms_ok):
+            proj = getattr(tg, "project", None)
+            if callable(proj):
+                try:
+                    proj(projection_method="PaCMAP", which="Z")
+                    dm_ok = getattr(tg, "PaCMAP", None) is not None
+                except Exception:
+                    pass
+                try:
+                    proj(projection_method="PaCMAP", which="msZ")
+                    ms_ok = getattr(tg, "msPaCMAP", None) is not None
+                except Exception:
+                    pass
+
+        def _try(method_name, *args, **kwargs):
+            f = getattr(tg, method_name, None)
+            if callable(f):
+                try:
+                    return f(*args, **kwargs)
+                except Exception:
+                    return None
+            return None
+
+        if not dm_ok:
+            for name in ("compute_pacmap", "compute_PaCMAP", "pacmap", "PaCMAP_fit"):
+                _try(name)
+                if getattr(tg, "PaCMAP", None) is not None:
+                    dm_ok = True
+                    break
+
+        if not ms_ok:
+            for name in ("compute_pacmap", "compute_PaCMAP", "pacmap", "PaCMAP_fit"):
+                _try(name, multiscale=True)
+                if getattr(tg, "msPaCMAP", None) is not None:
+                    ms_ok = True
+                    break
+
+        return dm_ok, ms_ok
+
+    # ---------- Simple kNN → row-stochastic P from coordinates ----------
+    def _rowstochastic_from_coords(Y: np.ndarray, k: int = 30) -> sp.csr_matrix:
+        Y = np.asarray(Y, float)
+        n = Y.shape[0]
+        k = int(max(1, min(k, n - 1)))
+
+        try:
+            from sklearn.neighbors import NearestNeighbors
+            nn = NearestNeighbors(n_neighbors=k + 1, algorithm="auto", metric="euclidean")
+            nn.fit(Y)
+            dists, idx = nn.kneighbors(Y, return_distance=True)
+        except Exception:
+            D2 = np.sum((Y[:, None, :] - Y[None, :, :]) ** 2, axis=2)
+            idx = np.argpartition(D2, kth=(k + 1), axis=1)[:, :k + 1]
+            dists = np.take_along_axis(D2, idx, axis=1)
+
+        rows = np.repeat(np.arange(n), k)
+        cols = idx[:, 1:].ravel()  # drop self
+        data = np.ones(rows.size, dtype=float)
+        P = sp.csr_matrix((data, (rows, cols)), shape=(n, n))
+        row_sums = np.asarray(P.sum(axis=1)).ravel()
+        row_sums[row_sums == 0] = 1.0
+        inv = sp.diags(1.0 / row_sums)
+        P = inv @ P
+        return P
+
+    # ---------- aspect ratio enforcement ----------
+    def _force_equal_axes(fig: plt.Figure):
+        """Set 1:1 aspect on ALL axes in a figure."""
+        for ax in fig.get_axes():
+            try:
+                ax.set_aspect('equal', adjustable='box')
+            except Exception:
+                pass
+
+    # =========================
+    # STEPWISE API (new)
+    # =========================
+
+    def fit_adata(
+        adata: AnnData,
+        tg: TopOGraph | None = None,
+        *,
+        projections: tuple[str, ...] = ("MAP", "PaCMAP"),
+        do_leiden: bool = True,
+        leiden_key_base: str = "topo_clusters",
+        leiden_resolutions: list[float] | tuple[float, ...] = (0.2, 0.8, 1.2),
+        leiden_primary_index: int = 1,
+        **topograph_kwargs,
+    ):
+        """
+        Fit or reuse a TopOGraph, populate adata with scaffolds, projections, and
+        cluster the refined DM graph (P_of_Z == tg.graph_kernel.P).
+
+        Returns
+        -------
+        tg : TopOGraph
+        """
+        if tg is None:
+            tg = TopOGraph(**topograph_kwargs).fit(adata.X)
+        else:
+            # (re)fit if user passed new kwargs
+            if topograph_kwargs:
+                tg.set_params(**topograph_kwargs)
+                tg.fit(adata.X)
+
+        # --- spectral scaffolds
+        try:
+            _safe_set_obsm(adata, 'X_ms_spectral_scaffold', tg.spectral_scaffold(multiscale=True))
+        except Exception:
+            pass
+        try:
+            _safe_set_obsm(adata, 'X_spectral_scaffold', tg.spectral_scaffold(multiscale=False))
+        except Exception:
+            pass
+
+        # --- ensure requested projections over {DM, msDM}
+        proj_fn = getattr(tg, "project", None)
+        for multiscale in (False, True):
+            which = "msZ" if multiscale else "Z"
+            ms_prefix = "X_msTopo" if multiscale else "X_Topo"
+            for proj in projections:
+                key = f"{ms_prefix}{proj}"
+                try:
+                    Y = proj_fn(projection_method=proj, which=multiscale) if callable(proj_fn) else None
+                    if Y is None:
+                        if proj.upper() == "MAP":
+                            Y = getattr(tg, "msTopoMAP" if multiscale else "TopoMAP", None)
+                        elif proj.upper() == "PACMAP":
+                            _ensure_pacmap(tg)
+                            Y = getattr(tg, "msTopoPaCMAP" if multiscale else "TopoPaCMAP", None)
+                    _safe_set_obsm(adata, key, Y)
+                except Exception:
+                    # last-ditch fallback
+                    try:
+                        if proj.upper() == "MAP":
+                            _safe_set_obsm(adata, key, getattr(tg, "msTopoMAP" if multiscale else "TopoMAP", None))
+                        elif proj.upper() == "PACMAP":
+                            _ensure_pacmap(tg)
+                            _safe_set_obsm(adata, key, getattr(tg, "msTopoPaCMAP" if multiscale else "TopoPaCMAP", None))
+                    except Exception:
+                        pass
+
+        # Default alias
+        if adata.obsm.get('X_msTopoMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_msTopoMAP'])
+        if adata.obsm.get('X_TopoMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_TopoMAP'])
+        if adata.obsm.get('X_msTopoPaCMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoPaCMAP_default', adata.obsm['X_msTopoPaCMAP'])
+        if adata.obsm.get('X_TopoPaCMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoPaCMAP_default', adata.obsm['X_TopoPaCMAP'])
+
+        # --- refined Markov operators (DM + msDM)
+        _safe_set_obsp(adata, 'topometry_connectivities_dm', getattr(tg, 'P_of_Z', None))
+        _safe_set_obsp(adata, 'topometry_connectivities_ms', getattr(tg, 'P_of_msZ', None))
+        if adata.obsp.get('topometry_connectivities_ms', None) is not None:
+            _safe_set_obsp(adata, 'topometry_connectivities', adata.obsp['topometry_connectivities_ms'])
+
+        # --- clustering on refined DM graph (P_of_Z)
+        P_dm = adata.obsp.get('topometry_connectivities_dm', None)
+        if do_leiden and P_dm is not None:
+            res_list = list(leiden_resolutions) if isinstance(leiden_resolutions, (list, tuple)) else [float(leiden_resolutions)]
+            for res in res_list:
+                key = f"{leiden_key_base}_res{res}"
+                try:
+                    sc.tl.leiden(adata, adjacency=P_dm, key_added=key, resolution=float(res))
+                except Exception as e:
+                    print(f"[topometry] Leiden clustering failed at res={res}: {e}")
+            try:
+                prim_key = f"{leiden_key_base}_res{res_list[int(leiden_primary_index)]}"
+                if prim_key in adata.obs:
+                    adata.obs[leiden_key_base] = adata.obs[prim_key].astype("category")
+                    if f"{prim_key}_colors" in adata.uns:
+                        adata.uns[f"{leiden_key_base}_colors"] = adata.uns[f"{prim_key}_colors"]
+            except Exception:
+                pass
+
+        return tg
+
+
+    def intrinsic_dim(
+        adata: AnnData,
+        tg: TopOGraph | None = None,
+        *,
+        id_methods: list[str] = ("fsa", "mle"),
+        id_k_values: list[int] | None = None,
+        n_jobs: int = -1,
+    ):
+        """
+        Populate adata with global+local intrinsic dimension summaries.
+        Uses tg summaries when available and also runs IntrinsicDim on adata.X.
+        """
+        if tg is not None:
+            adata.uns['topometry_id_details'] = getattr(tg, "_id_details", None)
+            adata.uns['topometry_id_global_mle'] = tg.global_id_mle()
+            adata.uns['topometry_id_global_fsa'] = tg.global_id_fsa()
+            _loc = tg.local_ids()
+            if _loc is not None:
+                if isinstance(_loc, dict):
+                    for name, vec in _loc.items():
+                        if vec is not None:
+                            adata.obs[f'local_id_{name}'] = np.asarray(vec)
+                else:
+                    adata.obs['local_id'] = np.asarray(_loc)
+
+        # Explicit estimator over adata.X
+        if id_k_values is None:
+            id_k_values = list(range(10, 110, 20))
+        try:
+            id_est = IntrinsicDim(
+                methods=list(id_methods),
+                k=list(id_k_values),
+                backend='hnswlib',
+                metric='euclidean',
+                n_jobs=n_jobs,
+                plot=False
+            )
+            id_est.fit(adata.X)
+            adata.uns['intrinsic_dim_estimator'] = id_est
+            k_low  = str(min(id_k_values))
+            k_high = str(max(id_k_values))
+            if 'fsa' in id_est.local_id and k_low in id_est.local_id['fsa']:
+                adata.obs['id_fsa_k'+k_low] = id_est.local_id['fsa'][k_low]
+            if 'fsa' in id_est.local_id and k_high in id_est.local_id['fsa']:
+                adata.obs['id_fsa_k'+k_high] = id_est.local_id['fsa'][k_high]
+            if 'mle' in id_est.local_id and k_low in id_est.local_id['mle']:
+                adata.obs['id_mle_k'+k_low] = id_est.local_id['mle'][k_low]
+            if 'mle' in id_est.local_id and k_high in id_est.local_id['mle']:
+                adata.obs['id_mle_k'+k_high] = id_est.local_id['mle'][k_high]
+        except Exception as e:
+            print(f"[TopOMetry] IntrinsicDim estimation skipped: {e}")
+
+
+    def spectral_selectivity(
+        adata: AnnData,
+        tg: TopOGraph,
+        *,
+        weight_mode: str = "lambda_over_one_minus_lambda",
+        k_neighbors: int = 30,
+        smooth_P: str | None = None,  # {'X','Z','msZ'} or None
+        smooth_t: int = 0,
+        groupby_candidates: list[str] | None = None,
+    ):
+        """
+        Compute spectral selectivity on the multiscale scaffold and store to adata.
+        Also computes alignment-by-label against the first available grouping key.
+        """
+        spec = tg.spectral_selectivity(
+            multiscale=True,
+            weight_mode=weight_mode,
+            k_neighbors=k_neighbors,
+            smooth_P=smooth_P,
+            smooth_t=smooth_t,
+        )
+        adata.obs['spectral_EAS']       = spec['EAS']
+        adata.obs['spectral_RayScore']  = spec['RayScore']
+        adata.obs['spectral_LAC']       = spec['LAC']
+        adata.obs['spectral_axis']      = pd.Categorical(spec['axis'].astype(int))
+        adata.obs['spectral_axis_sign'] = pd.Categorical(spec['axis_sign'].astype(int))
+        adata.obs['spectral_radius']    = spec['radius']
+
+        # alignment-by-label on ms scaffold, if present
+        candidates = groupby_candidates or ['topo_clusters', 'leiden', 'cell_type']
+        align_key = next((k for k in candidates if k in adata.obs), None)
+        if align_key and ('X_ms_spectral_scaffold' in adata.obsm):
+            _spectral_alignment_by_label(
+                adata, labels_key=align_key,
+                scaffold_key='X_ms_spectral_scaffold',
+                top_k=3,
+                out_key='spectral_alignment_summary',
+            )
+
+
+    def riemann_diagnostics(
+        adata: AnnData,
+        tg: TopOGraph,
+        *,
+        center: str = "median",
+        diffusion_t: int = 8,
+        diffusion_op: str | None = "X",   # {'X','Z','msZ'} or None
+        normalize: str = "symmetric",
+        clip_percentile: float = 2.0,
+    ):
+        """
+        Run Riemann diagnostics on EVERY 2-D embedding in adata.obsm.
+        Stores per-embedding deformation vectors in adata.obs as:
+            metric_deformation__<obsm_key>
+        and limits in:
+            adata.uns['metric_limits'][<obsm_key>]
+        Also caches the Laplacian.
+        """
+        # Save Laplacian
+        try:
+            adata.obsp['topometry_laplacian'] = tg.base_kernel.L
+        except Exception:
+            pass
+
+        adata.uns.setdefault('metric_limits', {})
+
+        for key, Y in adata.obsm.items():
+            try:
+                arr = np.asarray(Y)
+                if arr.ndim != 2 or arr.shape[1] != 2 or arr.shape[0] != adata.n_obs:
+                    continue
+            except Exception:
+                continue
+
+            try:
+                riem = tg.riemann_diagnostics(
+                    Y=arr,
+                    L=tg.base_kernel.L,
+                    center=center,
+                    diffusion_t=diffusion_t,
+                    diffusion_op=diffusion_op,
+                    normalize=normalize,
+                    clip_percentile=clip_percentile,
+                    return_limits=True,
+                    compute_metric=False,
+                    compute_scalars=True,
+                )
+                col = f"metric_deformation__{key}"
+                adata.obs[col] = riem['deformation']
+                adata.uns['metric_limits'][key] = riem.get('limits', None)
+            except Exception as e:
+                print(f"[TopOMetry] Riemann diagnostics skipped for {key}: {e}")
+
+    def pseudotime_analysis(
+        adata,
+        tg,
+        *,
+        starting_cluster,
+        groupby: str = "topo_clusters",
+        lineage_mask=None,
+        random_state: int = 42,
+        verbose: bool = True,
+    ):
+        """
+        Compute diffusion-based pseudotime for a *single lineage* (assumes `adata`
+        contains only the cells of interest OR a mask is provided).
+
+        This function:
+        1) Selects a root cell by sampling one index from the provided cluster
+            label in `adata.obs[groupby]` (within the working subset).
+        2) Builds multiscale diffusion coordinates from the fitted `TopOGraph`
+            (msDM scaffold with lambda/(1-lambda) weighting).
+        3) Computes pseudotime as squared Euclidean distance in those coordinates
+            to the chosen root, normalized to [0, 1] within the working subset.
+        4) Stores results in `adata.obs['topo_pseudotime']`.
+
+        Parameters
+        ----------
+        adata : AnnData
+            If it has the *same* number of cells as the fitted `tg` (no subsetting),
+            you may optionally pass `lineage_mask` to restrict the evaluation to a
+            subset; values outside the mask are set to NaN.
+            If it is a *subset* of the original data, you **must** provide a mask
+            aligned to the original `tg` universe (see `lineage_mask` below).
+        tg : TopOGraph
+            Fitted TopOGraph instance for the original dataset (the one used to
+            compute the spectral scaffold).
+        starting_cluster : str or int (required)
+            Cluster label within `adata.obs[groupby]` from which the root cell
+            will be sampled (e.g., a progenitor/early cluster).
+        groupby : str, default 'topo_clusters'
+            Column in `adata.obs` with cluster labels used to select the root.
+        lineage_mask : str or array-like of bool, optional
+            - If a **string**, it refers to a boolean column in `adata.obs` that
+            marks the working subset (True = included).
+            *Use this when `adata.n_obs == tg.n` (no subsetting).*
+            - If a **boolean vector**:
+                * If `adata.n_obs == tg.n`, it must have length `tg.n` and marks
+                the working subset directly.
+                * If `adata.n_obs != tg.n` (you passed a subset AnnData), it must
+                have length `tg.n` and select the rows in the original `tg`
+                universe that correspond to the rows of `adata` (i.e., the exact
+                mask you used for subsetting). In this case, pseudotime is computed
+                only on those rows and written to `adata` (length matches).
+        random_state : int, default 42
+            RNG seed for selecting the root inside the starting cluster.
+        verbose : bool, default True
+            Print progress.
+
+        Returns
+        -------
+        dict
+            {'root': int, 'k_use': int}
+            Root is the chosen row index *within the working subset*, and k_use is
+            the number of spectral coordinates used.
+
+        Notes
+        -----
+        - We compute pseudotime directly from msDM spectral coordinates to avoid
+        shape mismatches with `tg.pseudotime` when `adata` is a subset.
+        - If `adata` is a subset, provide a boolean `lineage_mask` aligned to the
+        original `tg` universe so we can subset the spectral coordinates correctly.
+        """
+
+        # --- helper: sample root from a cluster within a given AnnData view ---
+        def _sample_from_cluster(_adata, *, groupby, group, strategy='random', seed=42):
+            if groupby not in _adata.obs.columns:
+                raise KeyError(f"`{groupby}` not found in adata.obs")
+            labels = _adata.obs[groupby].astype(str).to_numpy()
+            target = str(group)
+            idxs = np.where(labels == target)[0]
+            if idxs.size == 0:
+                raise ValueError(f"No cells found for {groupby} == {group!r}")
+            if strategy == 'first':
+                return int(idxs[0])
+            rng = np.random.RandomState(seed)
+            return int(rng.choice(idxs))
+
+        # --- 0) Full spectral scaffold + weights from TopOGraph ---
+        Z_full = tg.spectral_scaffold(multiscale=True)              # shape (N_full, m)
+        key = 'msDM with ' + str(tg.base_kernel_version)
+        evals = tg.EigenbasisDict[key].eigenvalues                  # includes λ0
+        # choose k (drop the trivial first eigenpair)
+        k_use = int(min(64, Z_full.shape[1] - 1)) if Z_full.shape[1] > 1 else 1
+        # weights: lambda/(1-lambda), like in tg.pseudotime
+        lam = np.asarray(evals[1:k_use+1], float)
+        w = (lam / (1.0 - lam + 1e-12))[None, :]
+        Psi_full = Z_full[:, :k_use] * w                            # (N_full, k_use)
+
+        N_full = Psi_full.shape[0]
+        N_here = adata.n_obs
+
+        # --- 1) Resolve working subset (mask_full) and the AnnData view used for root selection ---
+        direct_mode = (N_here == N_full)  # adata covers the same rows as tg in the same order
+
+        if isinstance(lineage_mask, str):
+            # string column from *adata.obs*
+            if lineage_mask not in adata.obs.columns:
+                raise KeyError(f"`{lineage_mask}` not found in adata.obs")
+            mask_from_obs = adata.obs[lineage_mask].astype(bool).to_numpy()
+            if direct_mode:
+                mask_full = mask_from_obs
+                adata_view = adata[mask_full]  # view for root selection
+            else:
+                # We cannot map a short mask (length N_here) to the full `tg` universe.
+                raise ValueError(
+                    "You passed a string `lineage_mask` but `adata` is a subset "
+                    "(adata.n_obs != tg.n). Please provide a boolean `lineage_mask` "
+                    "aligned to the *original* tg universe (length == tg.n)."
+                )
+        elif lineage_mask is None:
+            if direct_mode:
+                # use all cells
+                mask_full = np.ones(N_full, dtype=bool)
+                adata_view = adata
+            else:
+                raise ValueError(
+                    "adata.n_obs != tg.n (you passed a subset). Please provide "
+                    "`lineage_mask` as a boolean array aligned to the original tg universe."
+                )
+        else:
+            # boolean vector provided
+            mask_arr = np.asarray(lineage_mask)
+            if mask_arr.dtype != bool:
+                mask_arr = mask_arr.astype(bool)
+            if mask_arr.shape[0] != N_full:
+                raise ValueError(
+                    f"`lineage_mask` must have length {N_full} (tg.n). Got {mask_arr.shape[0]}."
+                )
+            mask_full = mask_arr
+            # For root sampling, use the current `adata` as-is; it should be the subset defined by mask_full.
+            # (Length of adata is sum(mask_full) if it was created as adata_full[mask_full].)
+            adata_view = adata
+
+        # --- 2) Build the working Psi (subset) and pick the root within that subset ---
+        Psi_work = Psi_full[mask_full]               # (N_work, k_use)
+        if Psi_work.shape[0] != adata_view.n_obs:
+            raise ValueError(
+                "The working subset derived from `lineage_mask` does not match the number "
+                "of rows in `adata` used for root selection. Ensure your `adata` is either "
+                "(a) the full dataset (no subsetting), or (b) the exact subset produced by "
+                "the same boolean mask you provided as `lineage_mask`."
+            )
+
+        # root within the *subset view*
+        root_sub = _sample_from_cluster(
+            adata_view, groupby=groupby, group=str(starting_cluster),
+            strategy='random', seed=random_state
+        )
+        if verbose:
+            print(f"[pseudotime_analysis] Root selected from {groupby} == {starting_cluster!r}: "
+                f"subset-index {root_sub}")
+
+        # --- 3) Pseudotime in the working subset (msDM weighted coordinates) ---
+        # squared distances to root in Psi space
+        diff = Psi_work - Psi_work[root_sub, :]
+        d2 = np.sum(diff * diff, axis=1)
+        # normalize to [0,1] within the working subset
+        pt_work = (d2 - d2.min()) / (d2.max() - d2.min() + 1e-12)
+
+        # --- 4) Write back to adata.obs['topo_pseudotime'] ---
+        if direct_mode:
+            # fill a full-length vector with NaN outside the mask (if mask_full not all True)
+            pt_full = np.full(N_full, np.nan, dtype=float)
+            pt_full[mask_full] = pt_work
+            adata.obs['topo_pseudotime'] = pt_full
+        else:
+            # adata is the subset; lengths match
+            adata.obs['topo_pseudotime'] = pt_work
+
+        if verbose:
+            print(f"[pseudotime_analysis] Stored pseudotime in adata.obs['topo_pseudotime'] "
+                f"(n={adata.n_obs}).")
+
+        return {'root': int(root_sub), 'k_use': int(k_use)}
+
+    def impute_adata(
+        adata: AnnData,
+        tg: TopOGraph,
+        *,
+        layer: str = "X",
+        raw: bool = False,
+        which: str = "msZ",
+        impute_t_grid: list[int] | tuple[int, ...] = (1, 2, 4, 8, 16),
+        null_K: int = 1000,
+        heatmap_top_genes: int = 100,
+        seed: int = 13,
+    ):
+        """
+        Automatically detect best diffusion step t via null-based QC and store ONLY
+        the best imputation in adata.layers['topo_imputation'].
+        Also stores QC info in adata.uns['imputation_qc'].
+        """
+        # choose source matrix
+        if raw:
+            Xsrc = adata.raw.to_adata().X
+        else:
+            Xsrc = adata.X if layer == "X" else adata.layers[layer]
+
+        # helper to get variable genes
+        try:
+            X_for_var = Xsrc
+            if sp.issparse(X_for_var):
+                mean = np.asarray(X_for_var.mean(axis=0)).ravel()
+                mean_sq = np.asarray(X_for_var.multiply(X_for_var).mean(axis=0)).ravel()
+                var = np.maximum(0.0, mean_sq - mean**2)
+            else:
+                var = np.var(np.asarray(X_for_var), axis=0)
+            top_n = int(max(5, min(heatmap_top_genes, adata.n_vars)))
+            top_idx = np.argsort(var)[::-1][:top_n]
+            top_genes = adata.var_names[top_idx].tolist()
+        except Exception:
+            # fallback
+            top_idx = np.arange(min(heatmap_top_genes, adata.n_vars))
+            top_genes = adata.var_names[top_idx].tolist()
+
+        def _dense_subset(X, idx):
+            if sp.issparse(X):
+                return X[:, idx].toarray()
+            return np.asarray(X)[:, idx]
+
+        P = tg.P_of_msZ
+        def _diffuse_block(M, t):
+            F = M
+            for _ in range(int(t)):
+                F = P @ F
+            return F
+
+        def _corr_genes(M):
+            if M.ndim != 2 or M.shape[1] < 2:
+                return None
+            return np.corrcoef(M, rowvar=False)
+
+        X_top = _dense_subset(Xsrc, top_idx)
+        corr_raw = _corr_genes(X_top)
+
+        t_grid = sorted(set(int(t) for t in impute_t_grid))
+        stats = []
+        corr_by_t = {}
+        rng = np.random.default_rng(seed)
+
+        for tval in t_grid:
+            X_imp_top = _diffuse_block(X_top, tval)
+            C_imp = _corr_genes(X_imp_top)
+            corr_by_t[int(tval)] = C_imp
+            if C_imp is not None:
+                g = C_imp.shape[0]
+                mask = ~np.eye(g, dtype=bool)
+                S_obs = float(np.mean(np.abs(C_imp[mask])))
+            else:
+                S_obs = np.nan
+
+            null_vals = []
+            for k in range(int(null_K)):
+                X_null = X_top.copy()
+                for j in range(X_null.shape[1]):
+                    rng.shuffle(X_null[:, j])
+                X_null_f = _diffuse_block(X_null, tval)
+                C_null = _corr_genes(X_null_f)
+                if C_null is None:
+                    continue
+                g = C_null.shape[0]
+                mask = ~np.eye(g, dtype=bool)
+                null_vals.append(float(np.mean(np.abs(C_null[mask]))))
+            null_vals = np.asarray(null_vals, float)
+            null_mean = float(np.nanmean(null_vals)) if null_vals.size else np.nan
+            null_std  = float(np.nanstd(null_vals)) if null_vals.size else np.nan
+
+            if null_vals.size:
+                p_emp = (np.sum(null_vals >= S_obs) + 1.0) / (null_vals.size + 1.0)
+            else:
+                p_emp = np.nan
+
+            z = (S_obs - null_mean) / (null_std + 1e-9) if np.isfinite(null_mean) and np.isfinite(null_std) and null_std > 0 else np.nan
+
+            stats.append({
+                "t": int(tval),
+                "score_mean_abs_corr": S_obs,
+                "null_mean": null_mean,
+                "null_std": null_std,
+                "zscore": z,
+                "p_empirical": p_emp,
+            })
+
+        df_stats = pd.DataFrame(stats).sort_values("t").reset_index(drop=True)
+        best_idx = int(np.nanargmin(df_stats["p_empirical"].values)) if df_stats["p_empirical"].notna().any() else 0
+        if df_stats["p_empirical"].notna().any():
+            min_p = df_stats.loc[best_idx, "p_empirical"]
+            cand = df_stats.index[df_stats["p_empirical"] == min_p].tolist()
+            if len(cand) > 1:
+                best_idx = int(df_stats.loc[cand, "zscore"].idxmax())
+        best_t = int(df_stats.loc[best_idx, "t"]) if len(df_stats) else int(t_grid[0])
+
+        # final imputation on the chosen source
+        try:
+            X_imp_best = tg.impute(Xsrc, t=best_t, which=which)
+            adata.layers["topo_imputation"] = X_imp_best  # <- ONLY best result persisted
+        except Exception as e:
+            print(f"[TopOMetry] Imputation failed at best_t={best_t}: {e}")
+
+        adata.uns["imputation_qc"] = {
+            "t_grid": [int(t) for t in t_grid],
+            "stats": df_stats,
+            "best_t": best_t,
+            "heatmap_genes": top_genes,
+            "corr_raw": corr_raw,
+            "corr_imp_best": corr_by_t.get(best_t, None),
+        }
+
+
+    def geometry_preservation(
+        adata: AnnData,
+        tg: TopOGraph | None = None,
+        *,
+        verbose: bool = False,
+    ):
+        """
+        Compute geometry-preservation metrics for ALL 2D/ND representations in adata.obsm.
+        Stores a formatted table in adata.uns['geometry_metrics_table'].
+        """
+        Px = _first_non_none(
+            adata.obsp.get('topometry_connectivities_ms', None),
+            adata.obsp.get('topometry_connectivities_dm', None)
+        )
+        if Px is None:
+            adata.uns["geometry_metrics_table"] = None
+            if verbose:
+                print("[TopOMetry] Geometry metrics skipped: no connectivities found.")
+            return
+
+        # collect all candidate reps
+        reps = {}
+        for k, Y in adata.obsm.items():
+            if Y is None:
+                continue
+            try:
+                arr = np.asarray(Y)
+                if arr.ndim == 2 and arr.shape[0] == adata.n_obs and arr.shape[1] >= 2:
+                    reps[k] = arr
+            except Exception:
+                continue
+        # ensure scaffolds included if present
+        for k in ('X_spectral_scaffold', 'X_ms_spectral_scaffold'):
+            if k in adata.obsm:
+                reps[k] = adata.obsm[k]
+
+        # Build operators
+        Py_ops = {}
+        for name, Y in reps.items():
+            try:
+                Py_ops[name] = _rowstochastic_from_coords(Y, k=int(max(10, min(30, Px.shape[0]-1))))
+            except Exception:
+                continue
+
+        rows = []
+        for name, Py in Py_ops.items():
+            try:
+                rdc = rank_diffusion_correlation(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
+                dknp15 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=15)
+                dknp30 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=30)
+                dknp60 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=60 if Px.shape[0] > 60 else max(5, Px.shape[0]//20))
+                dknp = float(np.nanmean([dknp15, dknp30, dknp60]))
+                pf1 = sparse_neighborhood_f1(Px, Py, k=None)
+                pjs = rowwise_js_similarity(Px, Py)
+                spR2 = spectral_procrustes(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
+                comp, parts = topo_preserve_score(Px, Py, times=(1,2,4,8), k_local=30, r=64, symmetric_hint=False)
+                rows.append(dict(
+                    representation=name,
+                    RDC=rdc, DkNP=dknp, PF1=pf1, PJS=pjs, SP=spR2, Composite=comp
+                ))
+            except Exception:
+                continue
+
+        if rows:
+            df = pd.DataFrame(rows).set_index("representation").sort_index()
+            df_display = df.copy()
+            df_display["RDC"] = 0.5 * (df_display["RDC"] + 1.0)
+            adata.uns["geometry_metrics_table"] = df_display
+            if verbose:
+                print(df_display.round(3))
+        else:
+            adata.uns["geometry_metrics_table"] = None
+            if verbose:
+                print("[TopOMetry] Geometry metrics produced no rows.")
+
 
     # --------------------------------------
-    # Core: run TopOMetry on an AnnData
+    # Core: run full analysis on an AnnData
     # --------------------------------------
+
+    def run_topometry_analysis(
+        adata: AnnData,
+        *,
+        # TopOGraph hyperparameters (passed to fit_adata via **kwargs)
+        base_knn: int = 30,
+        graph_knn: int = 30,
+        n_eigs: int = 100,
+        base_metric: str = "cosine",
+        graph_metric: str = "euclidean",
+        graph_kernel_version: str = "bw_adaptive",
+        diff_t: int = 1,
+        n_jobs: int = -1,
+        verbosity: int = 1,
+        random_state: int = 42,
+        id_method: str = "mle",
+        id_ks: int | list[int] = 50,
+        id_min_components: int = 16,
+        id_max_components: int = 512,
+        id_headroom: float = 0.5,
+        # projections
+        projections: tuple[str, ...] = ("MAP", "PaCMAP"),
+        # clustering
+        do_leiden: bool = True,
+        leiden_key_base: str = "topo_clusters",
+        leiden_resolutions: list[float] | tuple[float, ...] = (0.2, 0.8, 1.2),
+        leiden_primary_index: int = 1,
+        # spectral selectivity
+        spec_weight_mode: str = "lambda_over_one_minus_lambda",
+        spec_k_neighbors: int = 30,
+        spec_smooth_P: str | None = None,
+        spec_smooth_t: int = 0,
+        groupby_candidates: list[str] | None = None,
+        # riemann diagnostics
+        riem_center: str = "median",
+        riem_diffusion_t: int = 8,
+        riem_diffusion_op: str | None = "X",
+        riem_normalize: str = "symmetric",
+        riem_clip_percentile: float = 2.0,
+        # imputation
+        impute_layer: str = "X",
+        impute_raw: bool = False,
+        impute_which: str = "msZ",
+        impute_t_grid: list[int] | tuple[int, ...] = (1, 2, 4, 8, 16),
+        impute_null_K: int = 1000,
+        impute_heatmap_top_genes: int = 100,
+    ):
+        """
+        Run the full pipeline by composing the new stepwise functions.
+        Returns
+        -------
+        (adata, tg)
+        """
+        tg = fit_adata(
+            adata, tg=None,
+            projections=projections,
+            do_leiden=do_leiden,
+            leiden_key_base=leiden_key_base,
+            leiden_resolutions=leiden_resolutions,
+            leiden_primary_index=leiden_primary_index,
+            base_knn=base_knn,
+            graph_knn=graph_knn,
+            n_eigs=n_eigs,
+            base_metric=base_metric,
+            graph_metric=graph_metric,
+            graph_kernel_version=graph_kernel_version,
+            diff_t=diff_t,
+            n_jobs=n_jobs,
+            verbosity=verbosity,
+            random_state=random_state,
+            id_method=id_method,
+            id_ks=id_ks,
+            id_min_components=id_min_components,
+            id_max_components=id_max_components,
+            id_headroom=id_headroom,
+        )
+
+        intrinsic_dim(
+            adata, tg,
+            id_methods=("fsa", "mle"),
+            id_k_values=None,
+            n_jobs=n_jobs,
+        )
+
+        spectral_selectivity(
+            adata, tg,
+            weight_mode=spec_weight_mode,
+            k_neighbors=spec_k_neighbors,
+            smooth_P=spec_smooth_P,
+            smooth_t=spec_smooth_t,
+            groupby_candidates=(groupby_candidates or [leiden_key_base, "leiden", "cell_type"]),
+        )
+
+        riemann_diagnostics(
+            adata, tg,
+            center=riem_center,
+            diffusion_t=riem_diffusion_t,
+            diffusion_op=riem_diffusion_op,
+            normalize=riem_normalize,
+            clip_percentile=riem_clip_percentile,
+        )
+
+        impute_adata(
+            adata, tg,
+            layer=impute_layer,
+            raw=impute_raw,
+            which=impute_which,
+            impute_t_grid=impute_t_grid,
+            null_K=impute_null_K,
+            heatmap_top_genes=impute_heatmap_top_genes,
+        )
+
+        geometry_preservation(adata, tg, verbose=False)
+
+        return adata, tg
+
+
 
     def run_topometry_analysis(
         adata: AnnData,
@@ -269,7 +1159,6 @@ if _HAVE_SCANPY:
         do_leiden: bool = True,
         leiden_key_base: str = "topo_clusters",
         leiden_resolutions: list[float] = (0.2, 0.8, 1.2),
-        # which of the resolutions to designate as "primary" topo_clusters
         leiden_primary_index: int = 1,
         # --- Extra categorical variables for plots / filtering ---
         categorical_plot_keys: list[str] | None = None,
@@ -277,23 +1166,19 @@ if _HAVE_SCANPY:
         # --- Spectral selectivity (stored to .obs) ---
         spec_weight_mode: str = "lambda_over_one_minus_lambda",
         spec_k_neighbors: int = 30,
-        spec_smooth_P: str | None = None,  # {'X','Z','msZ'} or None
+        spec_smooth_P: str | None = None,
         spec_smooth_t: int = 0,
         # --- Riemann diagnostics ---
         riem_center: str = "median",
         riem_diffusion_t: int = 8,
-        riem_diffusion_op: str | None = "X",  # {'X','Z','msZ'} or None
+        riem_diffusion_op: str | None = "X",
         riem_normalize: str = "symmetric",
         riem_clip_percentile: float = 2.0,
-        # --- Graph filtering demo (defaults; pages may override) ---
+        # --- Graph filtering demo ---
         filtering_noise_level: float = 0.15,
         filtering_diffusion_t: int = 3,
         filtering_null_t: int = 1,
         filtering_null_K: int = 500,
-        # --- Pseudotime ---
-        pseudotime_null_seeds: int = 200,
-        pseudotime_multiscale: bool = True,
-        pseudotime_k: int = 64,
         # --- Imputation ---
         impute_t: int = 3,
         impute_which: str = "msZ",
@@ -303,15 +1188,15 @@ if _HAVE_SCANPY:
         impute_heatmap_top_genes: int = 100,
         # --- Intrinsic dimension page ---
         id_methods: list[str] = ("fsa", "mle"),
-        id_k_values: list[int] | None = None,  # default range(10,110,20)
+        id_k_values: list[int] | None = None,
+        # --- NEW: projections to compute/store ---
+        projections: tuple[str, ...] = ("MAP", "PaCMAP"),
     ):
         """
         Run the full TopOMetry pipeline on `adata` and cache results into the object.
-
         Returns
         -------
         tg : TopOGraph
-            The fitted TopOGraph instance (also persists outputs into `adata`).
         """
         # 1) Fit TopOGraph
         tg = TopOGraph(
@@ -332,36 +1217,60 @@ if _HAVE_SCANPY:
             id_headroom=id_headroom,
         ).fit(adata.X)
 
-        # 2) Persist core outputs to adata
-        # Spectral scaffolds
-        adata.obsm['X_spectral_scaffold_ms'] = tg.spectral_scaffold(multiscale=True)
-        adata.obsm['X_spectral_scaffold_dm'] = tg.spectral_scaffold(multiscale=False)
-
-        # Embeddings (topoMAP)
-        adata.obsm['X_topoMAP_ms'] = getattr(tg, 'msMAP', None)
-        if adata.obsm['X_topoMAP_ms'] is None and hasattr(tg, 'msMAP'):
-            adata.obsm['X_topoMAP_ms'] = tg.msMAP
-        # Fixed-t DM MAP (if available)
+        # 1) Persist core outputs to adata
+        # --- spectral scaffolds
         try:
-            adata.obsm['X_topoMAP_dm'] = tg.MAP
-        except Exception:
-            adata.obsm['X_topoMAP_dm'] = adata.obsm['X_topoMAP_ms']
-
-        # PaCMAP (multiscale and optional DM)
-        try:
-            adata.obsm['X_topoPaCMAP_ms'] = tg.msPaCMAP
+            _safe_set_obsm(adata, 'X_ms_spectral_scaffold', tg.spectral_scaffold(multiscale=True))
         except Exception:
             pass
         try:
-            adata.obsm['X_topoPaCMAP_dm'] = tg.PaCMAP
+            _safe_set_obsm(adata, 'X_spectral_scaffold', tg.spectral_scaffold(multiscale=False))
         except Exception:
-            adata.obsm['X_topoPaCMAP_dm'] = adata.obsm.get('X_topoPaCMAP_ms', None)
+            pass
 
-        # Refined operators (store for both variants if accessible)
-        adata.obsp['topometry_connectivities_ms'] = getattr(tg, 'P_of_msZ', None)
-        adata.obsp['topometry_connectivities_dm'] = getattr(tg, 'P_of_Z', getattr(tg, 'P_of_msZ', None))
+        # --- Projections: iterate requested methods × {DM, msDM}
+        proj_fn = getattr(tg, "project", None)
+        for multiscale in (False, True):
+            which = "msZ" if multiscale else "Z"
+            ms_prefix = "X_ms_topo" if multiscale else "X_topo"
+            for proj in projections:
+                key = f"{ms_prefix}{proj}"
+                try:
+                    Y = None
+                    if callable(proj_fn):
+                        Y = proj_fn(projection_method=proj, which=which)
+                    else:
+                        # Fall back to existing attributes for MAP/PaCMAP if available
+                        if proj.upper() == "MAP":
+                            Y = getattr(tg, "msMAP" if multiscale else "MAP", None)
+                        elif proj.upper() == "PACMAP":
+                            _ensure_pacmap(tg)
+                            Y = getattr(tg, "msPaCMAP" if multiscale else "PaCMAP", None)
+                    _safe_set_obsm(adata, key, Y)
+                except Exception:
+                    # try best-effort specific fallbacks
+                    try:
+                        if proj.upper() == "MAP":
+                            _safe_set_obsm(adata, key, getattr(tg, "msMAP" if multiscale else "MAP", None))
+                        elif proj.upper() == "PACMAP":
+                            _ensure_pacmap(tg)
+                            _safe_set_obsm(adata, key, getattr(tg, "msPaCMAP" if multiscale else "PaCMAP", None))
+                    except Exception:
+                        pass
 
-        # Clustering (optional): run for multiple resolutions on ms connectivities
+        # Legacy default alias for embeddings
+        if adata.obsm.get('X_ms_TopoMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_ms_TopoMAP'])
+        elif adata.obsm.get('X_TopoMAP', None) is not None:
+            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_TopoMAP'])
+
+        # --- Refined Markov operators
+        _safe_set_obsp(adata, 'topometry_connectivities_ms', getattr(tg, 'P_of_msZ', None))
+        if adata.obsp.get('topometry_connectivities_ms', None) is not None:
+            _safe_set_obsp(adata, 'topometry_connectivities', adata.obsp['topometry_connectivities_ms'])
+        _safe_set_obsp(adata, 'topometry_connectivities_dm', getattr(tg, 'P_of_Z', None))
+
+        # Clustering over ms connectivities
         if do_leiden and adata.obsp.get('topometry_connectivities_ms', None) is not None:
             res_list = list(leiden_resolutions) if isinstance(leiden_resolutions, (list, tuple)) else [float(leiden_resolutions)]
             for res in res_list:
@@ -384,7 +1293,7 @@ if _HAVE_SCANPY:
             except Exception:
                 pass
 
-        # Store ID details computed internally by TopOGraph (when available)
+        # 2) Store ID summaries
         adata.uns['topometry_id_details'] = getattr(tg, "_id_details", None)
         adata.uns['topometry_id_global_mle'] = tg.global_id_mle()
         adata.uns['topometry_id_global_fsa'] = tg.global_id_fsa()
@@ -423,17 +1332,17 @@ if _HAVE_SCANPY:
                 if rk in adata.obs: align_key_candidates.append(rk)
         align_key_candidates += [k for k in [filtering_label_key, "cell_type", "leiden"] if (k and k in adata.obs)]
         align_key = next((k for k in align_key_candidates if k in adata.obs), None)
-        if align_key:
+        if align_key and ('X_ms_spectral_scaffold' in adata.obsm):
             _spectral_alignment_by_label(
                 adata, labels_key=align_key,
-                scaffold_key='X_spectral_scaffold_ms',
+                scaffold_key='X_ms_spectral_scaffold',
                 top_k=3,
                 out_key='spectral_alignment_summary',
             )
 
-        # 4) Riemann diagnostics (metric deformation scalar for plots)
+        # 4) Riemann diagnostics (scalar field only computed once on ms TopoMAP)
         riem = tg.riemann_diagnostics(
-            Y=adata.obsm['X_topoMAP_ms'],
+            Y=adata.obsm['X_ms_TopoMAP'] if 'X_ms_TopoMAP' in adata.obsm else adata.obsm.get('X_TopoMAP', None),
             L=tg.base_kernel.L,
             center=riem_center,
             diffusion_t=riem_diffusion_t,
@@ -446,23 +1355,13 @@ if _HAVE_SCANPY:
         )
         adata.obs['metric_deformation'] = riem['deformation']
         adata.uns['metric_limits']      = riem.get('limits', None)
+        # add L to adata.obsp
 
-        # 5) Pseudotime once (global), component-wise scaling & colors later
-        pt = tg.pseudotime(
-            multiscale=pseudotime_multiscale,
-            k=pseudotime_k,
-            null_n_seeds=pseudotime_null_seeds,
-        )
-        adata.obs['topo_pseudotime'] = pt['pseudotime']
-        if 'null_mean' in pt: adata.obs['pt_null_mean'] = pt['null_mean']
-        if 'null_std' in pt:  adata.obs['pt_null_std']  = pt['null_std']
-        adata.uns['topo_pseudotime_root'] = pt['root']
-
-        # 6) Imputation (P^t @ X)
+        # 5) Imputation
         X_imp = tg.impute(adata.X, t=impute_t, which=impute_which)
         adata.layers['topo_imputation'] = X_imp
 
-        # 7) Imputation QC & summaries
+        # Imputation QC (omitted here for brevity — identical to previous version)
         try:
             X_for_var = adata.X
             if sp.issparse(X_for_var):
@@ -572,7 +1471,7 @@ if _HAVE_SCANPY:
         except Exception as e:
             print(f"[TopOMetry] Imputation QC skipped: {e}")
 
-        # 8) Intrinsic dimension (explicit estimator for plots)
+        # Intrinsic dimension (same as before)
         if id_k_values is None:
             id_k_values = list(range(10, 110, 20))
         try:
@@ -586,7 +1485,6 @@ if _HAVE_SCANPY:
             )
             id_est.fit(adata.X)
             adata.uns['intrinsic_dim_estimator'] = id_est
-            # store representative vectors (if present) for quick coloring
             k_low  = str(min(id_k_values))
             k_high = str(max(id_k_values))
             if 'fsa' in id_est.local_id and k_low in id_est.local_id['fsa']:
@@ -600,10 +1498,63 @@ if _HAVE_SCANPY:
         except Exception as e:
             print(f"[TopOMetry] IntrinsicDim estimation skipped: {e}")
 
-        return tg
+        # Geometry preservation metrics — dynamic over ALL obsm representations
+        Px = _first_non_none(adata.obsp.get('topometry_connectivities_ms', None),
+                                adata.obsp.get('topometry_connectivities_dm', None))
+        if Px is not None:
+            reps = {}
+            for k, Y in adata.obsm.items():
+                if Y is None:
+                    continue
+                try:
+                    arr = np.asarray(Y)
+                    if arr.ndim == 2 and arr.shape[0] == adata.n_obs and arr.shape[1] >= 2:
+                        reps[k] = arr
+                except Exception:
+                    continue
+            # Ensure spectral scaffolds are present if available
+            for k in ('X_spectral_scaffold', 'X_ms_spectral_scaffold'):
+                if k in adata.obsm:
+                    reps[k] = adata.obsm[k]
+
+            # Build operators
+            Py_ops = {}
+            for name, Y in reps.items():
+                try:
+                    Py_ops[name] = _rowstochastic_from_coords(Y, k=int(max(10, min(30, Px.shape[0]-1))))
+                except Exception:
+                    continue
+
+            rows = []
+            for name, Py in Py_ops.items():
+                try:
+                    rdc = rank_diffusion_correlation(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
+                    dknp15 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=15)
+                    dknp30 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=30)
+                    dknp60 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=60 if Px.shape[0] > 60 else max(5, Px.shape[0]//20))
+                    dknp = float(np.nanmean([dknp15, dknp30, dknp60]))
+                    pf1 = sparse_neighborhood_f1(Px, Py, k=None)
+                    pjs = rowwise_js_similarity(Px, Py)
+                    spR2 = spectral_procrustes(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
+                    comp, parts = topo_preserve_score(Px, Py, times=(1,2,4,8), k_local=30, r=64, symmetric_hint=False)
+                    rows.append(dict(
+                        representation=name,
+                        RDC=rdc, DkNP=dknp, PF1=pf1, PJS=pjs, SP=spR2, Composite=comp
+                    ))
+                except Exception:
+                    continue
+            if rows:
+                df = pd.DataFrame(rows).set_index("representation").sort_index()
+                df_display = df.copy()
+                df_display["RDC"] = 0.5 * (df_display["RDC"] + 1.0)
+                adata.uns["geometry_metrics_table"] = df_display
+        else:
+            adata.uns["geometry_metrics_table"] = None
+
+        return adata, tg
 
     # --------------------------------------
-    # Report: multi-page A4 landscape PDF
+    # Report: single multi-page A4 landscape PDF
     # --------------------------------------
 
     def plot_topometry_report(
@@ -621,54 +1572,56 @@ if _HAVE_SCANPY:
         filtering_diffusion_t: int = 3,
         filtering_null_t: int = 1,
         filtering_null_K: int = 500,
-        variant: str = "msDM",  # {"msDM","DM"}
-        basis_name: str = "topoMAP",  # {"topoMAP","topoPaCMAP"}
     ):
         """
-        Build a multi-page A4-landscape, 300 dpi PDF summarizing the analysis for a given variant + basis.
+        Build a consolidated multi-page A4-landscape, 300 dpi PDF summarizing the analysis.
 
-        Page order (per variant & basis):
-          1) Clustering resolutions (condensed to 1–N pages, 1×3 grids in ascending res)
-          2) For each categorical key: topoMAP and composition barplot
-          3) Riemann metrics page: Localized, Global, Contraction/Expansion (top row), guide text bottom
-          4) Spectral selectivity (EAS, RayScore, LAC, Radius) – 1:1 aspect
-          5) Eigenspectrum + ID page (2×4): spectrum & first diff; ID hists; topoMAP colored by ID (low/high k)
-          6) Graph filtering main page(s): for each signal key (or simulated), ground truth + noisy/filtered + Bernoulli
-          7) Graph filtering controls: null mean/std + power attenuation + explanatory text
-          8) Pseudotime within components (cluster hue shaded by brightness)
-          9) Imputation QC page (maps, heatmaps, score-vs-t + explanatory text)
-         10) TopOMetry summary page (text only)
+        For each "conceptual page", we render two pages:
+          * Page X:  DM scaffold (row1=TopoMAP, row2=TopoPaCMAP)
+          * Page X+1: msDM scaffold (row1=TopoMAP, row2=TopoPaCMAP)
+
+        Page order:
+          1&2) Clustering resolutions (2×3: row1 TopoMAP, row2 TopoPaCMAP)
+          3&4) Riemann diagnostics (2×3 + bottom text)
+          5&6) Spectral selectivity (2×4, cmap='Reds' for all)
+          7)   Eigenspectrum & IDs (2×4; first row uses original decay+hist style; second row = ID maps on TopoMAP)
+          8)   Simulated disease-state filtering page (kept as is)
+          9)   Pure noise filtering control (kept as is, with text)
+         10)   Pseudotime (fixed gradient shading)
+         11)   Imputation (overlap fix in QC panel)
+         12)   TopOMetry summary
         """
         _ensure_dir(output_dir)
         pdf_path = os.path.join(output_dir, filename)
 
-        # Basis mapping
-        if variant not in {"msDM", "DM"}:
-            variant = "msDM"
-        if basis_name not in {"topoMAP", "topoPaCMAP"}:
-            basis_name = "topoMAP"
-
-        if variant == "msDM":
-            basis_key = "X_topoMAP_ms" if basis_name == "topoMAP" else "X_topoPaCMAP_ms"
-            P_ref = adata.obsp.get('topometry_connectivities_ms', None)
-            scaffold_key = 'X_spectral_scaffold_ms'
-        else:
-            basis_key = "X_topoMAP_dm" if basis_name == "topoMAP" else "X_topoPaCMAP_dm"
-            P_ref = adata.obsp.get('topometry_connectivities_dm', None)
-            scaffold_key = 'X_spectral_scaffold_dm'
-
-        # Simple wrapper for embeddings enforcing 1:1 aspect
-        def _emb(ax, color, title=None, cmap=None, legend_loc=None):
-            bk = 'topoMAP' if basis_name == 'topoMAP' else ('msPaCMAP' if basis_name == 'topoPaCMAP' and 'X_topoPaCMAP_ms' in adata.obsm else 'topoMAP')
-            try:
-                sc.pl.embedding(
-                    adata, basis=bk, color=color, show=False, ax=ax,
-                    title=title, cmap=cmap, legend_loc=legend_loc
-                )
-            except Exception:
-                ax.axis('off'); ax.text(0.5,0.5,f"{color} N/A", ha='center', va='center')
+        # Embedding helper (variant-aware)
+        def _embedding(ax, color, basis_name: str, variant: str, title=None, cmap=None, legend_loc=None):
+            """
+            Draw embedding with 1:1 aspect and hidden ticks.
+            basis_name in {'TopoMAP','TopoPaCMAP'} ; variant in {'DM','msDM'}
+            """
+            if basis_name == 'TopoMAP':
+                key = 'X_TopoMAP' if variant == 'DM' else 'X_ms_TopoMAP'
+                basis_arg = 'TopoMAP' if variant == 'DM' else 'ms_TopoMAP'
+            else:
+                key = 'X_TopoPaCMAP' if variant == 'DM' else 'X_ms_TopoPaCMAP'
+                basis_arg = 'TopoPaCMAP' if variant == 'DM' else 'ms_TopoPaCMAP'
+            if (key not in adata.obsm) or (adata.obsm.get(key) is None):
+                ax.axis('off'); ax.text(0.5, 0.5, f"{basis_name} ({variant}) unavailable", ha='center', va='center')
                 return
-            ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+            sc.pl.embedding(
+                adata, basis=basis_arg, color=color, cmap=cmap,
+                legend_loc=legend_loc, show=False, ax=ax, title=title
+            )
+            ax.set_aspect('equal')
+            ax.set_xticks([]); ax.set_yticks([])
+
+        def _coords(basis_name: str, variant: str):
+            if basis_name == 'TopoMAP':
+                key = 'X_TopoMAP' if variant == 'DM' else 'X_ms_TopoMAP'
+            else:
+                key = 'X_TopoPaCMAP' if variant == 'DM' else 'X_ms_TopoPaCMAP'
+            return adata.obsm.get(key, None)
 
         # Choose a label key for titles/legends
         lab_key = None
@@ -676,6 +1629,22 @@ if _HAVE_SCANPY:
             if k and (k in adata.obs):
                 lab_key = k
                 break
+
+        # Collect resolution keys and sort ascending; keep also topo_clusters if no res-keys
+        res_keys = [k for k in adata.obs.columns if k.startswith('topo_clusters_res')]
+        pairs = []
+        for k in res_keys:
+            try:
+                r = float(k.split('res',1)[1])
+            except Exception:
+                r = np.nan
+            pairs.append((r, k))
+        pairs.sort(key=lambda x: (np.isnan(x[0]), x[0]))
+        res_keys = [k for _, k in pairs]
+        if len(res_keys) == 0 and 'topo_clusters' in adata.obs:
+            res_keys = ['topo_clusters']
+
+        # Which categorical keys qualify
         cat_keys = []
         for k in (categorical_plot_keys or []):
             if k in adata.obs:
@@ -683,188 +1652,239 @@ if _HAVE_SCANPY:
                 if pd.api.types.is_categorical_dtype(s) or pd.api.types.is_bool_dtype(s) or pd.api.types.is_integer_dtype(s):
                     cat_keys.append(k)
 
-        # Collect resolution keys and sort ascending
-        res_keys = [k for k in adata.obs.columns if k.startswith('topo_clusters_res')]
-        res_pairs = []
-        for k in res_keys:
-            try:
-                r = float(k.split('res',1)[1])
-            except Exception:
-                r = np.nan
-            res_pairs.append((r, k))
-        res_pairs.sort(key=lambda x: (np.isnan(x[0]), x[0]))
-        res_keys = [k for _, k in res_pairs]
-        if len(res_keys) == 0 and 'topo_clusters' in adata.obs:
-            res_keys = ['topo_clusters']
+        # Select three representative resolutions (min/median/max)
+        def _pick_three(keys):
+            if len(keys) <= 3:
+                return keys
+            # parse numeric
+            vals = []
+            for k in keys:
+                try: vals.append(float(k.split('res',1)[1]))
+                except Exception: vals.append(np.nan)
+            idx = np.argsort(vals)
+            ordered = [keys[i] for i in idx]
+            lo = ordered[0]
+            hi = ordered[-1]
+            mid = ordered[len(ordered)//2]
+            out = []
+            for k in [lo, mid, hi]:
+                if k not in out: out.append(k)
+            return out
+
+        # Convenience: variant order (DM first, then msDM)
+        variant_order = ['DM', 'msDM']
 
         with PdfPages(pdf_path) as pdf:
-            # ===== 1) CLUSTERING RESOLUTION PAGES (1×3 condensed) =====
-            if len(res_keys) <= 3:
-                show_keys = res_keys
-                fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                gs = fig.add_gridspec(1, len(show_keys), left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.15)
-                for i, k in enumerate(show_keys):
-                    ax = fig.add_subplot(gs[0, i])
-                    _emb(ax, k, title=f"Clustering ({k})", legend_loc='on data')
-                pdf.savefig(fig, dpi=dpi); plt.close(fig)
-            else:
-                # slide windows of size 3
-                for i in range(0, len(res_keys), 3):
-                    show_keys = res_keys[i:i+3]
-                    fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                    gs = fig.add_gridspec(1, len(show_keys), left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.15)
-                    for j, k in enumerate(show_keys):
-                        ax = fig.add_subplot(gs[0, j])
-                        _emb(ax, k, title=f"Clustering ({k})", legend_loc='on data')
-                    pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== 2) CATEGORICAL KEYS (map + composition barplot) =====
-            for k in cat_keys:
-                # Page A: embedding colored by key
+            # ===== PAGES 1 & 2: CLUSTERING (2×3 grid) =====
+            show_keys = _pick_three(res_keys)
+            ncols = max(1, len(show_keys))
+            for variant in variant_order:
                 fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                ax = fig.add_axes([0.06, 0.12, 0.88, 0.80])
-                _emb(ax, k, title=f"Category: {k}", legend_loc='on data')
+                gs = fig.add_gridspec(2, ncols, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.15, hspace=0.20)
+                # Row 1: TopoMAP
+                for j, k in enumerate(show_keys):
+                    ax = fig.add_subplot(gs[0, j])
+                    _embedding(ax, k, basis_name='TopoMAP', variant=variant, title=f"Clustering ({k})", legend_loc='on data')
+                # Row 2: TopoPaCMAP
+                for j, k in enumerate(show_keys):
+                    ax = fig.add_subplot(gs[1, j])
+                    _embedding(ax, k, basis_name='TopoPaCMAP', variant=variant, title=f"Clustering ({k})", legend_loc='on data')
+                fig.suptitle(f"Clustering across resolutions — {variant}", y=0.98, fontsize=12)
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-                # Page B: composition vs primary clustering
-                comp_against = 'topo_clusters' if 'topo_clusters' in adata.obs else (res_keys[0] if len(res_keys)>0 else k)
+            # ===== PAGES 3 & 4: RIEMANN DIAGNOSTICS (2×3 + bottom text) =====
+            for variant in variant_order:
                 fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                ax = fig.add_axes([0.06, 0.12, 0.70, 0.80])
+                outer = fig.add_gridspec(2, 1, height_ratios=[4.0, 1.1], left=0.04, right=0.98, top=0.94, bottom=0.10, hspace=0.23)
+                top = outer[0].subgridspec(2, 3, wspace=0.18, hspace=0.20)
+
+                L = tg.base_kernel.L
+                Y_map = _coords('TopoMAP', variant)
+                Y_pac = _coords('TopoPaCMAP', variant)
+
+                # Colors from lab_key (if available)
+                colors_series = None
+                if lab_key and (lab_key in adata.obs):
+                    labels, lut, col = _palette_from_obs(adata, lab_key)
+                    if labels is not None:
+                        colors_series = pd.Series(col)
+
+                # Row 1: TopoMAP (Localized / Global / Contraction)
+                ax = fig.add_subplot(top[0, 0])
                 try:
-                    _composition_barplot(ax, adata, column_key=k, color_key=comp_against, invert=False)
+                    plot_riemann_metric_localized(
+                        Y_map, L,
+                        n_plot=max(100, adata.shape[0]//8),
+                        scale_mode="logdet",
+                        scale_gain=1.0,
+                        alpha=0.01,
+                        ax=ax,
+                        seed=7,
+                        show_points=True,
+                        colors=colors_series,
+                        point_alpha=0.6,
+                        ellipse_alpha=0.35,
+                        point_size=6,
+                    )
+                    ax.set_title('Localized indicatrices (TopoMAP)', fontsize=10); ax.set_aspect('equal')
                 except Exception:
-                    ax.text(0.5,0.5,"Composition N/A", ha='center', va='center'); ax.axis('off')
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                ax = fig.add_subplot(top[0, 1])
+                try:
+                    _embedding(ax, lab_key if lab_key else 'metric_deformation', 'TopoMAP', variant, title='Global indicatrices (overlay)')
+                    deform_vals = adata.obs['metric_deformation'].values
+                    (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
+                    plot_riemann_metric_global(
+                        Y_map, L,
+                        grid_res=8, k_avg=30,
+                        scale_mode="logdet",
+                        scale_gain=1.0,
+                        alpha=0.4,
+                        ax=ax,
+                        show_points=False,
+                        zorder=3,
+                        cmap="coolwarm",
+                        vmin=dmin, vmax=dmax,
+                        min_sep_factor=1.1,
+                        choose_strong_first=True,
+                        deformation_vals=deform_vals,
+                    )
+                except Exception:
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                ax = fig.add_subplot(top[0, 2])
+                try:
+                    deform_vals = adata.obs['metric_deformation'].values
+                    (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
+                    plot_metric_contraction_expansion(
+                        Y_map, L,
+                        center="median",
+                        normalize="symmetric",
+                        cmap="coolwarm",
+                        s=6,
+                        alpha=1,
+                        diffusion_t=3,
+                        diffusion_op=getattr(tg.base_kernel, "P", None),
+                        vmin=dmin, vmax=dmax,
+                        show_colorbar=True,
+                        ax=ax,
+                    )
+                    ax.set_title('Local contraction/expansion (TopoMAP)', fontsize=10); ax.set_aspect('equal')
+                except Exception:
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                # Row 2: TopoPaCMAP (same trio)
+                ax = fig.add_subplot(top[1, 0])
+                try:
+                    plot_riemann_metric_localized(
+                        Y_pac, L,
+                        n_plot=max(100, adata.shape[0]//8),
+                        scale_mode="logdet",
+                        scale_gain=1.0,
+                        alpha=0.01,
+                        ax=ax,
+                        seed=7,
+                        show_points=True,
+                        colors=colors_series,
+                        point_alpha=0.6,
+                        ellipse_alpha=0.35,
+                        point_size=6,
+                    )
+                    ax.set_title('Localized indicatrices (TopoPaCMAP)', fontsize=10); ax.set_aspect('equal')
+                except Exception:
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                ax = fig.add_subplot(top[1, 1])
+                try:
+                    _embedding(ax, lab_key if lab_key else 'metric_deformation', 'TopoPaCMAP', variant, title='Global indicatrices (overlay)')
+                    deform_vals = adata.obs['metric_deformation'].values
+                    (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
+                    plot_riemann_metric_global(
+                        Y_pac, L,
+                        grid_res=8, k_avg=30,
+                        scale_mode="logdet",
+                        scale_gain=1.0,
+                        alpha=0.4,
+                        ax=ax,
+                        show_points=False,
+                        zorder=3,
+                        cmap="coolwarm",
+                        vmin=dmin, vmax=dmax,
+                        min_sep_factor=1.1,
+                        choose_strong_first=True,
+                        deformation_vals=deform_vals,
+                    )
+                except Exception:
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                ax = fig.add_subplot(top[1, 2])
+                try:
+                    deform_vals = adata.obs['metric_deformation'].values
+                    (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
+                    plot_metric_contraction_expansion(
+                        Y_pac, L,
+                        center="median",
+                        normalize="symmetric",
+                        cmap="coolwarm",
+                        s=6,
+                        alpha=1,
+                        diffusion_t=3,
+                        diffusion_op=getattr(tg.base_kernel, "P", None),
+                        vmin=dmin, vmax=dmax,
+                        show_colorbar=True,
+                        ax=ax,
+                    )
+                    ax.set_title('Local contraction/expansion (TopoPaCMAP)', fontsize=10); ax.set_aspect('equal')
+                except Exception:
+                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center')
+
+                # Guidance text
+                ax = fig.add_subplot(outer[1, 0]); ax.axis('off')
+                guide = (
+                    "Reading the Riemann metric panels:\n"
+                    "• Localized indicatrices: each ellipse summarizes local anisotropy of the metric; large elongation indicates preferred directions of variation.\n"
+                    "• Global indicatrices: grid-averaged ellipses overlaid on the embedding reveal consistent deformation; colors reflect contraction (blue) vs expansion (red).\n"
+                    "• Contraction/expansion: points colored by centered log det(G) after mild diffusion smoothing."
+                )
+                ax.text(0, 1, guide, va='top', fontsize=9)
+                fig.suptitle(f"Riemann diagnostics — {variant}", y=0.985, fontsize=12)
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== 3) RIEMANN METRICS (1×3 + text) =====
-            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-            outer = fig.add_gridspec(2, 1, height_ratios=[4.0, 1.3], left=0.04, right=0.98, top=0.94, bottom=0.10, hspace=0.25)
-            top = outer[0].subgridspec(1, 3, wspace=0.18)
-            L = tg.base_kernel.L
-            Y = adata.obsm.get('X_topoMAP_ms', None) if basis_name == 'topoMAP' else adata.obsm.get('X_topoPaCMAP_ms', None)
-            if Y is None:
-                Y = adata.obsm.get('X_topoMAP_dm', None)
+            # ===== PAGES 5 & 6: SPECTRAL SELECTIVITY (2×4, Reds) =====
+            for variant in variant_order:
+                fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+                gs = fig.add_gridspec(2, 4, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.25, hspace=0.30)
+                # Row 1 TopoMAP
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, 'spectral_EAS',      'TopoMAP',    variant, title='EAS',      cmap='Reds')
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, 'spectral_RayScore', 'TopoMAP',    variant, title='RayScore', cmap='Reds')
+                ax = fig.add_subplot(gs[0, 2]); _embedding(ax, 'spectral_LAC',      'TopoMAP',    variant, title='LAC',      cmap='Reds')
+                ax = fig.add_subplot(gs[0, 3]); _embedding(ax, 'spectral_radius',   'TopoMAP',    variant, title='Radius',   cmap='Reds')
+                # Row 2 TopoPaCMAP
+                ax = fig.add_subplot(gs[1, 0]); _embedding(ax, 'spectral_EAS',      'TopoPaCMAP', variant, title='EAS',      cmap='Reds')
+                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, 'spectral_RayScore', 'TopoPaCMAP', variant, title='RayScore', cmap='Reds')
+                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, 'spectral_LAC',      'TopoPaCMAP', variant, title='LAC',      cmap='Reds')
+                ax = fig.add_subplot(gs[1, 3]); _embedding(ax, 'spectral_radius',   'TopoPaCMAP', variant, title='Radius',   cmap='Reds')
+                fig.suptitle(f"Spectral selectivity — {variant}", y=0.98, fontsize=12)
+                pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # colors from lab_key (if available)
-            colors_series = None
-            if lab_key and (lab_key in adata.obs):
-                labels, lut, col = _palette_from_obs(adata, lab_key)
-                if labels is not None:
-                    colors_series = pd.Series(col)
-
-            ax = fig.add_subplot(top[0, 0])
-            try:
-                plot_riemann_metric_localized(
-                    Y, L,
-                    n_plot=max(100, adata.shape[0]//8),
-                    scale_mode="logdet",
-                    scale_gain=1.0,
-                    alpha=0.01,
-                    ax=ax,
-                    seed=7,
-                    show_points=True,
-                    colors=colors_series,
-                    point_alpha=0.6,
-                    ellipse_alpha=0.35,
-                    point_size=6,
-                )
-                ax.set_title('Localized indicatrices', fontsize=11); ax.set_aspect('equal')
-            except Exception:
-                ax.axis('off'); ax.text(0.5,0.5,"Localized metric N/A", ha='center', va='center')
-
-            ax = fig.add_subplot(top[0, 1])
-            try:
-                _emb(ax, lab_key if lab_key else 'metric_deformation', title='Global indicatrices (overlay)')
-                deform_vals = adata.obs['metric_deformation'].values
-                (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
-                plot_riemann_metric_global(
-                    Y, L,
-                    grid_res=8, k_avg=30,
-                    scale_mode="logdet",
-                    scale_gain=1.0,
-                    alpha=0.4,
-                    ax=ax,
-                    show_points=False,
-                    zorder=3,
-                    cmap="coolwarm",
-                    vmin=dmin, vmax=dmax,
-                    min_sep_factor=1.1,
-                    choose_strong_first=True,
-                    deformation_vals=deform_vals,
-                )
-            except Exception:
-                ax.axis('off'); ax.text(0.5,0.5,"Global indicatrices N/A", ha='center', va='center')
-
-            ax = fig.add_subplot(top[0, 2])
-            try:
-                deform_vals = adata.obs['metric_deformation'].values
-                (dmin, dmax) = adata.uns.get('metric_limits', (np.nanmin(deform_vals), np.nanmax(deform_vals)))
-                plot_metric_contraction_expansion(
-                    Y, L,
-                    center="median",
-                    normalize="symmetric",
-                    cmap="coolwarm",
-                    s=6,
-                    alpha=1,
-                    diffusion_t=3,
-                    diffusion_op=getattr(tg.base_kernel, "P", None),
-                    vmin=dmin, vmax=dmax,
-                    show_colorbar=True,
-                    ax=ax,
-                )
-                ax.set_title('Local contraction / expansion', fontsize=11); ax.set_aspect('equal')
-            except Exception:
-                ax.axis('off'); ax.text(0.5,0.5,"Contraction/Expansion N/A", ha='center', va='center')
-
-            # guidance text bottom
-            ax = fig.add_subplot(outer[1, 0]); ax.axis('off')
-            guide = (
-                "Reading the Riemann metric panels:\n"
-                "• Localized indicatrices: each ellipse summarizes local anisotropy of the metric; large elongation indicates preferred directions of variation.\n"
-                "• Global indicatrices: grid-averaged ellipses overlaid on the embedding reveal regions of consistent deformation; colors reflect local contraction (blue) vs expansion (red).\n"
-                "• Contraction/expansion: points colored by centered log det(G) after mild diffusion smoothing."
-            )
-            ax.text(0, 1, guide, va='top', fontsize=9)
-            pdf.savefig(fig, dpi=dpi); plt.close(fig)
-
-            # ===== 4) SPECTRAL SELECTIVITY =====
-            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-            gs = fig.add_gridspec(2, 2, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.25, hspace=0.30)
-            ax = fig.add_subplot(gs[0, 0]); _emb(ax, 'spectral_EAS',       title='Axis selectivity (EAS)', cmap='Reds')
-            ax = fig.add_subplot(gs[0, 1]); _emb(ax, 'spectral_RayScore',  title='Ray score',              cmap='Reds')
-            ax = fig.add_subplot(gs[1, 0]); _emb(ax, 'spectral_LAC',       title='Local axial coherence',  cmap='Reds')
-            ax = fig.add_subplot(gs[1, 1]); _emb(ax, 'spectral_radius',    title='Spectral radius',        cmap='viridis')
-            pdf.savefig(fig, dpi=dpi); plt.close(fig)
-
-            # ===== 5) EIGENSPECTRUM & ID (2×4) =====
+            # ===== PAGE 7: EIGENSPECTRUM & IDs (2×4) =====
+            # First row: original decay+first-derivative + FSA/MLE histograms
+            # Second row: TopoMAP colored by IDs at low/high k
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
             gs = fig.add_gridspec(2, 4, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.28, hspace=0.35)
             # Row 1: spectrum & diff
             ax_curve = fig.add_subplot(gs[0, 0]); ax_diff = fig.add_subplot(gs[0, 1])
-            evals = _eigvals_from_tg(tg, variant=variant)
-            _decay_plot_axes(ax_curve, ax_diff, evals, title="Eigenspectrum & Eigengap")
+            evals_ms = _eigvals_from_tg(tg, variant='msDM')  # show msDM spectrum by default
+            _decay_plot_axes_original(ax_curve, ax_diff, evals_ms, title="Eigenspectrum & Eigengap")
 
-            # Row 1: ID histograms
+            # ID histograms (original style) into two axes
             ax_fsa = fig.add_subplot(gs[0, 2]); ax_mle = fig.add_subplot(gs[0, 3])
             id_est = adata.uns.get('intrinsic_dim_estimator', None)
-            def _hist(ax, data, title):
-                if data is None:
-                    ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center'); return
-                ax.hist(np.asarray(data).ravel(), bins=30, edgecolor='none')
-                ax.set_title(title, fontsize=10)
+            _plot_id_histograms_original(ax_fsa, ax_mle, id_est)
 
-            try:
-                # collect any stored local IDs in obs for low/high k
-                fsa_low  = next((adata.obs[c] for c in adata.obs.columns if c.startswith('id_fsa_k')), None)
-                mle_low  = next((adata.obs[c] for c in adata.obs.columns if c.startswith('id_mle_k')), None)
-                _hist(ax_fsa, fsa_low, "Local intrinsic dim (FSA)")
-                _hist(ax_mle, mle_low, "Local intrinsic dim (MLE)")
-            except Exception:
-                ax_fsa.axis('off'); ax_fsa.text(0.5,0.5,"N/A", ha='center', va='center')
-                ax_mle.axis('off'); ax_mle.text(0.5,0.5,"N/A", ha='center', va='center')
-
-            # Row 2: topoMAPs colored by ID low/high for FSA and MLE (if present)
-            # Choose lowest and highest k available by key names
+            # Row 2: TopoMAPs colored by ID low/high for FSA and MLE (if present)
             def _find_id_keys(prefix: str):
                 ks = [c for c in adata.obs.columns if c.startswith(prefix)]
                 if not ks: return (None, None)
@@ -882,17 +1902,18 @@ if _HAVE_SCANPY:
             fsa_low_key, fsa_high_key = _find_id_keys('id_fsa_k')
             mle_low_key, mle_high_key = _find_id_keys('id_mle_k')
 
-            ax = fig.add_subplot(gs[1, 0]); _emb(ax, fsa_low_key  if fsa_low_key  else 'spectral_radius', title=f'FSA id ({fsa_low_key})')
-            ax = fig.add_subplot(gs[1, 1]); _emb(ax, fsa_high_key if fsa_high_key else 'spectral_radius', title=f'FSA id ({fsa_high_key})')
-            ax = fig.add_subplot(gs[1, 2]); _emb(ax, mle_low_key  if mle_low_key  else 'spectral_radius', title=f'MLE id ({mle_low_key})')
-            ax = fig.add_subplot(gs[1, 3]); _emb(ax, mle_high_key if mle_high_key else 'spectral_radius', title=f'MLE id ({mle_high_key})')
+            ax = fig.add_subplot(gs[1, 0]); _embedding(ax, fsa_low_key  if fsa_low_key  else 'spectral_radius', 'TopoMAP', 'msDM', title=f'FSA id ({fsa_low_key})')
+            ax = fig.add_subplot(gs[1, 1]); _embedding(ax, fsa_high_key if fsa_high_key else 'spectral_radius', 'TopoMAP', 'msDM', title=f'FSA id ({fsa_high_key})')
+            ax = fig.add_subplot(gs[1, 2]); _embedding(ax, mle_low_key  if mle_low_key  else 'spectral_radius', 'TopoMAP', 'msDM', title=f'MLE id ({mle_low_key})')
+            ax = fig.add_subplot(gs[1, 3]); _embedding(ax, mle_high_key if mle_high_key else 'spectral_radius', 'TopoMAP', 'msDM', title=f'MLE id ({mle_high_key})')
 
+            fig.suptitle("Eigenspectrum and intrinsic dimensionality (msDM)", y=0.98, fontsize=12)
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== 6) GRAPH FILTERING — one page per signal (or simulated) =====
+            # ===== PAGE 8: SIMULATED DISEASE-STATE FILTERING (kept, but with new title) =====
+            # Simulate ~70% positives in three random clusters if no signal provided
             keys_for_signals = list(signal_plot_keys) if signal_plot_keys else []
             if not keys_for_signals:
-                # Simulate ~70% positives in three random clusters
                 rng = np.random.default_rng(7)
                 cluster_key = None
                 for k in ['topo_clusters'] + [c for c in adata.obs.columns if c.startswith('topo_clusters_res')] + ['leiden', 'cell type']:
@@ -919,19 +1940,12 @@ if _HAVE_SCANPY:
             else:
                 _cleanup_sim_key_after = None
 
-            # Precompute graph operator & spectrum bits for diagnostics
-            P = P_ref if P_ref is not None else getattr(tg, 'P_of_msZ', None)
-            evecs, evals = None, None
-            try:
-                key_e = 'msDM with ' + tg.base_kernel_version if variant == 'msDM' else 'DM with ' + tg.base_kernel_version
-                evecs, evals = tg.EigenbasisDict[key_e].results(return_evals=True)
-            except Exception:
-                pass
+            # Use msDM operator for filtering demo
+            P = adata.obsp.get('topometry_connectivities_ms', None)
 
             for sig_key in keys_for_signals:
-                # Build raw/noisy/filtered + random Bernoulli
                 rng = np.random.default_rng(7)
-                disease_state = (adata.obs[sig_key].astype(str) == str(adata.obs[sig_key].cat.categories[0])).astype(float).values \
+                disease_state = (adata.obs[sig_key].astype(str) == 'diseased').astype(float).values \
                                 if pd.api.types.is_categorical_dtype(adata.obs[sig_key]) else np.asarray(adata.obs[sig_key]).astype(float)
                 noisy = np.clip(disease_state + filtering_noise_level * rng.standard_normal(adata.n_obs), 0, 1)
 
@@ -951,96 +1965,111 @@ if _HAVE_SCANPY:
                 adata.obs['_gf_rand_raw'] = rand_raw
                 adata.obs['_gf_rand_flt'] = rand_flt
 
-                # Page: 2×3 as specified
                 fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
                 gs = fig.add_gridspec(2, 3, left=0.04, right=0.98, top=0.95, bottom=0.10, wspace=0.25, hspace=0.35)
-                ax = fig.add_subplot(gs[0, 0]); _emb(ax, sig_key, title='Simulated disease state', legend_loc=None)
-                ax = fig.add_subplot(gs[0, 1]); _emb(ax, '_gf_cat_raw', title='Noisy categorical readout', cmap='coolwarm')
-                ax = fig.add_subplot(gs[0, 2]); _emb(ax, '_gf_cat_flt', title='Graph-filtered readout',   cmap='coolwarm')
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, sig_key,       'TopoMAP', 'msDM', title='Simulated disease state', legend_loc=None)
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, '_gf_cat_raw', 'TopoMAP', 'msDM', title='Noisy categorical readout', cmap='coolwarm')
+                ax = fig.add_subplot(gs[0, 2]); _embedding(ax, '_gf_cat_flt', 'TopoMAP', 'msDM', title='Graph-filtered readout',   cmap='coolwarm')
                 ax = fig.add_subplot(gs[1, 0]); ax.axis('off')
-                ax = fig.add_subplot(gs[1, 1]); _emb(ax, '_gf_rand_raw', title='Random discrete (Bernoulli)', cmap='coolwarm')
-                ax = fig.add_subplot(gs[1, 2]); _emb(ax, '_gf_rand_flt', title='Filtered random discrete',   cmap='coolwarm')
+                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, '_gf_rand_raw','TopoMAP', 'msDM', title='Random discrete (Bernoulli)', cmap='coolwarm')
+                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, '_gf_rand_flt','TopoMAP', 'msDM', title='Filtered random discrete',   cmap='coolwarm')
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-                # Controls: null mean/std + power attenuation
-                # Nulls
-                if P is not None:
-                    K = int(max(10, filtering_null_K))
-                    t_null = int(max(0, filtering_null_t))
-                    vals = np.empty((K, adata.n_obs), float)
-                    for s in range(K):
-                        r = np.random.default_rng(s)
-                        y = r.standard_normal(adata.n_obs)
-                        f = y.copy()
-                        for _ in range(t_null):
-                            f = P @ f
-                        vals[s] = f
-                    adata.obs['_gf_null_mean'] = vals.mean(axis=0)
-                    adata.obs['_gf_null_std']  = vals.std(axis=0)
-
-                # power attenuation + GTV
-                spec_raw = np.array([])
-                spec_flt = np.array([])
-                gtv_raw = np.nan; gtv_flt = np.nan; spec_energy_raw = np.nan; spec_energy_flt = np.nan
-                try:
-                    if evecs is not None:
-                        U = evecs[:, 1:129]
-                        cr = U.T @ np.asarray(adata.obs['_gf_cat_raw'].values, float)
-                        cf = U.T @ np.asarray(adata.obs['_gf_cat_flt'].values, float)
-                        spec_raw = np.sort(cr**2)[::-1]
-                        spec_flt = np.sort(cf**2)[::-1]
-                        spec_energy_raw = float(np.sum(cr**2))
-                        spec_energy_flt = float(np.sum(cf**2))
-                    L = tg.base_kernel.L
-                    def _gtv(L_, f): return float(f.T @ (L_ @ f))
-                    gtv_raw = _gtv(L, np.asarray(adata.obs['_gf_cat_raw'].values, float))
-                    gtv_flt = _gtv(L, np.asarray(adata.obs['_gf_cat_flt'].values, float))
-                except Exception:
-                    pass
-
-                fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                gs = fig.add_gridspec(2, 3, height_ratios=[4.0, 1.4],
-                                      left=0.04, right=0.98, top=0.94, bottom=0.10, wspace=0.25, hspace=0.25)
-                ax0 = fig.add_subplot(gs[0, 0]); _emb(ax0, '_gf_null_mean', title='Filtered pure-noise: mean', cmap='coolwarm')
-                ax1 = fig.add_subplot(gs[0, 1]); _emb(ax1, '_gf_null_std',  title='Filtered pure-noise: std',  cmap='viridis')
-                ax2 = fig.add_subplot(gs[0, 2])
-                ax2.plot(np.arange(spec_raw.size), spec_raw, lw=1, label='raw')
-                ax2.plot(np.arange(spec_flt.size), spec_flt, lw=1, label='filtered')
-                ax2.set_title('Power attenuation after diffusion', fontsize=10)
-                ax2.set_xlabel('Mode rank (desc)'); ax2.set_yticklabels([]); ax2.legend(frameon=False, fontsize=8)
-                axt = fig.add_subplot(gs[1, :]); axt.axis('off')
-                def _fmt(x):
-                    try: return f"{float(x):.4g}"
-                    except Exception: return "n/a"
-                txt = (
-                    "Interpretation:\n"
-                    "• The filtered pure-noise mean/std visualize how diffusion smoothing behaves under a null model; patterns should not align to biological labels.\n"
-                    "• Graph Total Variation (GTV) quantifies smoothness: lower values after filtering indicate attenuation of high-frequency noise.\n"
-                    "• The power attenuation curve shows spectral energy shifting towards low-frequency modes after diffusion.\n"
-                    f"GTV raw: {_fmt(gtv_raw)} | GTV filtered: {_fmt(gtv_flt)} | Δ: {_fmt(gtv_raw - gtv_flt)} | "
-                    f"Spectral energy (low+mid): raw={_fmt(spec_energy_raw)}, filtered={_fmt(spec_energy_flt)}"
-                )
-                axt.text(0.0, 1.0, txt, fontsize=9, va='top')
-                pdf.savefig(fig, dpi=dpi); plt.close(fig)
-
-                # cleanup temp obs fields for this signal
-                for tmp in ['_gf_cat_raw','_gf_cat_flt','_gf_rand_raw','_gf_rand_flt','_gf_null_mean','_gf_null_std']:
+                # cleanup temp obs fields for this signal (page 8 only)
+                for tmp in ['_gf_cat_raw','_gf_cat_flt','_gf_rand_raw','_gf_rand_flt']:
                     if tmp in adata.obs: del adata.obs[tmp]
 
-            if '_simulated_state_for_example' in locals() and _cleanup_sim_key_after:
-                if _cleanup_sim_key_after in adata.obs:
-                    del adata.obs[_cleanup_sim_key_after]
+            if _cleanup_sim_key_after and (_cleanup_sim_key_after in adata.obs):
+                del adata.obs[_cleanup_sim_key_after]
 
-            # ===== 7) PSEUDOTIME PAGE =====
+            # ===== PAGE 9: PURE NOISE FILTERING CONTROL =====
+            # Build null mean/std with msDM operator and power attenuation curve
+            P = adata.obsp.get('topometry_connectivities_ms', None)
+            evecs, evals = None, None
+            try:
+                key_e = 'msDM with ' + tg.base_kernel_version
+                evecs, evals = tg.EigenbasisDict[key_e].results(return_evals=True)
+            except Exception:
+                pass
+
+            # Nulls
+            if P is not None:
+                K = int(max(10, filtering_null_K))
+                t_null = int(max(0, filtering_null_t))
+                vals = np.empty((K, adata.n_obs), float)
+                for s in range(K):
+                    r = np.random.default_rng(s)
+                    y = r.standard_normal(adata.n_obs)
+                    f = y.copy()
+                    for _ in range(t_null):
+                        f = P @ f
+                    vals[s] = f
+                adata.obs['_gf_null_mean'] = vals.mean(axis=0)
+                adata.obs['_gf_null_std']  = vals.std(axis=0)
+
+            # If we still have the previous simulated filtered signal in obs, recompute quick spec summaries
+            spec_raw = np.array([]); spec_flt = np.array([])
+            gtv_raw = np.nan; gtv_flt = np.nan; spec_energy_raw = np.nan; spec_energy_flt = np.nan
+            try:
+                # fabricate a quick raw/filtered pair from a new Bernoulli control to show attenuation
+                rng = np.random.default_rng(11)
+                raw = (rng.random(adata.n_obs) < 0.5).astype(float)
+                flt = raw.copy()
+                if P is not None:
+                    for _ in range(int(max(1, filtering_diffusion_t))):
+                        flt = P @ flt
+                if evecs is not None:
+                    U = evecs[:, 1:129]
+                    cr = U.T @ raw
+                    cf = U.T @ flt
+                    spec_raw = np.sort(cr**2)[::-1]
+                    spec_flt = np.sort(cf**2)[::-1]
+                    spec_energy_raw = float(np.sum(cr**2))
+                    spec_energy_flt = float(np.sum(cf**2))
+                L = tg.base_kernel.L
+                def _gtv(L_, f): return float(f.T @ (L_ @ f))
+                gtv_raw = _gtv(L, raw)
+                gtv_flt = _gtv(L, flt)
+            except Exception:
+                pass
+
+            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+            gs = fig.add_gridspec(2, 3, height_ratios=[4.0, 1.4],
+                                  left=0.04, right=0.98, top=0.94, bottom=0.10, wspace=0.25, hspace=0.25)
+            ax0 = fig.add_subplot(gs[0, 0]); _embedding(ax0, '_gf_null_mean', 'TopoMAP', 'msDM', title='Filtered pure-noise: mean', cmap='coolwarm')
+            ax1 = fig.add_subplot(gs[0, 1]); _embedding(ax1, '_gf_null_std',  'TopoMAP', 'msDM', title='Filtered pure-noise: std',  cmap='viridis')
+            ax2 = fig.add_subplot(gs[0, 2])
+            ax2.plot(np.arange(spec_raw.size), spec_raw, lw=1, label='raw')
+            ax2.plot(np.arange(spec_flt.size), spec_flt, lw=1, label='filtered')
+            ax2.set_title('Power attenuation after diffusion', fontsize=10)
+            ax2.set_xlabel('Mode rank (desc)'); ax2.set_yticklabels([]); ax2.legend(frameon=False, fontsize=8)
+            axt = fig.add_subplot(gs[1, :]); axt.axis('off')
+            def _fmt(x):
+                try: return f"{float(x):.4g}"
+                except Exception: return "n/a"
+            txt = (
+                "Interpretation:\n"
+                "• The filtered pure-noise mean/std visualize how diffusion smoothing behaves under a null model; patterns should not align to biological labels.\n"
+                "• Graph Total Variation (GTV) quantifies smoothness: lower values after filtering indicate attenuation of high-frequency noise.\n"
+                "• The power attenuation curve shows spectral energy shifting towards low-frequency modes after diffusion.\n"
+                f"GTV raw: {_fmt(gtv_raw)} | GTV filtered: {_fmt(gtv_flt)} | Δ: {_fmt(gtv_raw - gtv_flt)} | "
+                f"Spectral energy (low+mid): raw={_fmt(spec_energy_raw)}, filtered={_fmt(spec_energy_flt)}"
+            )
+            axt.text(0.0, 1.0, txt, fontsize=9, va='top')
+            pdf.savefig(fig, dpi=dpi); plt.close(fig)
+
+            # Cleanup null fields
+            for tmp in ['_gf_null_mean','_gf_null_std']:
+                if tmp in adata.obs: del adata.obs[tmp]
+
+            # ===== PAGE 10: PSEUDOTIME (gradient shading over cluster hue) =====
             res = _componentwise_pseudotime_colors(
                 adata, tg, cluster_key=lab_key if lab_key else 'topo_clusters'
             )
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
             ax = fig.add_axes([0.06, 0.10, 0.88, 0.82])
-            Yb = adata.obsm.get('X_topoMAP_ms', None) if basis_name == 'topoMAP' else adata.obsm.get('X_topoPaCMAP_ms', None)
-            if Yb is None:
-                Yb = adata.obsm.get('X_topoMAP_dm', None)
-            if res is not None:
+            Yb = adata.obsm.get('X_ms_TopoMAP', None) or adata.obsm.get('X_TopoMAP', None)
+            if res is not None and Yb is not None:
                 pt_key, pt_color_key, n_comp = res
                 cols = adata.obs[pt_color_key].astype(str).values
                 ax.scatter(Yb[:, 0], Yb[:, 1], s=6, c=cols, linewidths=0, alpha=0.95)
@@ -1050,7 +2079,7 @@ if _HAVE_SCANPY:
                 ax.axis('off'); ax.text(0.5, 0.5, "Pseudotime colors unavailable", ha='center', va='center')
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== 8) IMPUTATION QC PAGE =====
+            # ===== PAGE 11: IMPUTATION (overlap fix on QC axis) =====
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
             gs = fig.add_gridspec(2, 3, left=0.04, right=0.98, top=0.88, bottom=0.18, wspace=0.28, hspace=0.38)
             # choose gene
@@ -1064,8 +2093,8 @@ if _HAVE_SCANPY:
                 imp = (X_imp[:, gi].toarray().ravel() if sp.issparse(X_imp) else np.asarray(X_imp[:, gi]).ravel())
                 adata.obs['_gene_raw'] = raw
                 adata.obs['_gene_imputed'] = imp
-                ax = fig.add_subplot(gs[0, 0]); _emb(ax, '_gene_raw',     title=f'Raw: {g}',     cmap='Reds')
-                ax = fig.add_subplot(gs[0, 1]); _emb(ax, '_gene_imputed', title=f'Imputed: {g}', cmap='Reds')
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, '_gene_raw',     'TopoMAP', 'msDM', title=f'Raw: {g}',     cmap='Reds')
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, '_gene_imputed', 'TopoMAP', 'msDM', title=f'Imputed: {g}', cmap='Reds')
             else:
                 for slot in [gs[0, 0], gs[0, 1]]:
                     ax = fig.add_subplot(slot); ax.axis('off'); ax.text(0.5, 0.5, "Imputation layer or gene missing", ha='center', va='center')
@@ -1095,7 +2124,7 @@ if _HAVE_SCANPY:
             ax_h1 = fig.add_subplot(gs[1, 0]); _plot_heatmap(ax_h1, corr_raw, "Gene–gene corr (raw)")
             ax_h2 = fig.add_subplot(gs[1, 1]); _plot_heatmap(ax_h2, corr_imp, "Gene–gene corr (imputed @ best t)")
 
-            # QC score vs t
+            # QC score vs t – remove y-ticks and shrink label fontsize to avoid overlap
             sub = gs[:, 2].subgridspec(2, 1, hspace=0.10)
             ax = fig.add_subplot(sub[1, 0])
             ax.set_title("Imputation QC score across t", fontsize=10)
@@ -1109,8 +2138,9 @@ if _HAVE_SCANPY:
                 ax.plot(xs, nul, marker='o', linewidth=1.0, linestyle='--', label='null mean')
                 if best_t is not None:
                     ax.axvline(float(best_t), color='k', linewidth=0.8, linestyle=':')
-                ax.set_xlabel("t (diffusion steps)"); ax.set_ylabel("mean |corr|")
-                ax.tick_params(axis='y', labelsize=8)
+                ax.set_xlabel("t (diffusion steps)")
+                ax.set_ylabel("mean |corr|", fontsize=9)
+                ax.tick_params(axis='y', labelsize=0)  # effectively removes y-ticks labels
                 ax.legend(frameon=False, fontsize=8)
             else:
                 ax.axis('off'); ax.text(0.5, 0.5, "No QC stats", ha='center', va='center')
@@ -1124,7 +2154,11 @@ if _HAVE_SCANPY:
                         fontsize=9, va='center')
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== 9) TOPOmetry SUMMARY (text page) =====
+            # Cleanup temp gene maps
+            for tmp in ['_gene_raw','_gene_imputed']:
+                if tmp in adata.obs: del adata.obs[tmp]
+
+            # ===== PAGE 12: TOPOmetry SUMMARY (text page) =====
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
             ax = fig.add_axes([0.06, 0.12, 0.88, 0.80]); ax.axis('off')
             gid_mle = adata.uns.get('topometry_id_global_mle', None)
@@ -1132,7 +2166,7 @@ if _HAVE_SCANPY:
             def _fmt_g(v):
                 try: return f"{float(v):.3g}"
                 except Exception: return "n/a"
-            txt = (f"TopOMetry summary ({variant}, {basis_name})\n"
+            txt = (f"TopOMetry summary\n"
                    f"• Global ID (MLE): {_fmt_g(gid_mle)}\n"
                    f"• Global ID (FSA proxy): {_fmt_g(gid_fsa)}\n"
                    f"• Root index (pseudotime): {adata.uns.get('topo_pseudotime_root', 'n/a')}\n"
@@ -1142,6 +2176,7 @@ if _HAVE_SCANPY:
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
         return pdf_path
+
 
     # ----------------------------------------------------
     # Convenience wrapper: run + plot in one call
@@ -1206,18 +2241,16 @@ if _HAVE_SCANPY:
         a4_landscape_inches: tuple[float, float] = (11.69, 8.27),
         gene_for_imputation: str | None = None,
         labels_key_for_page_titles: str | None = None,
-        # Graph filtering report controls
+        # >>> NEW: graph filtering report controls <<<
         signal_plot_keys: list[str] | None = None,
-        # NEW: emit both variants
-        report_variants: tuple[str, ...] = ("msDM", "DM"),
     ):
         """
-        Run the full analysis then emit one or more PDF reports (msDM and DM variants).
+        Run the full analysis then emit a multi-page PDF report.
 
         Returns
         -------
         tg : TopOGraph
-        pdf_path : str         # path to the msDM topoMAP report (for backward compatibility)
+        pdf_path : str
         """
         tg = run_topometry_analysis(
             adata,
@@ -1263,24 +2296,53 @@ if _HAVE_SCANPY:
             id_methods=id_methods,
             id_k_values=id_k_values,
         )
-
-        # Decide which signals to plot; if none, a per-variant simulation will be created inside plot function as needed
+        # --- right before calling plot_topometry_report: synthesize a temporary signal if needed ---
+        # Decide which signals to plot. If none provided, synthesize a demo key:
+        _sim_key = None
         _signal_keys_for_report = list(signal_plot_keys) if signal_plot_keys else None
 
-        # Build base filename without extension
-        base, ext = os.path.splitext(filename)
-        if ext.lower() != ".pdf":
-            ext = ".pdf"
+        if not _signal_keys_for_report:
+            import numpy as np, pandas as pd
+            rng = np.random.default_rng(7)
 
-        outputs = {}
-        # For each variant, emit two reports (topoMAP & topoPaCMAP)
-        for variant in report_variants:
-            # topoMAP
-            fname_map = f"{base}_{variant}_topoMAP{ext}"
-            p1 = plot_topometry_report(
+            # choose a clustering key available in obs
+            cluster_key = None
+            for k in ['topo_clusters'] + [c for c in adata.obs.columns if c.startswith('topo_clusters_res')] + ['leiden', 'cell type']:
+                if k in adata.obs:
+                    cluster_key = k
+                    break
+            if cluster_key is None:
+                # fallback: single-trivial cluster
+                adata.obs['_all'] = pd.Categorical(['all'] * adata.n_obs)
+                cluster_key = '_all'
+
+            labels = adata.obs[cluster_key].astype('category')
+            cats = list(labels.cat.categories) if labels.dtype.name == 'category' else np.unique(labels)
+            # pick a random cluster
+            if len(cats) == 0:
+                pick_mask = np.ones(adata.n_obs, dtype=bool)
+            else:
+                c = rng.choice(cats)
+                pick_mask = (labels.astype(str).values == str(c))
+
+            # ~80% positives within the chosen cluster, ~0% elsewhere
+            pos = np.zeros(adata.n_obs, dtype=bool)
+            idx = np.where(pick_mask)[0]
+            if idx.size > 0:
+                k = max(1, int(round(0.8 * idx.size)))
+                chosen = rng.choice(idx, size=min(k, idx.size), replace=False)
+                pos[chosen] = True
+
+            _sim_key = 'simulated_state_for_example'
+            # store as categorical for plotting; values are {'enriched','depleted'}-like but not using that string
+            adata.obs[_sim_key] = pd.Categorical(np.where(pos, 'positive', 'negative'))
+            _signal_keys_for_report = [_sim_key]
+
+        try:
+            pdf_path = plot_topometry_report(
                 adata, tg,
                 output_dir=output_dir,
-                filename=fname_map,
+                filename=filename,
                 dpi=dpi,
                 a4_landscape_inches=a4_landscape_inches,
                 gene_for_imputation=gene_for_imputation,
@@ -1288,43 +2350,176 @@ if _HAVE_SCANPY:
                     leiden_key_base if (do_leiden and (leiden_key_base in adata.obs)) else "cell_type"
                 ),
                 categorical_plot_keys=categorical_plot_keys,
+                # >>> pass graph-filtering signals & knobs <<<
                 signal_plot_keys=_signal_keys_for_report,
                 filtering_noise_level=filtering_noise_level,
                 filtering_diffusion_t=filtering_diffusion_t,
                 filtering_null_t=filtering_null_t,
                 filtering_null_K=filtering_null_K,
-                variant=variant,
-                basis_name="topoMAP",
             )
-            # topoPaCMAP
-            fname_pac = f"{base}_{variant}_topoPaCMAP{ext}"
-            p2 = plot_topometry_report(
-                adata, tg,
-                output_dir=output_dir,
-                filename=fname_pac,
-                dpi=dpi,
-                a4_landscape_inches=a4_landscape_inches,
-                gene_for_imputation=gene_for_imputation,
-                labels_key_for_page_titles=labels_key_for_page_titles or (
-                    leiden_key_base if (do_leiden and (leiden_key_base in adata.obs)) else "cell_type"
-                ),
-                categorical_plot_keys=categorical_plot_keys,
-                signal_plot_keys=_signal_keys_for_report,
-                filtering_noise_level=filtering_noise_level,
-                filtering_diffusion_t=filtering_diffusion_t,
-                filtering_null_t=filtering_null_t,
-                filtering_null_K=filtering_null_K,
-                variant=variant,
-                basis_name="topoPaCMAP",
-            )
-            outputs[variant] = {"topoMAP": p1, "topoPaCMAP": p2}
+        finally:
+            # Clean up the temporary simulation key so it never persists beyond the report
+            if _sim_key is not None and _sim_key in adata.obs:
+                del adata.obs[_sim_key]
 
-        # Store paths in adata.uns for convenience
-        adata.uns["topometry_report_paths"] = outputs
+        pdf_path = plot_topometry_report(
+            adata, tg,
+            output_dir=output_dir,
+            filename=filename,
+            dpi=dpi,
+            a4_landscape_inches=a4_landscape_inches,
+            gene_for_imputation=gene_for_imputation,
+            labels_key_for_page_titles=labels_key_for_page_titles or (
+                leiden_key_base if (do_leiden and (leiden_key_base in adata.obs)) else "cell_type"
+            ),
+            categorical_plot_keys=categorical_plot_keys,
+        )
 
-        # For backward compatibility: return msDM topoMAP path as the second tuple element
-        fallback_path = outputs.get("msDM", {}).get("topoMAP", None)
-        return tg, (fallback_path if fallback_path is not None else list(outputs.values())[0]["topoMAP"])
+        return tg, pdf_path
+
+
+    # ----------------------------------------------------
+    # Convenience wrapper: run + plot in one call
+    # ----------------------------------------------------
+
+    def run_and_report(
+        adata: AnnData,
+        # --- Pass-through analysis knobs (same defaults as run_topometry_analysis) ---
+        base_knn: int = 30,
+        graph_knn: int = 30,
+        n_eigs: int = 100,
+        base_metric: str = "cosine",
+        graph_metric: str = "euclidean",
+        graph_kernel_version: str = "bw_adaptive",
+        diff_t: int = 1,
+        n_jobs: int = -1,
+        verbosity: int = 1,
+        random_state: int = 42,
+        id_method: str = "fsa",
+        id_ks: int | list[int] = 100,
+        id_min_components: int = 16,
+        id_max_components: int = 512,
+        id_headroom: float = 0.1,
+        # multi-granularity clustering
+        do_leiden: bool = True,
+        leiden_key_base: str = "topo_clusters",
+        leiden_resolutions: list[float] = (0.2, 0.8, 1.2),
+        leiden_primary_index: int = 1,
+        # categorical keys
+        categorical_plot_keys: list[str] | None = None,
+        filtering_label_key: str | None = None,
+        # spectral selectivity
+        spec_weight_mode: str = "lambda_over_one_minus_lambda",
+        spec_k_neighbors: int = 30,
+        spec_smooth_P: str | None = None,
+        spec_smooth_t: int = 0,
+        # riemann
+        riem_center: str = "median",
+        riem_diffusion_t: int = 8,
+        riem_diffusion_op: str | None = "X",
+        riem_normalize: str = "symmetric",
+        riem_clip_percentile: float = 2.0,
+        # filtering knobs (used only in report pages)
+        filtering_noise_level: float = 0.15,
+        filtering_diffusion_t: int = 3,
+        filtering_null_t: int = 1,
+        filtering_null_K: int = 500,
+        # imputation
+        impute_t: int = 8,
+        impute_which: str = "msZ",
+        # ID page
+        id_methods: list[str] = ("fsa", "mle"),
+        id_k_values: list[int] | None = None,
+        # --- Report / I/O ---
+        output_dir: str = "./topometry_report",
+        filename: str = "topometry_report.pdf",
+        dpi: int = 300,
+        a4_landscape_inches: tuple[float, float] = (11.69, 8.27),
+        gene_for_imputation: str | None = None,
+        labels_key_for_page_titles: str | None = None,
+        # Graph filtering report controls
+        signal_plot_keys: list[str] | None = None,
+        # --- NEW ---
+        projections: tuple[str, ...] = ("MAP", "PaCMAP"),
+    ):
+        """
+        Run the full analysis then emit a single consolidated PDF report.
+        Returns
+        -------
+        tg : TopOGraph
+        pdf_path : str
+        """
+        adata, tg = run_topometry_analysis(
+            adata,
+            base_knn=base_knn,
+            graph_knn=graph_knn,
+            n_eigs=n_eigs,
+            base_metric=base_metric,
+            graph_metric=graph_metric,
+            graph_kernel_version=graph_kernel_version,
+            diff_t=diff_t,
+            n_jobs=n_jobs,
+            verbosity=verbosity,
+            random_state=random_state,
+            id_method=id_method,
+            id_ks=id_ks,
+            id_min_components=id_min_components,
+            id_max_components=id_max_components,
+            id_headroom=id_headroom,
+            do_leiden=do_leiden,
+            leiden_key_base=leiden_key_base,
+            leiden_resolutions=leiden_resolutions,
+            leiden_primary_index=leiden_primary_index,
+            categorical_plot_keys=categorical_plot_keys,
+            filtering_label_key=filtering_label_key,
+            spec_weight_mode=spec_weight_mode,
+            spec_k_neighbors=spec_k_neighbors,
+            spec_smooth_P=spec_smooth_P,
+            spec_smooth_t=spec_smooth_t,
+            riem_center=riem_center,
+            riem_diffusion_t=riem_diffusion_t,
+            riem_diffusion_op=riem_diffusion_op,
+            riem_normalize=riem_normalize,
+            riem_clip_percentile=riem_clip_percentile,
+            filtering_noise_level=filtering_noise_level,
+            filtering_diffusion_t=filtering_diffusion_t,
+            filtering_null_t=filtering_null_t,
+            filtering_null_K=filtering_null_K,
+            impute_t=impute_t,
+            impute_which=impute_which,
+            id_methods=id_methods,
+            id_k_values=id_k_values,
+            projections=projections,   # <— pass through
+        )
+
+        # Ensure PaCMAP computed (redundant if projections contained 'PaCMAP', but safe)
+        _ensure_pacmap(tg)
+
+        pdf_path = plot_topometry_report(
+            adata, tg,
+            output_dir=output_dir,
+            filename=filename,
+            dpi=dpi,
+            a4_landscape_inches=a4_landscape_inches,
+            gene_for_imputation=gene_for_imputation,
+            labels_key_for_page_titles=labels_key_for_page_titles or (
+                leiden_key_base if (do_leiden and (leiden_key_base in adata.obs)) else "cell_type"
+            ),
+            categorical_plot_keys=categorical_plot_keys,
+            signal_plot_keys=signal_plot_keys,
+            filtering_noise_level=filtering_noise_level,
+            filtering_diffusion_t=filtering_diffusion_t,
+            filtering_null_t=filtering_null_t,
+            filtering_null_K=filtering_null_K,
+        )
+
+        adata.uns["topometry_report_path"] = pdf_path
+        return tg, pdf_path
+
+
+
+
+
 
 
 # ----------------------------------------------------

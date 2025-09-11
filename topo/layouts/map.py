@@ -61,6 +61,10 @@ def fuzzy_embedding(graph,
                     densmap=False,
                     densmap_kwds={},
                     output_dens=False,
+                    save_every=None,
+                    save_limit=None,
+                    save_callback=None,
+                    include_init_snapshot=True,
                     ):
     """
     Perform a fuzzy simplicial set embedding, using a specified
@@ -127,6 +131,20 @@ def fuzzy_embedding(graph,
         Key word arguments to be passed to the output_metric function.
     euclidean_output : bool
         Whether to use the faster code specialised for euclidean output metrics
+    save_every : int or None, optional
+        If provided and >0, store the embedding every `save_every` epochs into
+        `aux_data["checkpoints"]` as a list of dicts:
+            [{"epoch": e, "embedding": Y_e}, ...]
+        WARNING: storing many snapshots can be memory intensive. Consider
+        passing `save_callback` to stream snapshots to disk.
+    save_limit : int or None, optional
+        Maximum number of snapshots to keep in-memory in `aux_data`.
+        If exceeded, the earliest snapshots are discarded (FIFO).
+    save_callback : callable or None, optional
+        If provided, called as `save_callback(epoch:int, Y:np.ndarray)` for
+        each snapshot. Use this to persist to disk and avoid RAM growth.
+    include_init_snapshot : bool, default True
+        If True, also store a snapshot at epoch=0 (post initialisation/pre-SGD).
     parallel : bool (optional, default False)
         Whether to run the computation using numba parallel.
         Running in parallel is non-deterministic, and is not used
@@ -188,6 +206,11 @@ def fuzzy_embedding(graph,
                                         output_metric_kwds,
                                         euclidean_output,
                                         parallel,
-                                        verbose)
+                                        verbose,
+                                        save_every,
+                                        save_limit,
+                                        save_callback,
+                                        include_init_snapshot,
+                                        )
 
     return Y, Y_aux

@@ -7,14 +7,26 @@ import warnings
 import numpy as np
 import gc
 from sklearn.base import BaseEstimator, TransformerMixin
+import scipy.sparse as sp
 from scipy.sparse import issparse, csr_matrix
+from typing import Dict, Tuple, Optional, Union
 from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
-from typing import Optional, Union
-
+from topo.eval.topo_metrics import (
+    topo_preserve_score,
+    rank_diffusion_correlation,
+    diffusion_knn_preservation,
+    diffusion_trustworthiness,
+    diffusion_continuity,
+    diffusion_rank_biased_overlap,
+    multiscale_diffusion_emd,
+    spectral_procrustes,
+    spectral_similarity,
+    commute_time_trace_gap,
+)
 
 class TopOGraph(BaseEstimator, TransformerMixin):
     """
@@ -366,8 +378,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # msDM-based sizing (both details)
         n = Z_ms.shape[0]
         max_cap = min(int(self.id_max_components), max(2, n - 2), int(self.n_eigs))
-        if max_cap < 128:
-            max_cap = 128  # ensure minimum for stability
+
 
         # FSA (msDM)
         n_fsa, fsa_details = automated_scaffold_sizing(
@@ -805,7 +816,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
     # --- Embedding getters (properties) ---
     @property
-    def MAP(self):
+    def TopoMAP(self):
         """2D MAP layout computed on the DM refined graph (P_of_Z)."""
         key = 'MAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
         if key not in self.ProjectionDict:
@@ -813,7 +824,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         return self.ProjectionDict[key]
 
     @property
-    def msMAP(self):
+    def msTopoMAP(self):
         """2D MAP layout computed on the msDM refined graph (P_of_msZ)."""
         key = 'MAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
         if key not in self.ProjectionDict:
@@ -821,7 +832,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         return self.ProjectionDict[key]
 
     @property
-    def PaCMAP(self):
+    def TopoPaCMAP(self):
         """2D PaCMAP layout computed on the DM refined graph (P_of_Z)."""
         key = 'PaCMAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
         if key not in self.ProjectionDict:
@@ -829,24 +840,24 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         return self.ProjectionDict[key]
 
     @property
-    def msPaCMAP(self):
+    def msTopoPaCMAP(self):
         """2D PaCMAP layout computed on the msDM refined graph (P_of_msZ)."""
         key = 'PaCMAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
         if key not in self.ProjectionDict:
             raise AttributeError("msPaCMAP embedding not available. It may require `pacmap`. Call .fit(X) first.")
         return self.ProjectionDict[key]
 
-    # Keep Y() for backwards compatibility with string aliases
-    def Y(self, key: str = 'ms_topoMAP'):
+    # Keep Y() for backwardsTcompatibility with string aliases
+    def Y(self, key: str = 'msTopoMAP'):
         """
         Return a 2D embedding by stable alias (backwards compatible).
 
         Aliases
-        -------
-        'topoMAP'      -> MAP on DM refined graph (P_of_Z)
-        'ms_topoMAP'   -> MAP on msDM refined graph (P_of_msZ)
-        'topoPaCMAP'   -> PaCMAP on DM refined graph
-        'ms_topoPaCMAP'-> PaCMAP on msDM refined graph
+       -------
+        'TopoMAP'      -> MAP on DM refined graph (P_of_Z)
+        'msTopoMAP'   -> MAP on msDM refined graph (P_of_msZ)
+        'TopoPaCMAP'   -> PaCMAP on DM refined graph
+        'msTopoPaCMAP'-> PaCMAP on msDM refined graph
 
         Returns
         -------
@@ -855,10 +866,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         dm_tag = f"{self.graph_kernel_version} from DM with {self.base_kernel_version}"
         ms_tag = f"{self.graph_kernel_version} from msDM with {self.base_kernel_version}"
         mapping = {
-            'topoMAP':        f"MAP of {dm_tag}",
-            'ms_topoMAP':     f"MAP of {ms_tag}",
-            'topoPaCMAP':     f"PaCMAP of {dm_tag}",
-            'ms_topoPaCMAP':  f"PaCMAP of {ms_tag}",
+            'TopoMAP':        f"MAP of {dm_tag}",
+            'msTopoMAP':     f"MAP of {ms_tag}",
+            'TopoPaCMAP':     f"PaCMAP of {dm_tag}",
+            'msTopoPaCMAP':  f"PaCMAP of {ms_tag}",
         }
         if key in mapping and mapping[key] in self.ProjectionDict:
             return self.ProjectionDict[mapping[key]]
@@ -1242,18 +1253,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         return kernel, results_dict
 
-    # ===============================
-    # Convenience accessors / aliases
-    # ===============================
-    @property
-    def MAP(self):
-        """DM-scaffold (fixed-time) topoMAP embedding if available; else raises."""
-        return self.Y('topoMAP')
 
-    @property
-    def msMAP(self):
-        """msDM-scaffold (multiscale) topoMAP embedding if available; else raises."""
-        return self.Y('ms_topoMAP')
 
     # ---------------------------------
     # Intrinsic dimension access helpers
@@ -1744,9 +1744,20 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # Defaults
         if Y is None:
             try:
-                Y = self.msMAP
+                Y = self.TopoMAP
             except Exception:
-                Y = self.MAP
+                try:
+                    Y = self.msTopoMAP
+                except Exception:
+                    try:
+                        Y = self.TopoPaCMAP
+                    except Exception:
+                        try:
+                            Y = self.msTopoPaCMAP
+                        except Exception:
+                            warnings.warn("No projection found; computing new projection.")
+                            Y = self.project(projection_method='MAP', _use_msZ=False, random_state=random_state)
+                            Y = self.TopoMAP
         if L is None:
             # Base Laplacian for geometry (as in the demo)
             L = self.base_kernel.L
@@ -1975,5 +1986,6 @@ def load_topograph(filename: str) -> TopOGraph:
         warnings.warn("Loaded object is not a TopOGraph; returning as-is.", RuntimeWarning)
         return obj
     return obj
+
 
 
