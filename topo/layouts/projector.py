@@ -1,8 +1,3 @@
-#####################################
-# Author: Davi Sidarta-Oliveira
-# School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta[at]fcm[dot]unicamp[dot]com
-# License: MIT
 ######################################
 # Defining a projection class in a scikit-learn fashion to handle all projection methods
 
@@ -96,19 +91,25 @@ class Projector(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self,
-                 n_components=2,
-                 projection_method='MAP',
-                 metric='euclidean',
-                 n_neighbors=10,
-                 n_jobs=1,
-                 landmarks=None,
-                 landmark_method='kmeans',
-                 num_iters=800,
-                 init='spectral',
-                 nbrs_backend='nmslib',
-                 keep_estimator=False,
-                 random_state=None,
-                 verbose=False):
+                n_components=2,
+                projection_method='MAP',
+                metric='euclidean',
+                n_neighbors=10,
+                n_jobs=1,
+                landmarks=None,
+                landmark_method='kmeans',
+                num_iters=800,
+                init='spectral',
+                nbrs_backend='nmslib',
+                keep_estimator=False,
+                random_state=None,
+                verbose=False,
+                # ---- NEW: checkpointing passthrough to MAP ----
+                save_every=None,                 # int or None: store Y every `save_every` epochs
+                save_limit=None,                 # cap snapshots kept in memory
+                save_callback=None,              # callable(epoch:int, Y:np.ndarray) -> None
+                include_init_snapshot=True,      # store epoch=0 (post-init) snapshot
+                ):
         self.n_components = n_components
         self.metric = metric
         self.n_neighbors = n_neighbors
@@ -127,6 +128,15 @@ class Projector(BaseEstimator, TransformerMixin):
         self.N = None
         self.M = None
         self.init_Y_ = None
+        # NEW: checkpointing options (only used by MAP)
+        self.save_every = save_every
+        self.save_limit = save_limit
+        self.save_callback = save_callback
+        self.include_init_snapshot = include_init_snapshot
+        # NEW: holders for aux/checkpoints returned by MAP
+        self.Y_aux_ = None
+        self.checkpoints_ = None
+
 
     def __repr__(self):
         if self.Y_ is not None:
@@ -208,8 +218,17 @@ class Projector(BaseEstimator, TransformerMixin):
         """
         self.random_state = check_random_state(self.random_state)
 
+        # sanitize checkpointing kwargs for non-MAP methods ---
+        snapshot_keys = ("save_every", "save_limit", "save_callback", "include_init_snapshot")
+        if self.projection_method == "MAP":
+            # Extract only the snapshot-related arguments for MAP
+            map_checkpointing = {k: kwargs.pop(k) for k in snapshot_keys if k in kwargs}
+        else:
+            # Remove snapshot kwargs so downstream estimators (e.g., PaCMAP) don't see them
+            for k in snapshot_keys:
+                kwargs.pop(k, None)
+            map_checkpointing = {}
         # Check inputs
-
         if self.projection_method not in ['Isomap', 't-SNE', 'MAP', 'UMAP', 'PaCMAP', 'TriMAP', 'IsomorphicMDE', 'IsometricMDE', 'NCVis']:
             raise ValueError(
                 '\'projection_method\' must be one of \'Isomap\', \'t-SNE\', \'MAP\', \'UMAP\', \'PaCMAP\', \'TriMAP\', \'IsomorphicMDE\', \'IsometricMDE\' or \'NCVis\'.')
@@ -288,8 +307,28 @@ class Projector(BaseEstimator, TransformerMixin):
             self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'MAP':
-            self.Y_ = fuzzy_embedding(K, n_components=self.n_components, init=self.init_Y_,
-                                      n_epochs=self.num_iters, random_state=self.random_state, **kwargs)[0]
+            # Call fuzzy_embedding with explicit checkpointing kwargs
+            Y, Y_aux = fuzzy_embedding(
+                K,                                  # precomputed affinities
+                n_components=self.n_components,
+                init=self.init_Y_,
+                n_epochs=self.num_iters,
+                random_state=self.random_state,
+                metric=self.metric,
+                # plus whatever existing args you already pass through here
+                verbose=self.verbose,
+                # --- NEW: checkpointing passthrough ---
+                save_every=map_checkpointing.get("save_every", None),
+                save_limit=map_checkpointing.get("save_limit", None),
+                save_callback=map_checkpointing.get("save_callback", None),
+                include_init_snapshot=map_checkpointing.get("include_init_snapshot", True),
+                # also forward any *other* non-snapshot kwargs if you already do
+                **kwargs
+            )
+            self.Y_ = Y
+            # Keep aux so fit_transform can return (Y, aux)
+            self.aux_ = Y_aux
+
 
         elif self.projection_method == 'UMAP':
             try:
@@ -409,12 +448,17 @@ class Projector(BaseEstimator, TransformerMixin):
 
         Returns
         ----------
-        Y : np.ndarray (n_samples, n_components).
-            Projection results
+        For MAP: (Y, aux) tuple.
+        For other methods: Y only.
         """
-
         self.fit(X, **kwargs)
-        return self.Y_
+
+        # For MAP, return aux so upstream can record checkpoints
+        if self.projection_method == 'MAP' and hasattr(self, 'aux_'):
+            return self.Y_, getattr(self, 'aux_', None)
+        else:
+            return self.Y_
+
 
 
 # Check if pymde is installed
