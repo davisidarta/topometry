@@ -585,6 +585,157 @@ if _HAVE_SCANPY:
         return tg
 
 
+    def evaluate_representations(
+        adata,
+        tg,
+        *,
+        k_local: int = 30,
+        times: tuple = (1, 2, 4, 8),
+        r: int = 64,
+        symmetric_hint: bool = False,
+        verbose: bool = True,
+    ):
+        """
+        Build diffusion operators for reference X (layers['scaled'] if available, else X)
+        and for every 2-D representation in adata.obsm, then compute all preservation
+        metrics from topo.eval.topo_metrics (plus the composite TopoPreserve score).
+
+        Stores:
+        - adata.uns['topometry_representation_eval'] : pandas DataFrame with metrics
+        Returns the DataFrame.
+        """
+        import numpy as np
+        import pandas as pd
+        import scipy.sparse as sp
+        from sklearn.neighbors import NearestNeighbors
+
+        # --- metrics
+        from topo.eval.topo_metrics import (
+            topo_preserve_score,
+            rank_diffusion_correlation,
+            diffusion_knn_preservation,
+            sparse_neighborhood_f1,
+            rowwise_js_similarity,
+            spectral_procrustes,
+        )
+
+        # ---- helper: kNN diffusion operator (local scaling, symmetrize, row-stochastic)
+        def _knn_diffusion_operator(X, k=30, metric="euclidean"):
+            X = np.asarray(X)
+            n = X.shape[0]
+            k = min(k, n - 1)
+            nbrs = NearestNeighbors(n_neighbors=k + 1, metric=metric)
+            nbrs.fit(X)
+            dists, inds = nbrs.kneighbors(X, return_distance=True)  # (n, k+1) includes self
+
+            # exclude self: position 0 is self in sklearn kneighbors
+            dists = dists[:, 1:]
+            inds = inds[:, 1:]
+
+            # local scales: sigma_i = distance to k-th neighbor
+            # robust floor to avoid div-by-zero
+            sigma_i = np.maximum(dists[:, -1], np.percentile(dists[:, -1], 5))
+            sigma_i[sigma_i <= 1e-12] = np.median(sigma_i[sigma_i > 0])
+
+            # weights with Zelnik-Manor local scaling: exp(-d^2 / (sigma_i * sigma_j))
+            rows = np.repeat(np.arange(n), k)
+            cols = inds.reshape(-1)
+            dij2 = (dists.reshape(-1) ** 2)
+            sig_prod = np.repeat(sigma_i, k) * sigma_i[cols]
+            w = np.exp(-dij2 / (sig_prod + 1e-12))
+
+            A = sp.csr_matrix((w, (rows, cols)), shape=(n, n))
+            # symmetrize by averaging
+            A = 0.5 * (A + A.T)
+            A.eliminate_zeros()
+
+            # row-stochastic diffusion operator
+            rs = np.asarray(A.sum(axis=1)).ravel()
+            rs[rs <= 0] = 1e-12
+            P = A.multiply(1.0 / rs[:, None])
+            P.eliminate_zeros()
+            return P.tocsr()
+
+        # ---- reference operator from scaled layer (or X)
+        if "scaled" in adata.layers:
+            X_ref = adata.layers["scaled"]
+            if verbose:
+                print("[topometry] evaluate_representations: using adata.layers['scaled'] as reference.")
+        else:
+            X_ref = adata.X
+            if verbose:
+                print("[topometry] WARNING: 'scaled' layer not found. Using adata.X as reference.")
+        try:
+            P_ref = _knn_diffusion_operator(X_ref, k=k_local, metric="euclidean")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build reference diffusion operator: {e}")
+
+        # ---- collect candidate 2-D embeddings
+        def _is_valid_2d(Y):
+            try:
+                Y = np.asarray(Y)
+                return (Y.ndim == 2) and (Y.shape[1] == 2) and (Y.shape[0] == adata.n_obs)
+            except Exception:
+                return False
+
+        obsm_keys = [k for k, v in adata.obsm.items() if _is_valid_2d(v)]
+        if verbose:
+            print(f"[topometry] Found {len(obsm_keys)} 2-D embeddings for evaluation.")
+
+        rows = []
+        for key in obsm_keys:
+            label = key.replace("X_", "")
+            try:
+                P_y = _knn_diffusion_operator(adata.obsm[key], k=k_local, metric="euclidean")
+            except Exception as e:
+                if verbose:
+                    print(f"[topometry] Skipping {key}: failed to build diffusion operator ({e}).")
+                continue
+
+            # composite + components
+            try:
+                comp, parts = topo_preserve_score(
+                    P_ref, P_y,
+                    times=times,
+                    k_local=k_local,
+                    r=r,
+                    symmetric_hint=symmetric_hint,
+                    k_for_pf1=None,
+                )
+                # compute individual metrics explicitly as well (in case you need detail parity)
+                rdc = rank_diffusion_correlation(P_ref, P_y, times=times, r=r, symmetric_hint=symmetric_hint)
+                dknp = diffusion_knn_preservation(P_ref, P_y, times=times, r=r, k=k_local, symmetric_hint=symmetric_hint)
+                pf1 = sparse_neighborhood_f1(P_ref, P_y, k=None)
+                pjs = rowwise_js_similarity(P_ref, P_y)
+                spR2 = spectral_procrustes(P_ref, P_y, times=times, r=r, symmetric_hint=symmetric_hint)
+
+                rows.append({
+                    "representation": label,
+                    "TopoPreserve": float(comp),
+                    "RDC": float(0.5 * (rdc + 1.0)),  # map [-1,1]→[0,1] for display
+                    "DkNP": float(dknp),
+                    "PF1": float(pf1),
+                    "PJS": float(pjs),
+                    "SP": float(max(0.0, min(1.0, spR2))),
+                })
+            except Exception as e:
+                if verbose:
+                    print(f"[topometry] Skipping {key}: metric computation failed ({e}).")
+                continue
+
+        if not rows:
+            if verbose:
+                print("[topometry] No evaluation rows were produced.")
+            df = pd.DataFrame(columns=["representation", "TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"])
+        else:
+            df = pd.DataFrame(rows).sort_values("TopoPreserve", ascending=False).reset_index(drop=True)
+
+        # store for later use in the report
+        adata.uns["topometry_representation_eval"] = df
+        return df
+
+
+
     def plot_riemann_diagnostics(
         adata,
         tg,
@@ -805,7 +956,6 @@ if _HAVE_SCANPY:
                 return _make_plot(Y, L, proj_key, proj_nick, show=show)
 
 
-
     def visualize_optimization(
         adata,
         tg,
@@ -823,8 +973,8 @@ if _HAVE_SCANPY:
         """
         Render an animated GIF of MAP optimization snapshots, using colors defined
         by either:
-        • a categorical/numeric column in `adata.obs[groupby]` (preserving
-        scanpy palettes in `adata.uns[f"{groupby}_colors"]` for categoricals),
+        • a categorical/numeric column in `adata.obs[groupby]` (preserving scanpy
+        palettes in `adata.uns[f"{groupby}_colors"]` for categoricals),
         • or a gene name in `adata.var_names` (color by expression).
         """
         import numpy as np
@@ -847,44 +997,58 @@ if _HAVE_SCANPY:
             if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
                 vmin, vmax = np.nanmin(x), np.nanmax(x)
             t = (x - vmin) / (vmax - vmin + 1e-12)
-            colors = plt.get_cmap(cmap)(np.clip(t, 0, 1))
+            colors = plt.get_cmap(cmap)(np.clip(t, 0, 1))  # (n,4)
 
         elif groupby in adata.obs.columns:
             series = adata.obs[groupby]
             if series.dtype.name == "category" or str(series.dtype).startswith("category"):
-                # Use stored scanpy palette if available
+                # Categorical — use scanpy palette if available, else make a stable one
                 cats = series.cat.categories
-                codes = series.cat.codes.to_numpy()
+                codes = series.cat.codes.to_numpy()  # -1 for missing
                 palette_key = f"{groupby}_colors"
                 if palette_key in adata.uns and len(adata.uns[palette_key]) >= len(cats):
                     palette = list(adata.uns[palette_key])
                 else:
-                    # Make a stable palette, also stash it back to adata.uns for consistency
                     _cmap = plt.get_cmap("tab20")
                     palette = [mcolors.to_hex(_cmap(i % 20)) for i in range(len(cats))]
                     adata.uns[palette_key] = palette
 
-                cat2color = {cat: palette[i] for i, cat in enumerate(cats)}
-                colors = np.array([mcolors.to_rgba(cat2color[cats[c]]) for c in codes])
+                # Directly map codes -> palette (handle -1 as a neutral gray)
+                neutral = (0.7, 0.7, 0.7, 0.6)
+                colors = np.empty((n, 4), dtype=float)
+                for i, c in enumerate(codes):
+                    if c >= 0 and c < len(palette):
+                        colors[i] = mcolors.to_rgba(palette[c])
+                    else:
+                        colors[i] = neutral  # missing/unassigned category
             else:
-                # Numeric column: use viridis
+                # Numeric obs: viridis
                 vals = np.asarray(series.values, float).ravel()
                 vmin, vmax = np.nanpercentile(vals, [1, 99])
                 if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
                     vmin, vmax = np.nanmin(vals), np.nanmax(vals)
                 t = (vals - vmin) / (vmax - vmin + 1e-12)
-                colors = plt.get_cmap("viridis")(np.clip(t, 0, 1))
+                colors = plt.get_cmap("viridis")(np.clip(t, 0, 1))  # (n,4)
         else:
-            # Fallback uniform
-            colors = np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+            # Fallback uniform semi-dark gray
+            colors = np.tile(np.array([0.15, 0.15, 0.15, 0.85], dtype=float)[None, :], (n, 1))
 
-        # --- 2) Call core renderer
+        # --- 2) Ensure snapshots exist for the requested scaffold (crucial) ---
+        tg.project(
+            projection_method="MAP",
+            multiscale=bool(multiscale),
+            num_iters=int(num_iters),
+            save_every=int(save_every),
+            include_init_snapshot=True,
+        )
+
+        # --- 3) Render the GIF using TopOGraph’s helper (uses precomputed snaps) ---
         out_path = tg.visualize_optimization(
-            num_iters=num_iters,
+            num_iters=num_iters,    # harmless if snapshots already exist
             save_every=save_every,
             dpi=dpi,
-            color=colors,
-            multiscale=multiscale,   # forwarded correctly; TopOGraph now maps this to `_use_msZ`
+            color=colors,           # (n,4) RGBA float array
+            multiscale=multiscale,
             fps=fps,
             point_size=point_size,
             filename=filename,
@@ -1666,8 +1830,15 @@ if _HAVE_SCANPY:
 
         geometry_preservation(adata, tg, verbose=False)
 
+        # --- NEW: evaluate geometry preservation for all 2-D representations
+        try:
+            evaluate_representations(adata, tg)
+        except Exception as e:
+            print(f"[topometry] Representation evaluation failed: {e}")
+
         # Return only the fitted TopOGraph; adata is modified in-place
         return tg
+
 
     # --------------------------------------
     # Report: single multi-page A4 landscape PDF
@@ -1706,23 +1877,46 @@ if _HAVE_SCANPY:
         # ---- helpers ----------------------------------------------------------
         def _embedding(ax, color, basis_name: str, variant: str, title=None, cmap=None, legend_loc=None):
             """
-            Draw embedding with 1:1 aspect and hidden ticks.
+            Draw embedding with 1:1 aspect, show a frame, and label axes with projection names.
             basis_name in {'TopoMAP','TopoPaCMAP'} ; variant in {'DM','msDM'}
             """
             if basis_name == 'TopoMAP':
                 key = 'X_TopoMAP' if variant == 'DM' else 'X_msTopoMAP'
                 basis_arg = 'TopoMAP' if variant == 'DM' else 'msTopoMAP'
+                xlab, ylab = 'TopoMAP_1', 'TopoMAP_2'
             else:
                 key = 'X_TopoPaCMAP' if variant == 'DM' else 'X_msTopoPaCMAP'
                 basis_arg = 'TopoPaCMAP' if variant == 'DM' else 'msTopoPaCMAP'
-            if (key not in adata.obsm) or (adata.obsm.get(key) is None):
-                ax.axis('off'); ax.text(0.5, 0.5, f"{basis_name} ({variant}) unavailable", ha='center', va='center')
+                xlab, ylab = 'TopoPaCMAP_1', 'TopoPaCMAP_2'
+
+            Y = adata.obsm.get(key, None)
+            if (Y is None) or (not isinstance(Y, np.ndarray)) or (Y.ndim != 2) or (Y.shape[1] < 2):
+                ax.axis('off')
+                ax.text(0.5, 0.5, f"{basis_name} ({variant}) unavailable", ha='center', va='center')
                 return
+
             sc.pl.embedding(
-                adata, basis=basis_arg, color=color, cmap=cmap,
-                legend_loc=legend_loc, show=False, ax=ax, title=title
+                adata,
+                basis=basis_arg,
+                color=color,
+                cmap=cmap,
+                legend_loc=legend_loc,
+                show=False,
+                ax=ax,
+                title=title
             )
-            ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+
+            # visual polish: equal aspect, thin frame, no tick labels, but keep axis labels
+            ax.set_aspect('equal', adjustable='box')
+            ax.set_xlabel(xlab, fontsize=9)
+            ax.set_ylabel(ylab, fontsize=9)
+
+            ax.tick_params(axis='both', which='both', length=0, labelbottom=False, labelleft=False)
+
+            for side in ('left', 'right', 'top', 'bottom'):
+                ax.spines[side].set_visible(True)
+                ax.spines[side].set_linewidth(0.6)
+
 
         def _coords(basis_name: str, variant: str):
             if basis_name == 'TopoMAP':
@@ -1811,6 +2005,63 @@ if _HAVE_SCANPY:
             return (None, None)
 
         with PdfPages(pdf_path) as pdf:
+            # ===== INTRO PAGE: Geometry Preservation Benchmarks =====
+            df_eval = adata.uns.get("topometry_representation_eval", None)
+            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+            ax = fig.add_axes([0.04, 0.12, 0.92, 0.80])
+            ax.axis('off')
+
+            title = "Geometry Preservation Benchmarks (diffusion-based)"
+            ax.set_title(title, fontsize=14, pad=10, loc='left')
+
+            if df_eval is None or df_eval.empty:
+                ax.text(0.0, 0.9, "No evaluation results found.", fontsize=11, va='top')
+            else:
+                # Format a small table
+                # Ensure column order
+                cols = ["representation", "TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"]
+                show_df = df_eval.loc[:, [c for c in cols if c in df_eval.columns]].copy()
+
+                # pretty formatting
+                for c in ["TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"]:
+                    if c in show_df.columns:
+                        show_df[c] = show_df[c].map(lambda x: f"{x:0.3f}" if pd.notnull(x) else "n/a")
+
+                # draw table
+                tbl = ax.table(
+                    cellText=show_df.values,
+                    colLabels=show_df.columns,
+                    loc='center',
+                    cellLoc='center',
+                    colLoc='center',
+                )
+                tbl.auto_set_font_size(False)
+                tbl.set_fontsize(9)
+                tbl.scale(1.0, 1.25)
+
+                # style header row
+                for (row, col), cell in tbl.get_celld().items():
+                    if row == 0:
+                        cell.set_facecolor('#f0f0f0')
+                        cell.set_edgecolor('#cccccc')
+                        cell.set_linewidth(0.8)
+                    else:
+                        cell.set_edgecolor('#dddddd')
+                        cell.set_linewidth(0.5)
+
+                # brief legend
+                legend = (
+                    "TopoPreserve = composite of: RDC (rank corr. of diffusion distances), "
+                    "DkNP (diffusion kNN preservation), PF1 (sparse neighborhood F1), "
+                    "PJS (row-wise JS similarity), SP (spectral Procrustes R²). "
+                    "All scores mapped to [0,1], higher is better."
+                )
+                ax2 = fig.add_axes([0.04, 0.06, 0.92, 0.05])
+                ax2.axis('off')
+                ax2.text(0, 0.5, legend, va='center', fontsize=9, wrap=True)
+
+            pdf.savefig(fig, dpi=dpi)
+            plt.close(fig)
 
             # ===== PAGES 1 & 2: CLUSTERING (2×3 grid) =====
             show_keys = _pick_three(res_keys)
@@ -2097,23 +2348,23 @@ if _HAVE_SCANPY:
                 if tmp in adata.obs: del adata.obs[tmp]
 
             # ===== PAGE 10: PSEUDOTIME =====
-            res = _componentwise_pseudotime_colors(
-                adata, tg, cluster_key=lab_key if lab_key else 'topo_clusters'
-            )
-            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-            ax = fig.add_axes([0.06, 0.10, 0.88, 0.82])
-            Yb = adata.obsm.get('X_msTopoMAP', None)
-            if Yb is None:
-                Yb = adata.obsm.get('X_TopoMAP', None)
-            if res is not None and Yb is not None:
-                pt_key, pt_color_key, n_comp = res
-                cols = adata.obs[pt_color_key].astype(str).values
-                ax.scatter(Yb[:, 0], Yb[:, 1], s=6, c=cols, linewidths=0, alpha=0.95)
-                ax.set_title(f"Pseudotime within components (n={n_comp})", fontsize=12)
-                ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect('equal')
-            else:
-                ax.axis('off'); ax.text(0.5, 0.5, "Pseudotime colors unavailable", ha='center', va='center')
-            pdf.savefig(fig, dpi=dpi); plt.close(fig)
+            # res = _componentwise_pseudotime_colors(
+            #     adata, tg, cluster_key=lab_key if lab_key else 'topo_clusters'
+            # )
+            # fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+            # ax = fig.add_axes([0.06, 0.10, 0.88, 0.82])
+            # Yb = adata.obsm.get('X_msTopoMAP', None)
+            # if Yb is None:
+            #     Yb = adata.obsm.get('X_TopoMAP', None)
+            # if res is not None and Yb is not None:
+            #     pt_key, pt_color_key, n_comp = res
+            #     cols = adata.obs[pt_color_key].astype(str).values
+            #     ax.scatter(Yb[:, 0], Yb[:, 1], s=6, c=cols, linewidths=0, alpha=0.95)
+            #     ax.set_title(f"Pseudotime within components (n={n_comp})", fontsize=12)
+            #     ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect('equal')
+            # else:
+            #     ax.axis('off'); ax.text(0.5, 0.5, "Pseudotime colors unavailable", ha='center', va='center')
+            # pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
             # ===== PAGE 11: IMPUTATION =====
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
@@ -2188,138 +2439,143 @@ if _HAVE_SCANPY:
             for tmp in ['_gene_raw','_gene_imputed']:
                 if tmp in adata.obs: del adata.obs[tmp]
 
-            # ===== PAGE 12: topometry SUMMARY =====
-            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+        # ===== PAGE 12: topometry SUMMARY (vertical layout) =====
+        fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
 
-            # Layout: title band + three columns (concepts | fitted stats | what's available)
-            title_ax = fig.add_axes([0.05, 0.91, 0.90, 0.06]); title_ax.axis('off')
-            left_ax  = fig.add_axes([0.05, 0.16, 0.40, 0.72]); left_ax.axis('off')
-            mid_ax   = fig.add_axes([0.47, 0.16, 0.22, 0.72]); mid_ax.axis('off')
-            right_ax = fig.add_axes([0.71, 0.16, 0.24, 0.72]); right_ax.axis('off')
+        # Layout: title band + stacked sections (concepts → fitted stats → availability → footer)
+        title_ax   = fig.add_axes([0.06, 0.92, 0.88, 0.06]); title_ax.axis('off')
+        concept_ax = fig.add_axes([0.06, 0.74, 0.88, 0.16]); concept_ax.axis('off')
+        stats_ax   = fig.add_axes([0.06, 0.49, 0.88, 0.21]); stats_ax.axis('off')
+        avail_ax   = fig.add_axes([0.06, 0.22, 0.88, 0.23]); avail_ax.axis('off')
+        footer_ax  = fig.add_axes([0.06, 0.08, 0.88, 0.07]); footer_ax.axis('off')
 
-            # ----- Title -----
-            title_ax.text(0.0, 0.4, "topometry — summary", fontsize=16, weight='bold', va='center')
+        # ----- Title -----
+        title_ax.text(0.0, 0.45, "topometry — summary", fontsize=16, weight='bold', va='center')
 
-            # ----- Helper formatters -----
-            def _fmt_num(x, nd=3):
-                try:
-                    return f"{float(x):.{nd}g}"
-                except Exception:
-                    return "n/a"
+        # ----- Helper formatters -----
+        def _fmt_num(x, nd=3):
+            try:
+                return f"{float(x):.{nd}g}"
+            except Exception:
+                return "n/a"
 
-            def _safe(val, default="n/a"):
-                return default if val is None else str(val)
+        def _safe(val, default="n/a"):
+            return default if val is None else str(val)
 
-            # ----- Pull fitted stats -----
-            gid_mle = adata.uns.get('topometry_id_global_mle', None)
-            gid_fsa = adata.uns.get('topometry_id_global_fsa', None)
+        # ----- Pull fitted stats -----
+        gid_mle = adata.uns.get('topometry_id_global_mle', None)
+        gid_fsa = adata.uns.get('topometry_id_global_fsa', None)
 
-            # eigengap / selected components from msDM (fall back to DM if needed)
-            ev_ms = _eigvals_from_tg(tg, variant='msDM')
-            ev_dm = _eigvals_from_tg(tg, variant='DM') if (ev_ms is None or ev_ms.size == 0) else None
-            _evals = ev_ms if (ev_ms is not None and ev_ms.size) else (ev_dm if ev_dm is not None else np.array([]))
-            sel_k  = None
-            if _evals.size >= 2:
-                first_diff = np.diff(_evals)             # evals are sorted desc in _eigvals_from_tg
-                sel_k = int(np.argmax(first_diff) + 1)   # index after the largest drop
+        # eigengap / selected components from msDM (fall back to DM if needed)
+        ev_ms = _eigvals_from_tg(tg, variant='msDM')
+        ev_dm = _eigvals_from_tg(tg, variant='DM') if (ev_ms is None or (hasattr(ev_ms, "size") and ev_ms.size == 0)) else None
+        _evals = ev_ms if (ev_ms is not None and getattr(ev_ms, "size", 0) > 0) else (ev_dm if ev_dm is not None else np.array([]))
+        sel_k  = None
+        if getattr(_evals, "size", 0) >= 2:
+            first_diff = np.diff(_evals)             # evals sorted desc in _eigvals_from_tg
+            sel_k = int(np.argmax(first_diff) + 1)   # index after the largest drop
 
-            # basic dataset + kernel info
-            n_cells = adata.n_obs
-            n_genes = adata.n_vars
-            base_knn  = getattr(tg, 'base_knn', 'n/a')
-            graph_knn = getattr(tg, 'graph_knn', 'n/a')
-            n_eigs    = getattr(tg, 'n_eigs', 'n/a')
-            base_metric  = getattr(tg, 'base_metric', 'n/a')
-            graph_metric = getattr(tg, 'graph_metric', 'n/a')
-            bk_ver = getattr(tg, 'base_kernel_version', 'n/a')
-            gk_ver = getattr(tg, 'graph_kernel_version', 'n/a')
+        # basic dataset + kernel info
+        n_cells = adata.n_obs
+        n_genes = adata.n_vars
+        base_knn  = getattr(tg, 'base_knn', 'n/a')
+        graph_knn = getattr(tg, 'graph_knn', 'n/a')
+        n_eigs    = getattr(tg, 'n_eigs', 'n/a')
+        base_metric  = getattr(tg, 'base_metric', 'n/a')
+        graph_metric = getattr(tg, 'graph_metric', 'n/a')
+        bk_ver = getattr(tg, 'base_kernel_version', 'n/a')
+        gk_ver = getattr(tg, 'graph_kernel_version', 'n/a')
 
-            # ----- LEFT: Key ideas (brief, biologist-friendly) -----
-            concepts = (
-                "What topometry does\n"
-                "• Builds a geometry-aware graph of cells from the expression space (base kernel),\n"
-                "  refines it by diffusion (graph kernel), and learns spectral coordinates (DM / msDM).\n"
-                "• Uses these coordinates to make faithful 2-D views (TopoMAP / PaCMAP) that preserve\n"
-                "  global and local structure better than direct PCA/UMAP in many datasets.\n"
-                "• Quantifies distortion with a Riemannian metric: ellipses show local stretching/\n"
-                "  squashing; the centered log-det tracks contraction (blue) vs expansion (red).\n"
-                "• Extra tools: spectral selectivity (axes linked to biology), diffusion-based\n"
-                "  pseudotime on the scaffold, and graph-diffusion imputation for denoising."
-            )
-            left_ax.text(0.0, 1.0, concepts, ha='left', va='top', fontsize=10, linespacing=1.25)
+        # ----- SECTION 1: Key ideas (brief, biologist-friendly) -----
+        concepts = (
+            "What topometry does\n"
+            "• Builds a geometry-aware graph of cells from the expression space (base kernel), refines it by diffusion (graph kernel),\n"
+            "  and learns spectral coordinates (DM / msDM).\n"
+            "• Uses these coordinates to make faithful 2-D views (TopoMAP / PaCMAP) that preserve global and local structure better\n"
+            "  than direct PCA/UMAP in many datasets.\n"
+            "• Quantifies distortion with a Riemannian metric: ellipses show local stretching/squashing; the centered log-det tracks\n"
+            "  contraction (blue) vs expansion (red).\n"
+            "• Extra tools: spectral selectivity (axes linked to biology), diffusion-based pseudotime on the scaffold, and graph-diffusion\n"
+            "  imputation for denoising."
+        )
+        concept_ax.text(0.0, 1.0, concepts, ha='left', va='top', fontsize=10, linespacing=1.25, wrap=True)
 
-            # ----- MIDDLE: Fitted stats snapshot -----
-            stats_lines = [
-                "Fitted statistics",
-                f"• Cells × genes: {n_cells} × {n_genes}",
-                f"• Global ID (MLE): {_fmt_num(gid_mle)}",
-                f"• Global ID (FSA): {_fmt_num(gid_fsa)}",
-                f"• Selected components (eigengap): {sel_k if sel_k is not None else 'n/a'}",
-                "",
-                "Model hyperparameters",
-                f"• base_knn / graph_knn: {base_knn} / {graph_knn}",
-                f"• n_eigs: {n_eigs}",
-                f"• base metric / graph metric: {_safe(base_metric)} / {_safe(graph_metric)}",
-                f"• base kernel: {_safe(bk_ver)}",
-                f"• graph kernel: {_safe(gk_ver)}",
-            ]
-            mid_ax.text(0.0, 1.0, "\n".join(stats_lines), ha='left', va='top', fontsize=10, linespacing=1.35)
+        # ----- SECTION 2: Fitted stats snapshot -----
+        stats_lines = [
+            "Fitted statistics",
+            f"• Cells × genes: {n_cells} × {n_genes}",
+            f"• Global ID (MLE): {_fmt_num(gid_mle)}",
+            f"• Global ID (FSA): {_fmt_num(gid_fsa)}",
+            f"• Selected components (eigengap): {sel_k if sel_k is not None else 'n/a'}",
+            "",
+            "Model hyperparameters",
+            f"• base_knn / graph_knn: {base_knn} / {graph_knn}",
+            f"• n_eigs: {n_eigs}",
+            f"• base metric / graph metric: {_safe(base_metric)} / {_safe(graph_metric)}",
+            f"• base kernel: {_safe(bk_ver)}",
+            f"• graph kernel: {_safe(gk_ver)}",
+        ]
+        stats_ax.text(0.0, 1.0, "\n".join(stats_lines), ha='left', va='top', fontsize=10, linespacing=1.35)
 
-            # ----- RIGHT: What’s available to plot/use -----
-            # Graphs
-            graphs_available = []
-            if 'topometry_connectivities' in adata.obsp:
-                graphs_available.append("topometry_connectivities (DM)")
-            if 'topometry_connectivities_ms' in adata.obsp:
-                graphs_available.append("topometry_connectivities_ms (msDM)")
+        # ----- SECTION 3: What’s available to plot/use -----
+        # Graphs
+        graphs_available = []
+        if 'topometry_connectivities' in adata.obsp:
+            graphs_available.append("topometry_connectivities (DM)")
+        if 'topometry_connectivities_ms' in adata.obsp:
+            graphs_available.append("topometry_connectivities_ms (msDM)")
 
-            # Embeddings (common keys used by our pipeline)
-            embeddings_available = []
-            for k in ('X_TopoMAP', 'X_msTopoMAP', 'X_TopoPaCMAP', 'X_msTopoPaCMAP'):
-                if k in adata.obsm and adata.obsm.get(k) is not None:
-                    embeddings_available.append(k.replace('X_', ''))
+        # Embeddings (common keys used by our pipeline)
+        embeddings_available = []
+        for k in ('X_TopoMAP', 'X_msTopoMAP', 'X_TopoPaCMAP', 'X_msTopoPaCMAP'):
+            if k in adata.obsm and adata.obsm.get(k) is not None:
+                embeddings_available.append(k.replace('X_', ''))
 
-            # Clustering keys (report the primary and any resolutions)
-            cluster_keys = []
-            if 'topo_clusters' in adata.obs:
-                cluster_keys.append('topo_clusters')
-            cluster_keys += [c for c in adata.obs.columns if c.startswith('topo_clusters_res')]
+        # Clustering keys (report the primary and any resolutions)
+        cluster_keys = []
+        if 'topo_clusters' in adata.obs:
+            cluster_keys.append('topo_clusters')
+        cluster_keys += [c for c in adata.obs.columns if c.startswith('topo_clusters_res')]
 
-            # Build the text block
-            avail_lines = ["What you can use next"]
-            if embeddings_available:
-                avail_lines.append("• 2-D views: " + ", ".join(embeddings_available))
-            else:
-                avail_lines.append("• 2-D views: (none cached)")
+        # Geometry preservation (prefer new evaluation; fall back to legacy table)
+        best_geo_line = None
+        try:
+            df_eval = adata.uns.get('topometry_representation_eval', None)
+            if df_eval is not None and not df_eval.empty:
+                best_idx = int(np.nanargmax(df_eval['TopoPreserve'].values))
+                best_rep = df_eval.iloc[best_idx]['representation']
+                best_geo_line = f"• Best geometry preservation (TopoPreserve): {best_rep}"
+        except Exception:
+            pass
 
-            if graphs_available:
-                avail_lines.append("• Graphs: " + ", ".join(graphs_available))
-            else:
-                avail_lines.append("• Graphs: (none cached)")
+        if best_geo_line is None:
+            try:
+                gtbl = adata.uns.get('geometry_metrics_table', None)
+                if gtbl is not None and 'Composite' in gtbl:
+                    best_rep = gtbl['Composite'].idxmax()
+                    best_geo_line = f"• Best geometry preservation (composite): {best_rep}"
+            except Exception:
+                pass
 
-            if cluster_keys:
-                avail_lines.append("• Clusters: " + ", ".join(cluster_keys[:6]) + (" ..." if len(cluster_keys) > 6 else ""))
+        avail_lines = ["What you can use next"]
+        avail_lines.append("• 2-D views: " + (", ".join(embeddings_available) if embeddings_available else "(none cached)"))
+        avail_lines.append("• Graphs: " + (", ".join(graphs_available) if graphs_available else "(none cached)"))
+        if cluster_keys:
+            avail_lines.append("• Clusters: " + ", ".join(cluster_keys[:8]) + (" ..." if len(cluster_keys) > 8 else ""))
+        if best_geo_line:
+            avail_lines.append(best_geo_line)
 
-            # Geometry metrics table (if computed)
-            if adata.uns.get('geometry_metrics_table', None) is not None:
-                try:
-                    best_rep = adata.uns['geometry_metrics_table']['Composite'].idxmax()
-                    avail_lines.append(f"• Best geometry preservation (composite): {best_rep}")
-                except Exception:
-                    pass
+        avail_ax.text(0.0, 1.0, "\n".join(avail_lines), ha='left', va='top', fontsize=10, linespacing=1.30)
 
-            right_ax.text(0.0, 1.0, "\n".join(avail_lines), ha='left', va='top', fontsize=10, linespacing=1.35)
+        # ----- Footer hint -----
+        footer_ax.text(
+            0.0, 0.5,
+            "Tip: try sc.pl.embedding(adata, basis='TopoMAP', color=['cell type','spectral_EAS','metric_contract_expand_TopoMAP']) "
+            "or switch to 'msTopoPaCMAP' to compare views.",
+            ha='left', va='center', fontsize=9, wrap=True
+        )
 
-            # Footer hint
-            footer_ax = fig.add_axes([0.05, 0.08, 0.90, 0.05]); footer_ax.axis('off')
-            footer_ax.text(
-                0.0, 0.5,
-                "Tip: try sc.pl.embedding(adata, basis='TopoMAP', color=['cell type','spectral_EAS','metric_contract_expand_TopoMAP']) "
-                "or switch to 'msTopoPaCMAP' to compare views.",
-                ha='left', va='center', fontsize=9
-            )
-
-            pdf.savefig(fig, dpi=dpi); plt.close(fig)
+        pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
 
         return pdf_path

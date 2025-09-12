@@ -218,13 +218,28 @@ class Projector(BaseEstimator, TransformerMixin):
         """
         self.random_state = check_random_state(self.random_state)
 
-        # sanitize checkpointing kwargs for non-MAP methods ---
+        # --- CHECKPOINTING KWARG HANDLING ---
+        # Snapshot keys that only MAP understands
         snapshot_keys = ("save_every", "save_limit", "save_callback", "include_init_snapshot")
+
         if self.projection_method == "MAP":
-            # Extract only the snapshot-related arguments for MAP
-            map_checkpointing = {k: kwargs.pop(k) for k in snapshot_keys if k in kwargs}
+            # 1) Accept any explicit kwarg overrides, but
+            # 2) Fallback to constructor attributes if not provided in kwargs.
+            map_checkpointing = {}
+            for k in snapshot_keys:
+                if k in kwargs:                 # explicit call-time override
+                    map_checkpointing[k] = kwargs.pop(k)
+            # Fallbacks to instance attributes set in __init__
+            if "save_every" not in map_checkpointing:
+                map_checkpointing["save_every"] = self.save_every
+            if "save_limit" not in map_checkpointing:
+                map_checkpointing["save_limit"] = self.save_limit
+            if "save_callback" not in map_checkpointing:
+                map_checkpointing["save_callback"] = self.save_callback
+            if "include_init_snapshot" not in map_checkpointing:
+                map_checkpointing["include_init_snapshot"] = self.include_init_snapshot
         else:
-            # Remove snapshot kwargs so downstream estimators (e.g., PaCMAP) don't see them
+            # Strip snapshot kwargs so other estimators (PaCMAP, etc.) never see them
             for k in snapshot_keys:
                 kwargs.pop(k, None)
             map_checkpointing = {}
@@ -307,27 +322,25 @@ class Projector(BaseEstimator, TransformerMixin):
             self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'MAP':
-            # Call fuzzy_embedding with explicit checkpointing kwargs
             Y, Y_aux = fuzzy_embedding(
-                K,                                  # precomputed affinities
+                K,
                 n_components=self.n_components,
                 init=self.init_Y_,
                 n_epochs=self.num_iters,
                 random_state=self.random_state,
                 metric=self.metric,
-                # plus whatever existing args you already pass through here
                 verbose=self.verbose,
-                # --- NEW: checkpointing passthrough ---
+                # --- pass checkpointing settings (from kwargs or constructor) ---
                 save_every=map_checkpointing.get("save_every", None),
                 save_limit=map_checkpointing.get("save_limit", None),
                 save_callback=map_checkpointing.get("save_callback", None),
                 include_init_snapshot=map_checkpointing.get("include_init_snapshot", True),
-                # also forward any *other* non-snapshot kwargs if you already do
+                # any additional kwargs for fuzzy_embedding
                 **kwargs
             )
             self.Y_ = Y
-            # Keep aux so fit_transform can return (Y, aux)
             self.aux_ = Y_aux
+
 
 
         elif self.projection_method == 'UMAP':
