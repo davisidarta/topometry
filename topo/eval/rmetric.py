@@ -573,7 +573,7 @@ def plot_riemann_metric_global(
     mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
     mappable.set_array([])
     cb = plt.colorbar(mappable, ax=ax, fraction=0.046, pad=0.04)
-    cb.set_label("Contraction  ←  centered log det(G)  →  Expansion")
+    cb.set_label("Contraction  ←  centered log det(G)  →  Expansion", size=8)
 
     return ax
 

@@ -4,7 +4,8 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.stats import spearmanr, wasserstein_distance
 from scipy.linalg import orthogonal_procrustes, subspace_angles
-
+import scipy.sparse as sp
+from topo.tpgraph.kernels import Kernel
 # ----------------------------
 # Utilities
 # ----------------------------
@@ -131,6 +132,76 @@ def _topk_support_from_row(data, ind, k):
     sel = np.argpartition(data, -k)[-k:]
     return set(ind[sel].tolist())
 
+
+def get_P(Y, **kwargs_for_kernel):
+    """
+    Convenience: build a diffusion operator P from data or a precomputed graph.
+
+    Parameters
+    ----------
+    Y : array-like or sparse matrix or topo.tpgraph.kernels.Kernel
+        - If a Kernel instance: returns its .P (computing it if needed).
+        - If a rectangular (n x d) array/matrix: treated as data; a kernel and
+          diffusion operator are built using the provided kwargs.
+        - If a square (n x n) array/sparse matrix AND metric='precomputed' is
+          provided (or auto-detected), Y is treated as a precomputed affinity/
+          kernel matrix (NOT distances), and P is computed from it.
+
+    **kwargs_for_kernel :
+        Passed to Kernel(...). Useful options include:
+          metric='cosine' | 'euclidean' | 'precomputed'
+          n_neighbors=30
+          adaptive_bw=True
+          backend='nmslib' | 'hnswlib' 
+          n_jobs=-1
+          symmetrize=True
+          anisotropy=1.0
+          use_angular=True (for cosine)
+
+    Returns
+    -------
+    P : scipy.sparse.csr_matrix
+        The (symmetrized) diffusion operator.
+
+    Notes
+    -----
+    - If Y is square and you did NOT set metric='precomputed', we auto-switch
+      to 'precomputed' (assuming Y is an affinity/kernel). If Y is a *distance*
+      matrix, convert it to an affinity first or pass the raw data.
+    """
+    # 1) If user already passed a fitted Kernel, just return its P
+    if isinstance(Y, Kernel):
+        Kobj = Y
+        return Kobj.P.tocsr()
+
+    # 2) Prepare defaults and merge user options
+    params = dict(
+        metric='cosine',
+        n_neighbors=30,
+        adaptive_bw=True,
+        backend='nmslib',
+        n_jobs=-1,
+        symmetrize=True,
+        use_angular=True,  # sensible for cosine on z-scored data
+    )
+    params.update(kwargs_for_kernel)
+
+    # 3) Auto-detect precomputed case: square matrix input → kernel/affinity
+    try:
+        n0, n1 = Y.shape
+        is_square = (n0 == n1)
+    except Exception:
+        is_square = False
+
+    if is_square and params.get('metric', None) != 'precomputed':
+        # Interpret as a precomputed affinity/kernel unless explicitly told otherwise
+        params['metric'] = 'precomputed'
+
+    # 4) Build the Kernel and compute P
+    Kobj = Kernel(**params).fit(Y)
+    P = Kobj.P  # already symmetrized internally
+    return P.tocsr()
+
 # ----------------------------
 # 1) Global geometry
 # ----------------------------
@@ -241,7 +312,7 @@ def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, 
     r : int, default=64
         Number of eigenpairs for coordinates.
     symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
+        See `_top_eigs_of_P`.
     center : bool, default=True
         Mean-center coordinates before Procrustes.
 
@@ -250,31 +321,35 @@ def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, 
     R2_avg : float
         Average coefficient of determination across t (clipped to [0,1]).
         Higher is better (1.0 means perfect alignment up to a rotation).
-
-    Notes
-    -----
-    - Procrustes finds the best orthogonal transform aligning Φ_t(Py) to Φ_t(Px),
-      then reports R^2 of the fit.
-    - Captures *coordinate-level* consistency, not just pairwise distances.
     """
+    from scipy.linalg import orthogonal_procrustes
 
     wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
     wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
+
+    # choose a consistent number of non-trivial modes (skip the first ~1.0 eigenvector)
+    # limit by available columns and by r
+    r_use = max(1, min(Vx.shape[1] - 1, Vy.shape[1] - 1, r))
+
     scores = []
     for t in times:
-        Phix = diffusion_coordinates(wx, Vx, t, r_use=r_use)
-        Phiy = diffusion_coordinates(wy, Vy, t, r_use=Phix.shape[1])
-        # center
-        Phix = Phix - Phix.mean(0, keepdims=True)
-        Phiy = Phiy - Phiy.mean(0, keepdims=True)
-        R, scale = orthogonal_procrustes(Phiy, Phix)  # maps Phiy @ R ~ Phix
+        Phix = diffusion_coordinates(wx, Vx, t, r_use=r_use, drop_first=True, normalize_cols=True)
+        Phiy = diffusion_coordinates(wy, Vy, t, r_use=r_use, drop_first=True, normalize_cols=True)
+
+        if center:
+            Phix = Phix - Phix.mean(0, keepdims=True)
+            Phiy = Phiy - Phiy.mean(0, keepdims=True)
+
+        R, _ = orthogonal_procrustes(Phiy, Phix)  # map Phiy @ R ≈ Phix
         Yhat = Phiy @ R
+
         # R^2 with centered data (no intercept): 1 - SSE/SST
-        sse = np.sum((Phix - Yhat)**2)
-        sst = np.sum(Phix**2)
-        r2 = 1.0 - (sse / (sst + 1e-12))
-        scores.append(float(r2))
-    return np.nanmean(scores)
+        sse = float(np.sum((Phix - Yhat) ** 2))
+        sst = float(np.sum(Phix ** 2)) + 1e-12
+        r2 = 1.0 - (sse / sst)
+        # clip to [0,1] for stability
+        scores.append(max(0.0, min(1.0, r2)))
+    return float(np.nanmean(scores))
 
 # ----------------------------
 # 2) Local geometry
@@ -559,6 +634,46 @@ def sparse_neighborhood_f1(Px, Py, k=None):
     return float(np.mean(f1s)) if f1s else np.nan
 
 def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False):
+    """
+    Operator-level spectral agreement via eigenvalues and subspaces.
+
+    Returns
+    -------
+    If return_details=False:
+        float in [0,1]: cosine of the largest principal angle between the
+        top-r eigenspaces (higher is better).
+    If return_details=True:
+        dict with {'eigenvalue_w1', 'subspace_cos'}.
+    """
+    from scipy.stats import wasserstein_distance
+    from scipy.linalg import subspace_angles
+
+    wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
+    wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
+
+    # Drop the trivial first mode (~1.0)
+    wx = wx[1:]; wy = wy[1:]
+
+    r_pair = min(len(wx), len(wy))
+    # Wasserstein-1 between (absolute) leading spectra (lower is better)
+    w1 = wasserstein_distance(
+        np.arange(r_pair), np.arange(r_pair),
+        u_weights=np.abs(wx[:r_pair]), v_weights=np.abs(wy[:r_pair])
+    )
+
+    # principal angles between top subspaces (skip first vector)
+    r_use = max(1, min(Vx.shape[1] - 1, Vy.shape[1] - 1, r))
+    U = Vx[:, 1:1 + r_use]
+    V = Vy[:, 1:1 + r_use]
+    # Orthonormalize columns (QR) to be safe
+    U, _ = np.linalg.qr(U); V, _ = np.linalg.qr(V)
+    ang = subspace_angles(U, V)  # ascending
+    cos_largest = float(np.cos(ang[-1])) if ang.size > 0 else np.nan
+
+    if return_details:
+        return {'eigenvalue_w1': float(w1), 'subspace_cos': cos_largest}
+    else:
+        return cos_largest
     """
     Operator-level spectral agreement via eigenvalues and subspaces.
 

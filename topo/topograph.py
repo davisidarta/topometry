@@ -155,6 +155,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  base_knn=30,
                  graph_knn=30,
                  n_eigs=100,
+                 n_jobs=-1,
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
                  eigenmap_method='DM',  # deprecated
@@ -166,7 +167,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  diff_t=1,
                  delta=1.0,
                  sigma=0.1,
-                 n_jobs=1,
                  low_memory=False,
                  eigen_tol=1e-8,
                  eigensolver='arpack',
@@ -175,11 +175,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  verbosity=1,
                  random_state=42,
                  # ID defaults (both methods computed; `id_method` selects the size used)
-                 id_method='mle',
+                 id_method='fsa',
                  id_ks=50,
                  id_metric='euclidean',
                  id_quantile=0.99,
-                 id_min_components=32,
+                 id_min_components=128,
                  id_max_components=1024,
                  id_headroom=0.5,
                  ):
@@ -1226,18 +1226,33 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             epoch = snap["epoch"]
 
             fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+
+            # scatter
             ax.scatter(Y[:, 0], Y[:, 1], s=point_size, c=point_colors, linewidths=0)
+
+            # axis limits + labels
             ax.set_xlim(*xlim); ax.set_ylim(*ylim)
             ax.set_aspect("equal", adjustable="box")
+            ax.set_xlabel("TopoMAP_1")
+            ax.set_ylabel("TopoMAP_2")
+
+            # remove tick labels (optional aesthetic)
             ax.set_xticks([]); ax.set_yticks([])
+
+            # title
             tag = "msTopoMAP" if multiscale else "TopoMAP"
             ax.set_title(f"{tag} training — epoch {epoch}")
 
+            # adjust layout so scatter fills most of the figure
+            fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
+
+            # render to numpy frame
             fig.canvas.draw()
             w, h = fig.canvas.get_width_height()
             frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3)
             frames.append(frame)
             plt.close(fig)
+
 
         # 5) Write GIF
         if filename is None:
