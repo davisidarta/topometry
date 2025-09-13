@@ -6,6 +6,7 @@ import time
 import warnings
 import numpy as np
 import gc
+import copy
 from sklearn.base import BaseEstimator, TransformerMixin
 import scipy.sparse as sp
 from scipy.sparse import issparse, csr_matrix
@@ -143,7 +144,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def __init__(self,
                  base_knn=30,
                  graph_knn=30,
-                 n_eigs=100,
+                 min_eigs=100,
                  n_jobs=-1,
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
@@ -175,7 +176,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # Core config
         self.projection_method = projection_method
         self.diff_t = diff_t
-        self.n_eigs = n_eigs
+        self.n_eigs = min_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
         self.n_jobs = n_jobs
@@ -361,22 +362,30 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             print('RandomState error! No random state was defined!')
 
     # ---------------------------------------------------------------------
-    # Intrinsic dimension (compute BOTH methods, always)
+    # Intrinsic dimension
     # ---------------------------------------------------------------------
-    def _compute_id_details(self, Z_ms, Z_dm):
-        """
-        Compute ID via both methods ('mle' and 'fsa') on msDM scaffold by default for sizing,
-        but store details for both methods. Also compute MLE on DM scaffold for reference.
-        """
-        # msDM-based sizing (both details)
-        n = Z_ms.shape[0]
-        max_cap = min(int(self.id_max_components), max(2, n - 2), int(self.n_eigs))
 
+    def _automated_sizing(self, X):
+        """
+        Run automated scaffold sizing directly on X (no eigenbasis required),
+        record details for both methods, and set:
+           - self._scaffold_components_ms
+           - self._scaffold_components_dm
+           - self.n_eigs  (so eigendecomposition uses this size cap)
 
-        # FSA (msDM)
+        Notes
+        -----
+        - Uses self.id_method ('fsa' or 'mle') to pick the working size.
+        - Applies caps: [id_min_components, id_max_components, n-2].
+        """
+        # robust caps
+        n = X.shape[0]
+        max_cap = min(int(self.id_max_components), max(2, n - 2))
+
+        # FSA on X (quantile/robust proxy)
         n_fsa, fsa_details = automated_scaffold_sizing(
-            Z_ms,
-            method='mle',
+            X,
+            method='fsa',
             ks=self.id_ks,
             backend=self.backend,
             metric=self.id_metric,
@@ -390,9 +399,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         )
         self._id_details['fsa'] = fsa_details
 
-        # MLE (msDM) with use_median=True
-        n_mle_ms, mle_details_ms = automated_scaffold_sizing(
-            Z_ms,
+        # MLE on X (median-of-locals)
+        n_mle, mle_details = automated_scaffold_sizing(
+            X,
             method='mle',
             ks=self.id_ks,
             backend=self.backend,
@@ -405,44 +414,22 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             use_median=True,
             return_details=True,
         )
-        # tag scaffold
-        mle_details_ms['scaffold'] = 'msDM'
-        self._id_details['mle'] = mle_details_ms
+        self._id_details['mle'] = mle_details
 
-        # Also compute MLE on DM scaffold (for users who want to inspect differences)
-        try:
-            _, mle_details_dm = automated_scaffold_sizing(
-                Z_dm,
-                method='mle',
-                ks=self.id_ks,
-                backend=self.backend,
-                metric=self.id_metric,
-                n_jobs=self.n_jobs if self.n_jobs != -1 else None,
-                min_components=int(self.id_min_components),
-                max_components=int(max_cap),
-                headroom=float(self.id_headroom),
-                random_state=self.random_state,
-                use_median=True,
-                return_details=True,
-            )
-            mle_details_dm['scaffold'] = 'DM'
-            # store side-by-side for discovery
-            self._id_details['mle_dm'] = mle_details_dm
-        except Exception:
-            # optional; not required for sizing
-            pass
-
-        # Choose size for each scaffold independently using selected method
+        # choose by configured method
         if str(self.id_method).lower().strip() == 'fsa':
-            self._scaffold_components_ms = int(n_fsa)
-            self._scaffold_components_dm = int(n_fsa)  # mirror for simplicity
+            k_sel = int(n_fsa)
         else:
-            self._scaffold_components_ms = int(n_mle_ms)
-            self._scaffold_components_dm = int(n_mle_ms)
+            k_sel = int(n_mle)
 
-        # ensure caps
-        self._scaffold_components_ms = int(max(2, min(self._scaffold_components_ms, max_cap)))
-        self._scaffold_components_dm = int(max(2, min(self._scaffold_components_dm, max_cap)))
+        # finalize scaffold component counts (same for msDM/DM at this stage)
+        k_sel = int(max(2, min(k_sel, max_cap)))
+        self._scaffold_components_ms = k_sel
+        self._scaffold_components_dm = k_sel
+
+        # IMPORTANT: ensure eigendecomposition will compute at least this many
+        # (keep user-requested n_eigs if it is larger)
+        self.n_eigs = int(max(self.n_eigs, k_sel))
 
     # ---------------------------------------------------------------------
     # High-level fit (builds everything) – dual scaffold
@@ -552,37 +539,24 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print(f' Base kernel ({self.base_kernel_version}) fitted in {self.runtimes["Kernel_X"]:.3f} sec')
 
-        # Compute BOTH msDM and DM eigenbases (always)
-        if self.verbosity >= 1:
-            print('Computing eigenbases (DM and msDM)...')
-
-        ms_key = 'msDM with ' + str(self.base_kernel_version)
-        if ms_key not in self.EigenbasisDict:
-            t0 = time.time()
-            ms_eig = EigenDecomposition(
-                n_components=self.n_eigs,
-                method='msDM',
-                eigensolver=self.eigensolver,
-                eigen_tol=self.eigen_tol,
-                drop_first=True,
-                weight=True,
-                t=self.diff_t,
-                random_state=self.random_state,
-                verbose=self.bases_graph_verbose
-            ).fit(self.base_kernel)
-            self.EigenbasisDict[ms_key] = ms_eig
-            self.runtimes[ms_key] = time.time() - t0
+        if self.metric != 'precomputed':
+            self._automated_sizing(X if X is not None else self.base_kernel.X)
             if self.verbosity >= 1:
-                print(f' msDM fitted in {self.runtimes[ms_key]:.3f} sec')
-        else:
-            ms_eig = self.EigenbasisDict[ms_key]
+                print(f"Automated sizing (pre-eigs) → target components: {self._scaffold_components_ms} "
+                    f"(n_eigs set to {self.n_eigs})")
+
+        # Compute eigenbases
+        if self.verbosity >= 1:
+            print('Computing eigenbasis (once on P); deriving DM/msDM embeddings in transform()...')
 
         dm_key = 'DM with ' + str(self.base_kernel_version)
+        ms_key = 'msDM with ' + str(self.base_kernel_version)
+
         if dm_key not in self.EigenbasisDict:
             t0 = time.time()
             dm_eig = EigenDecomposition(
                 n_components=self.n_eigs,
-                method='DM',
+                method='DM',                 # <- fit on P; no powering; DM uses λ**t in transform()
                 eigensolver=self.eigensolver,
                 eigen_tol=self.eigen_tol,
                 drop_first=True,
@@ -594,26 +568,27 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             self.EigenbasisDict[dm_key] = dm_eig
             self.runtimes[dm_key] = time.time() - t0
             if self.verbosity >= 1:
-                print(f' DM fitted in {self.runtimes[dm_key]:.3f} sec')
+                print(f' DM/msDM eigenpairs computed in {self.runtimes[dm_key]:.3f} sec')
         else:
             dm_eig = self.EigenbasisDict[dm_key]
 
-        # Active eigenbasis for BC/info (default msDM)
+        # Clone dm_eig → ms_eig (share eigenpairs; different transform rule)
+        if ms_key not in self.EigenbasisDict:
+            ms_eig = copy.deepcopy(dm_eig)
+            ms_eig.method = 'msDM'
+            self.EigenbasisDict[ms_key] = ms_eig
+        else:
+            ms_eig = self.EigenbasisDict[ms_key]
+
+        # Active eigenbasis (default msDM)
         self.current_eigenbasis = ms_key
         self.eigenbasis = self.EigenbasisDict[self.current_eigenbasis]
-
-        # Automated scaffold sizing (compute details for BOTH methods; size for each scaffold)
-        Z_ms = ms_eig.transform(X=None)
-        Z_dm = dm_eig.transform(X=None)
-        self._compute_id_details(Z_ms, Z_dm)
-        if self.verbosity >= 1:
-            print(f' Automated sizing -> msDM components: {self._scaffold_components_ms}; DM components: {self._scaffold_components_dm}')
 
         # kNN in msZ
         if self.verbosity >= 1:
             print('Computing neighborhood graph (msZ space)...')
         t0 = time.time()
-        ms_target = Z_ms[:, :self._scaffold_components_ms]
+        ms_target = ms_eig.transform()[:, :self._scaffold_components_ms]
         self._knn_msZ = kNN(
             ms_target,
             n_neighbors=self.graph_knn,
@@ -632,7 +607,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if self.verbosity >= 1:
             print('Computing neighborhood graph (Z [DM] space)...')
         t0 = time.time()
-        dm_target = Z_dm[:, :self._scaffold_components_dm]
+        dm_target = dm_eig.transform()[:, :self._scaffold_components_dm]
         self._knn_Z = kNN(
             dm_target,
             n_neighbors=self.graph_knn,
@@ -656,7 +631,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             self.GraphKernelDict,
             suffix=' from ' + ms_key,
             low_memory=self.low_memory,
-            data_for_expansion=Z_ms,
+            data_for_expansion=ms_eig.transform(),
             base=False
         )
         self.runtimes['Kernel_msZ'] = time.time() - t0
@@ -672,7 +647,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             self.GraphKernelDict,
             suffix=' from ' + dm_key,
             low_memory=self.low_memory,
-            data_for_expansion=Z_dm,
+            data_for_expansion=dm_eig.transform(),
             base=False
         )
         self.runtimes['Kernel_Z'] = time.time() - t0

@@ -1894,9 +1894,13 @@ if _HAVE_SCANPY:
         """
         Build a consolidated multi-page A4-landscape, 300 dpi PDF summarizing the analysis.
 
-        Naming agreement with `fit_adata`:
-        - DM:   X_TopoMAP,     X_TopoPaCMAP
-        - msDM: X_msTopoMAP,   X_msTopoPaCMAP
+        Parameters
+        ----------
+        adata : AnnData
+            Annotated data matrix with TopOMetry results.
+        tg : TopOGraph or (adata, tg) tuple
+            Fitted TopOGraph instance used to compute the results in `adata`.
+        
         """
         # Defensive unwrap (in case someone passes (adata, tg))
         if isinstance(tg, tuple):
@@ -1911,14 +1915,25 @@ if _HAVE_SCANPY:
             Draw embedding with 1:1 aspect, show a frame, and label axes with projection names.
             basis_name in {'TopoMAP','TopoPaCMAP'} ; variant in {'DM','msDM'}
             """
+            # Resolve keys, scanpy basis, and axis labels correctly per variant
             if basis_name == 'TopoMAP':
-                key = 'X_TopoMAP' if variant == 'DM' else 'X_msTopoMAP'
-                basis_arg = 'TopoMAP' if variant == 'DM' else 'msTopoMAP'
-                xlab, ylab = 'TopoMAP_1', 'TopoMAP_2'
-            else:
-                key = 'X_TopoPaCMAP' if variant == 'DM' else 'X_msTopoPaCMAP'
-                basis_arg = 'TopoPaCMAP' if variant == 'DM' else 'msTopoPaCMAP'
-                xlab, ylab = 'TopoPaCMAP_1', 'TopoPaCMAP_2'
+                if variant == 'DM':
+                    key = 'X_TopoMAP'
+                    basis_arg = 'TopoMAP'
+                    xlab, ylab = 'TopoMAP_1', 'TopoMAP_2'
+                else:  # msDM
+                    key = 'X_msTopoMAP'
+                    basis_arg = 'msTopoMAP'
+                    xlab, ylab = 'msTopoMAP_1', 'msTopoMAP_2'
+            else:  # TopoPaCMAP
+                if variant == 'DM':
+                    key = 'X_TopoPaCMAP'
+                    basis_arg = 'TopoPaCMAP'
+                    xlab, ylab = 'TopoPaCMAP_1', 'TopoPaCMAP_2'
+                else:  # msDM
+                    key = 'X_msTopoPaCMAP'
+                    basis_arg = 'msTopoPaCMAP'
+                    xlab, ylab = 'msTopoPaCMAP_1', 'msTopoPaCMAP_2'
 
             Y = adata.obsm.get(key, None)
             if (Y is None) or (not isinstance(Y, np.ndarray)) or (Y.ndim != 2) or (Y.shape[1] < 2):
@@ -1926,7 +1941,7 @@ if _HAVE_SCANPY:
                 ax.text(0.5, 0.5, f"{basis_name} ({variant}) unavailable", ha='center', va='center')
                 return
 
-            # Draw with scanpy (this may call ax.set_axis_off())
+            # Draw with scanpy (may toggle axis off)
             sc.pl.embedding(
                 adata,
                 basis=basis_arg,
@@ -1939,18 +1954,15 @@ if _HAVE_SCANPY:
                 **kwargs
             )
 
-            # --- IMPORTANT: turn axis back on after Scanpy drew on it ---
+            # Ensure axes are visible after scanpy call
             ax.set_axis_on()
 
-            # visual polish: equal aspect, thin frame, no tick labels, but keep axis labels
+            # Formatting: equal aspect, thin frame, hidden ticks, correct axis labels
             ax.set_aspect('equal', adjustable='box')
             ax.set_xlabel(xlab, fontsize=9, labelpad=2)
             ax.set_ylabel(ylab, fontsize=9, labelpad=2)
-
-            # hide tick marks/labels, keep axis labels
             ax.tick_params(axis='both', which='both', length=0, labelbottom=False, labelleft=False)
 
-            # thin frame/spines on
             ax.set_frame_on(True)
             for side in ('left', 'right', 'top', 'bottom'):
                 ax.spines[side].set_visible(True)
@@ -1958,20 +1970,6 @@ if _HAVE_SCANPY:
 
 
 
-
-        def _coords(basis_name: str, variant: str):
-            if basis_name == 'TopoMAP':
-                key = 'X_TopoMAP' if variant == 'DM' else 'X_msTopoMAP'
-            else:
-                key = 'X_TopoPaCMAP' if variant == 'DM' else 'X_msTopoPaCMAP'
-            return adata.obsm.get(key, None)
-
-        # Choose a label key for titles/legends
-        lab_key = None
-        for k in [labels_key_for_page_titles, 'topo_clusters', 'cell_type', 'leiden']:
-            if k and (k in adata.obs):
-                lab_key = k
-                break
 
         # Collect resolution keys and sort ascending; keep topo_clusters if no res-keys
         res_keys = [k for k in adata.obs.columns if k.startswith('topo_clusters_res')]
@@ -2046,7 +2044,7 @@ if _HAVE_SCANPY:
             return (None, None)
 
         with PdfPages(pdf_path) as pdf:
-            # ===== INTRO PAGE: Geometry Preservation Benchmarks =====
+            # ===== PART 1: Geometry Preservation Benchmarks =====
             df_eval = adata.uns.get("topometry_representation_eval", None)
 
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
@@ -2192,49 +2190,73 @@ if _HAVE_SCANPY:
                 except Exception:
                     pass
 
-                # # Style header row + left row labels
-                # for (rc, cc), cell in tbl.get_celld().items():
-                #     # Header row is rc == 0 in mpl tables when colLabels are provided
-                #     if rc == 0:
-                #         cell.set_facecolor('#f0f0f0')
-                #         cell.set_edgecolor('#cccccc')
-                #         cell.set_linewidth(0.8)
-                #         cell.get_text().set_fontweight('bold')
-                #     # Row labels live at cc == -1
-                #     if cc == -1 and rc > 0:
-                #         cell.get_text().set_fontweight('bold')
-                #         cell.set_edgecolor('#dddddd')
-                #         cell.set_linewidth(0.5)
-                #     # Body cells
-                #     if rc > 0 and cc >= 0:
-                #         cell.set_edgecolor('#dddddd')
-                #         cell.set_linewidth(0.5)
-
-                # Bold the top-performers in each metric column
-                # Body cells start at rc >= 1; our mask is (n_reps, n_metrics)
-                # n_reps, n_metrics = data_vals.shape
-                # for i in range(n_reps):
-                #     for j in range(n_metrics):
-                #         if best_mask[i, j]:
-                #             cell = tbl[i+1, j]  # +1 because header row is 0
-                #             cell.get_text().set_fontweight('bold')
 
                 # Expanded legend (wrapped)
                 ax2 = fig.add_axes([0.04, 0.05, 0.92, 0.09])  # taller band; keep inside margins
                 ax2.axis('off')
                 legend = (
                     "• PF1 — Sparse Neighborhood F1: overlap of the top-k transition supports per row; focuses on whether the same neighbors are kept in the operator (weights ignored).\n"
-                    "• PJS — Row-wise Jensen–Shannon Similarity: compares the *probability distributions* of transitions for each cell; sensitive to how mass is redistributed.\n"
-                    "• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n"
-                    "• CT-gap is the absolute difference |trace(L⁺_ref) − trace(L⁺_rep)| (lower is better). Arrows in the table indicate the desirable direction."
+                    "\n• PJS — Row-wise Jensen–Shannon Similarity: compares the *probability distributions* of transitions for each cell; sensitive to how mass is redistributed.\n"
+                    "\n• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n"
+                    "\n• CT-gap is the absolute difference |trace(L⁺_ref) − trace(L⁺_rep)| (lower is better). Arrows in the table indicate the desirable direction."
                 )
                 ax2.text(0.0, 0.5, legend, va='center', fontsize=9, wrap=True)
 
             pdf.savefig(fig, dpi=dpi)
             plt.close(fig)
 
+            # ===== PART 2 : EIGENSPECTRUM / I.D. (1×4) =====
+            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+            gs = fig.add_gridspec(2, 2, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.28, hspace=0.35)
+            # Row 1: spectrum & diff
+            ax_curve = fig.add_subplot(gs[0, 0]); ax_diff = fig.add_subplot(gs[0, 1])
+            evals_ms = _eigvals_from_tg(tg, variant='msDM')
+            _decay_plot_axes_original(ax_curve, ax_diff, evals_ms, title="Eigenspectrum & Eigengap")
 
-            # ===== PAGES 1 & 2: CLUSTERING (2×3 grid) =====
+            # ID histograms (original style)
+            ax_fsa = fig.add_subplot(gs[1, 0]); ax_mle = fig.add_subplot(gs[1, 1])
+            id_est = adata.uns.get('intrinsic_dim_estimator', None)
+            _plot_id_histograms_original(ax_fsa, ax_mle, id_est)
+
+            fig.suptitle("Eigenspectrum and intrinsic dimensionality (msDM)", y=0.98, fontsize=14)
+            pdf.savefig(fig, dpi=dpi); plt.close(fig)
+            
+            # ===== PART 3 : I.D. EMBEDDINGS (2×4 grid) =====
+            # Row 1: TopoMAPs colored by ID low/high for FSA and MLE (if present)
+            def _find_id_keys(prefix: str):
+                ks = [c for c in adata.obs.columns if c.startswith(prefix)]
+                if not ks: return (None, None)
+                nums = []
+                for c in ks:
+                    try: nums.append(int(c.split('k',1)[1]))
+                    except Exception: nums.append(9999)
+                order = np.argsort(nums)
+                low = ks[order[0]]
+                high = ks[order[-1]]
+                return (low, high) if low != high else (low, None)
+            
+            for variant in variant_order:
+                fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
+                gs = fig.add_gridspec(2, 4, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.28, hspace=0.35)
+
+                fsa_low_key, fsa_high_key = _find_id_keys('id_fsa_k')
+                mle_low_key, mle_high_key = _find_id_keys('id_mle_k')
+
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, fsa_low_key  if fsa_low_key  else 'spectral_radius', 'TopoMAP', variant, title=f'FSA id ({fsa_low_key})')
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, fsa_high_key if fsa_high_key else 'spectral_radius', 'TopoMAP', variant, title=f'FSA id ({fsa_high_key})')
+                ax = fig.add_subplot(gs[0, 2]); _embedding(ax, mle_low_key  if mle_low_key  else 'spectral_radius', 'TopoMAP', variant, title=f'MLE id ({mle_low_key})')
+                ax = fig.add_subplot(gs[0, 3]); _embedding(ax, mle_high_key if mle_high_key else 'spectral_radius', 'TopoMAP', variant, title=f'MLE id ({mle_high_key})')
+
+                ax = fig.add_subplot(gs[1, 0]); _embedding(ax, fsa_low_key  if fsa_low_key  else 'spectral_radius', 'TopoPaCMAP', variant, title=f'FSA id ({fsa_low_key})')
+                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, fsa_high_key if fsa_high_key else 'spectral_radius', 'TopoPaCMAP', variant, title=f'FSA id ({fsa_high_key})')
+                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, mle_low_key  if mle_low_key  else 'spectral_radius', 'TopoPaCMAP', variant, title=f'MLE id ({mle_low_key})')
+                ax = fig.add_subplot(gs[1, 3]); _embedding(ax, mle_high_key if mle_high_key else 'spectral_radius', 'TopoPaCMAP', variant, title=f'MLE id ({mle_high_key})')
+
+                fig.suptitle("Eigenspectrum and intrinsic dimensionality (msDM)", y=0.98, fontsize=12)
+                plt.tight_layout()
+                pdf.savefig(fig, dpi=dpi); plt.close(fig)
+
+            # ===== PART 4 : CLUSTERING (1x3/2×3 grid) =====
             show_keys = _pick_three(res_keys)
             ncols = max(1, len(show_keys))
             for variant in variant_order:
@@ -2251,7 +2273,7 @@ if _HAVE_SCANPY:
                 fig.suptitle(f"Clustering across resolutions — {variant}", y=0.98, fontsize=14)
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== RIEMANN DIAGNOSTICS: one page per embedding (1×3 + bottom text) =====
+            # ===== PART 5 : RIEMANN DIAGNOSTICS: one page per embedding (1×3 + bottom text) =====
             # Ensure we're in non-interactive mode during report build
             plt.ioff()
 
@@ -2322,69 +2344,110 @@ if _HAVE_SCANPY:
                 finally:
                     plt.close(fig)
 
-            # ===== PAGES 5 & 6: SPECTRAL SELECTIVITY (2×4) =====
+            # ===== PART 6: SPECTRAL SELECTIVITY (2×4) =====
             for variant in variant_order:
                 fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
                 gs = fig.add_gridspec(2, 4, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.25, hspace=0.30)
                 # Row 1 TopoMAP
-                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, 'spectral_EAS',      'TopoMAP',    variant, title='EAS',      cmap='Reds')
-                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, 'spectral_RayScore', 'TopoMAP',    variant, title='RayScore', cmap='Reds')
-                ax = fig.add_subplot(gs[0, 2]); _embedding(ax, 'spectral_LAC',      'TopoMAP',    variant, title='LAC',      cmap='Reds')
-                ax = fig.add_subplot(gs[0, 3]); _embedding(ax, 'spectral_radius',   'TopoMAP',    variant, title='Radius',   cmap='Reds')
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, 'spectral_EAS',      'TopoMAP',    variant, title='EAS',      cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, 'spectral_RayScore', 'TopoMAP',    variant, title='RayScore', cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[0, 2]); _embedding(ax, 'spectral_LAC',      'TopoMAP',    variant, title='LAC',      cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[0, 3]); _embedding(ax, 'spectral_radius',   'TopoMAP',    variant, title='Radius',   cmap='Reds', colorbar_loc=None)
                 # Row 2 TopoPaCMAP
-                ax = fig.add_subplot(gs[1, 0]); _embedding(ax, 'spectral_EAS',      'TopoPaCMAP', variant, title='EAS',      cmap='Reds')
-                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, 'spectral_RayScore', 'TopoPaCMAP', variant, title='RayScore', cmap='Reds')
-                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, 'spectral_LAC',      'TopoPaCMAP', variant, title='LAC',      cmap='Reds')
-                ax = fig.add_subplot(gs[1, 3]); _embedding(ax, 'spectral_radius',   'TopoPaCMAP', variant, title='Radius',   cmap='Reds')
+                ax = fig.add_subplot(gs[1, 0]); _embedding(ax, 'spectral_EAS',      'TopoPaCMAP', variant, title='EAS',      cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, 'spectral_RayScore', 'TopoPaCMAP', variant, title='RayScore', cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, 'spectral_LAC',      'TopoPaCMAP', variant, title='LAC',      cmap='Reds', colorbar_loc=None)
+                ax = fig.add_subplot(gs[1, 3]); _embedding(ax, 'spectral_radius',   'TopoPaCMAP', variant, title='Radius',   cmap='Reds', colorbar_loc=None)
                 fig.suptitle(f"Spectral selectivity — {variant}", y=0.98, fontsize=12)
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== PAGE 7: EIGENSPECTRUM & IDs (2×4) =====
+            # ===== PAGE 7: IMPUTATION =====
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-            gs = fig.add_gridspec(2, 4, left=0.04, right=0.98, top=0.92, bottom=0.12, wspace=0.28, hspace=0.35)
-            # Row 1: spectrum & diff
-            ax_curve = fig.add_subplot(gs[0, 0]); ax_diff = fig.add_subplot(gs[0, 1])
-            evals_ms = _eigvals_from_tg(tg, variant='msDM')
-            _decay_plot_axes_original(ax_curve, ax_diff, evals_ms, title="Eigenspectrum & Eigengap")
+            gs = fig.add_gridspec(2, 3, left=0.04, right=0.98, top=0.88, bottom=0.18, wspace=0.28, hspace=0.38)
+            g = gene_for_imputation or (adata.var_names[0] if len(adata.var_names) else None)
 
-            # ID histograms (original style)
-            ax_fsa = fig.add_subplot(gs[0, 2]); ax_mle = fig.add_subplot(gs[0, 3])
-            id_est = adata.uns.get('intrinsic_dim_estimator', None)
-            _plot_id_histograms_original(ax_fsa, ax_mle, id_est)
+            if g is not None and g in adata.var_names and ('topo_imputation' in adata.layers):
+                gi = adata.var_names.get_loc(g)
+                X_csr = adata.X.tocsr(copy=False) if sp.issparse(adata.X) else sp.csr_matrix(np.asarray(adata.X))
+                X_imp = adata.layers['topo_imputation']
+                raw = (X_csr[:, gi].toarray().ravel() if sp.issparse(X_csr) else np.asarray(X_csr[:, gi]).ravel())
+                imp = (X_imp[:, gi].toarray().ravel() if sp.issparse(X_imp) else np.asarray(X_imp[:, gi]).ravel())
+                adata.obs['_gene_raw'] = raw
+                adata.obs['_gene_imputed'] = imp
+                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, '_gene_raw',     'TopoMAP', 'msDM', title=f'Raw: {g}',     cmap='Reds')
+                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, '_gene_imputed', 'TopoMAP', 'msDM', title=f'Imputed: {g}', cmap='Reds')
+            else:
+                for slot in [gs[0, 0], gs[0, 1]]:
+                    ax = fig.add_subplot(slot); ax.axis('off'); ax.text(0.5, 0.5, "Imputation layer or gene missing", ha='center', va='center')
 
-            # Row 2: TopoMAPs colored by ID low/high for FSA and MLE (if present)
-            def _find_id_keys(prefix: str):
-                ks = [c for c in adata.obs.columns if c.startswith(prefix)]
-                if not ks: return (None, None)
-                nums = []
-                for c in ks:
-                    try: nums.append(int(c.split('k',1)[1]))
-                    except Exception: nums.append(9999)
-                order = np.argsort(nums)
-                low = ks[order[0]]
-                high = ks[order[-1]]
-                return (low, high) if low != high else (low, None)
+            iqc = adata.uns.get("imputation_qc", {})
+            corr_raw = iqc.get("corr_raw", None)
+            corr_imp = iqc.get("corr_imp_best", None)
+            genes = iqc.get("heatmap_genes", None)
 
-            fsa_low_key, fsa_high_key = _find_id_keys('id_fsa_k')
-            mle_low_key, mle_high_key = _find_id_keys('id_mle_k')
+            def _plot_heatmap(ax, C, title):
+                ax.set_title(title, fontsize=10)
+                if C is None:
+                    ax.axis('off'); ax.text(0.5, 0.5, "N/A", ha='center', va='center'); return
+                im = ax.imshow(C, vmin=-1, vmax=1, cmap='coolwarm', interpolation='nearest', aspect='auto')
+                ax.tick_params(axis='x', labelsize=6); ax.tick_params(axis='y', labelsize=6)
+                if genes is not None and len(genes) == C.shape[0] and C.shape[0] <= 50:
+                    ax.set_xticks(np.arange(len(genes))); ax.set_yticks(np.arange(len(genes)))
+                    ax.set_xticklabels(genes, rotation=90); ax.set_yticklabels(genes)
+                else:
+                    ax.set_xticks([]); ax.set_yticks([])
+                from mpl_toolkits.axes_grid1 import make_axes_locatable
+                div = make_axes_locatable(ax); cax = div.append_axes("right", size="3%", pad=0.15)
+                cb = plt.colorbar(im, cax=cax); cb.ax.tick_params(labelsize=6)
 
-            ax = fig.add_subplot(gs[1, 0]); _embedding(ax, fsa_low_key  if fsa_low_key  else 'spectral_radius', 'TopoMAP', 'msDM', title=f'FSA id ({fsa_low_key})')
-            ax = fig.add_subplot(gs[1, 1]); _embedding(ax, fsa_high_key if fsa_high_key else 'spectral_radius', 'TopoMAP', 'msDM', title=f'FSA id ({fsa_high_key})')
-            ax = fig.add_subplot(gs[1, 2]); _embedding(ax, mle_low_key  if mle_low_key  else 'spectral_radius', 'TopoMAP', 'msDM', title=f'MLE id ({mle_low_key})')
-            ax = fig.add_subplot(gs[1, 3]); _embedding(ax, mle_high_key if mle_high_key else 'spectral_radius', 'TopoMAP', 'msDM', title=f'MLE id ({mle_high_key})')
+            ax_h1 = fig.add_subplot(gs[1, 0]); _plot_heatmap(ax_h1, corr_raw, "Gene–gene corr (raw)")
+            ax_h2 = fig.add_subplot(gs[1, 1]); _plot_heatmap(ax_h2, corr_imp, "Gene–gene corr (imputed @ best t)")
 
-            fig.suptitle("Eigenspectrum and intrinsic dimensionality (msDM)", y=0.98, fontsize=12)
+            sub = gs[:, 2].subgridspec(2, 1, hspace=0.10)
+            ax = fig.add_subplot(sub[1, 0])
+            ax.set_title("Imputation QC score across t", fontsize=10)
+            df_stats = iqc.get("stats", None)
+            best_t = iqc.get("best_t", None)
+            if isinstance(df_stats, pd.DataFrame) and not df_stats.empty:
+                xs = df_stats["t"].to_numpy()
+                ys = df_stats["score_mean_abs_corr"].to_numpy()
+                nul = df_stats["null_mean"].to_numpy()
+                ax.plot(xs, ys, marker='o', linewidth=1.2, label='obs |mean|corr|')
+                ax.plot(xs, nul, marker='o', linewidth=1.0, linestyle='--', label='null mean')
+                if best_t is not None:
+                    ax.axvline(float(best_t), color='k', linewidth=0.8, linestyle=':')
+                ax.set_xlabel("t (diffusion steps)")
+                ax.set_ylabel("mean |corr|", fontsize=9)
+                ax.tick_params(axis='y', labelsize=0)
+                ax.legend(frameon=False, fontsize=8)
+            else:
+                ax.axis('off'); ax.text(0.5, 0.5, "No QC stats", ha='center', va='center')
+
+            ax_exp = fig.add_axes([0.06, 0.06, 0.88, 0.06]); ax_exp.axis('off')
+            ax_exp.text(0.0, 0.5,
+                        "Imputation uses diffusion (P^t) on the TopOMetry graph to denoise expression. "
+                        "QC compares mean absolute gene–gene correlations against null (per-gene permutations) across t. "
+                        "Best t minimizes the empirical null p-value (ties broken by max z-score).",
+                        fontsize=9, va='center')
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== PAGE 8: SIMULATED DISEASE-STATE FILTERING =====
+            for tmp in ['_gene_raw','_gene_imputed']:
+                if tmp in adata.obs: del adata.obs[tmp]
+
+            # ===== PART 8: SIMULATED DISEASE-STATE FILTERING =====
             keys_for_signals = list(signal_plot_keys) if signal_plot_keys else []
             if not keys_for_signals:
                 rng = np.random.default_rng(7)
                 cluster_key = None
-                for k in ['topo_clusters'] + [c for c in adata.obs.columns if c.startswith('topo_clusters_res')] + ['leiden']:
-                    if k in adata.obs:
-                        cluster_key = k
-                        break
+                keys = ['topo_clusters'] + [c for c in adata.obs.columns if c.startswith('topo_clusters_res')]
+                if len(keys)>1:
+                    if keys[-1] in adata.obs:
+                        cluster_key = keys[-1]
+                else:
+                    for k in keys:
+                        if k in adata.obs:
+                            cluster_key = k
+                            break
                 if cluster_key is None:
                     adata.obs['_all'] = pd.Categorical(['all'] * adata.n_obs)
                     cluster_key = '_all'
@@ -2395,7 +2458,7 @@ if _HAVE_SCANPY:
                 for c in pick:
                     idx = np.where(labels.values == c)[0]
                     if idx.size == 0: continue
-                    ksel = int(round(0.65 * idx.size))
+                    ksel = int(round(0.7 * idx.size))
                     chosen = rng.choice(idx, size=max(1, min(ksel, idx.size)), replace=False)
                     mask[chosen] = True
                 sim_key = "_simulated_state_for_example"
@@ -2430,13 +2493,12 @@ if _HAVE_SCANPY:
                 adata.obs['_gf_rand_flt'] = rand_flt
 
                 fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-                gs = fig.add_gridspec(2, 3, left=0.04, right=0.98, top=0.95, bottom=0.10, wspace=0.25, hspace=0.35)
+                gs = fig.add_gridspec(1, 3, left=0.04, right=0.98, top=0.95, bottom=0.10, wspace=0.1, hspace=0.35)
                 ax = fig.add_subplot(gs[0, 0]); _embedding(ax, sig_key,       'TopoMAP', 'msDM', title='Simulated disease state', legend_loc=None)
                 ax = fig.add_subplot(gs[0, 1]); _embedding(ax, '_gf_cat_raw', 'TopoMAP', 'msDM', title='Noisy categorical readout', cmap='coolwarm')
                 ax = fig.add_subplot(gs[0, 2]); _embedding(ax, '_gf_cat_flt', 'TopoMAP', 'msDM', title='Graph-filtered readout',   cmap='coolwarm')
-                ax = fig.add_subplot(gs[1, 0]); ax.axis('off')
-                ax = fig.add_subplot(gs[1, 1]); _embedding(ax, '_gf_rand_raw','TopoMAP', 'msDM', title='Random discrete (Bernoulli)', cmap='coolwarm')
-                ax = fig.add_subplot(gs[1, 2]); _embedding(ax, '_gf_rand_flt','TopoMAP', 'msDM', title='Filtered random discrete',   cmap='coolwarm')
+                plt.tight_layout()
+                fig.suptitle(f"Simulated disease-state filtering")
                 pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
                 for tmp in ['_gf_cat_raw','_gf_cat_flt','_gf_rand_raw','_gf_rand_flt']:
@@ -2539,78 +2601,7 @@ if _HAVE_SCANPY:
             #     ax.axis('off'); ax.text(0.5, 0.5, "Pseudotime colors unavailable", ha='center', va='center')
             # pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
-            # ===== PAGE 11: IMPUTATION =====
-            fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
-            gs = fig.add_gridspec(2, 3, left=0.04, right=0.98, top=0.88, bottom=0.18, wspace=0.28, hspace=0.38)
-            g = gene_for_imputation or (adata.var_names[0] if len(adata.var_names) else None)
 
-            if g is not None and g in adata.var_names and ('topo_imputation' in adata.layers):
-                gi = adata.var_names.get_loc(g)
-                X_csr = adata.X.tocsr(copy=False) if sp.issparse(adata.X) else sp.csr_matrix(np.asarray(adata.X))
-                X_imp = adata.layers['topo_imputation']
-                raw = (X_csr[:, gi].toarray().ravel() if sp.issparse(X_csr) else np.asarray(X_csr[:, gi]).ravel())
-                imp = (X_imp[:, gi].toarray().ravel() if sp.issparse(X_imp) else np.asarray(X_imp[:, gi]).ravel())
-                adata.obs['_gene_raw'] = raw
-                adata.obs['_gene_imputed'] = imp
-                ax = fig.add_subplot(gs[0, 0]); _embedding(ax, '_gene_raw',     'TopoMAP', 'msDM', title=f'Raw: {g}',     cmap='Reds')
-                ax = fig.add_subplot(gs[0, 1]); _embedding(ax, '_gene_imputed', 'TopoMAP', 'msDM', title=f'Imputed: {g}', cmap='Reds')
-            else:
-                for slot in [gs[0, 0], gs[0, 1]]:
-                    ax = fig.add_subplot(slot); ax.axis('off'); ax.text(0.5, 0.5, "Imputation layer or gene missing", ha='center', va='center')
-
-            iqc = adata.uns.get("imputation_qc", {})
-            corr_raw = iqc.get("corr_raw", None)
-            corr_imp = iqc.get("corr_imp_best", None)
-            genes = iqc.get("heatmap_genes", None)
-
-            def _plot_heatmap(ax, C, title):
-                ax.set_title(title, fontsize=10)
-                if C is None:
-                    ax.axis('off'); ax.text(0.5, 0.5, "N/A", ha='center', va='center'); return
-                im = ax.imshow(C, vmin=-1, vmax=1, cmap='coolwarm', interpolation='nearest', aspect='auto')
-                ax.tick_params(axis='x', labelsize=6); ax.tick_params(axis='y', labelsize=6)
-                if genes is not None and len(genes) == C.shape[0] and C.shape[0] <= 50:
-                    ax.set_xticks(np.arange(len(genes))); ax.set_yticks(np.arange(len(genes)))
-                    ax.set_xticklabels(genes, rotation=90); ax.set_yticklabels(genes)
-                else:
-                    ax.set_xticks([]); ax.set_yticks([])
-                from mpl_toolkits.axes_grid1 import make_axes_locatable
-                div = make_axes_locatable(ax); cax = div.append_axes("right", size="3%", pad=0.15)
-                cb = plt.colorbar(im, cax=cax); cb.ax.tick_params(labelsize=6)
-
-            ax_h1 = fig.add_subplot(gs[1, 0]); _plot_heatmap(ax_h1, corr_raw, "Gene–gene corr (raw)")
-            ax_h2 = fig.add_subplot(gs[1, 1]); _plot_heatmap(ax_h2, corr_imp, "Gene–gene corr (imputed @ best t)")
-
-            sub = gs[:, 2].subgridspec(2, 1, hspace=0.10)
-            ax = fig.add_subplot(sub[1, 0])
-            ax.set_title("Imputation QC score across t", fontsize=10)
-            df_stats = iqc.get("stats", None)
-            best_t = iqc.get("best_t", None)
-            if isinstance(df_stats, pd.DataFrame) and not df_stats.empty:
-                xs = df_stats["t"].to_numpy()
-                ys = df_stats["score_mean_abs_corr"].to_numpy()
-                nul = df_stats["null_mean"].to_numpy()
-                ax.plot(xs, ys, marker='o', linewidth=1.2, label='obs |mean|corr|')
-                ax.plot(xs, nul, marker='o', linewidth=1.0, linestyle='--', label='null mean')
-                if best_t is not None:
-                    ax.axvline(float(best_t), color='k', linewidth=0.8, linestyle=':')
-                ax.set_xlabel("t (diffusion steps)")
-                ax.set_ylabel("mean |corr|", fontsize=9)
-                ax.tick_params(axis='y', labelsize=0)
-                ax.legend(frameon=False, fontsize=8)
-            else:
-                ax.axis('off'); ax.text(0.5, 0.5, "No QC stats", ha='center', va='center')
-
-            ax_exp = fig.add_axes([0.06, 0.06, 0.88, 0.06]); ax_exp.axis('off')
-            ax_exp.text(0.0, 0.5,
-                        "Imputation uses diffusion (P^t) on the TopOMetry graph to denoise expression. "
-                        "QC compares mean absolute gene–gene correlations against null (per-gene permutations) across t. "
-                        "Best t minimizes the empirical null p-value (ties broken by max z-score).",
-                        fontsize=9, va='center')
-            pdf.savefig(fig, dpi=dpi); plt.close(fig)
-
-            for tmp in ['_gene_raw','_gene_imputed']:
-                if tmp in adata.obs: del adata.obs[tmp]
 
             # ===== PAGE 12: topometry SUMMARY (stacked, no overlap) =====
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
@@ -2763,7 +2754,7 @@ if _HAVE_SCANPY:
             pdf.savefig(fig, dpi=dpi)
             plt.close(fig)
 
-
+        print("Report saved at:", output_dir + filename)
 
         return pdf_path
 
@@ -2943,7 +2934,7 @@ if _HAVE_SCANPY:
             ),
             categorical_plot_keys=categorical_plot_keys,
         )
-
+        
         return tg, pdf_path
 
 
