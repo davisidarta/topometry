@@ -33,16 +33,6 @@ if _HAVE_SCANPY:
     )
     from topo.tpgraph.intrinsic_dim import IntrinsicDim
 
-    # Geometry metrics
-    from topo.eval.topo_metrics import (
-            rank_diffusion_correlation,
-            diffusion_knn_preservation,
-            rowwise_js_similarity,
-            sparse_neighborhood_f1,
-            spectral_procrustes,
-            topo_preserve_score,
-        )
-
 
     # -----------------------
     # Helpers (internal API)
@@ -280,6 +270,81 @@ if _HAVE_SCANPY:
             ax.tick_params(axis='y', labelleft=False)
         _one(ax_fsa, 'fsa')
         _one(ax_mle, 'mle')
+
+    def _heatmap(data, row_labels, col_labels, ax=None, cbar_kw=None, cbarlabel="", **kwargs):
+        if ax is None: ax = plt.gca()
+        if cbar_kw is None: cbar_kw = {}
+        im = ax.imshow(data, **kwargs)
+        cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+        cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+        ax.set_xticks(np.arange(data.shape[1]), labels=col_labels)
+        ax.set_yticks(np.arange(data.shape[0]), labels=row_labels)
+        ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
+        plt.setp(ax.get_xticklabels(), rotation=-40, ha="right", rotation_mode="anchor")
+        for spine in ax.spines.values(): spine.set_visible(False)
+        ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+        ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+        ax.grid(which="minor", color="w", linestyle='-', linewidth=2)
+        ax.tick_params(which="minor", bottom=False, left=False)
+        return im, cbar
+
+
+    def _plot_eval_heatmap(df_eval, out_png=None, title="Geometry Preservation"):
+        if df_eval is None or len(df_eval) == 0:
+            return
+
+        cols = [c for c in ["PF1", "PJS", "SP"] if c in df_eval.columns]
+        if not cols:
+            return
+
+        df_show = df_eval.copy()
+        M = df_show[cols].astype(float).values
+        reps = df_show["representation"].astype(str).tolist()
+
+        fig, ax = plt.subplots(
+            figsize=(max(6, 0.75*len(cols)+2), max(4, 0.4*len(reps)+2)),
+            dpi=150,
+            facecolor="white"
+        )
+        ax.set_facecolor("white")
+
+        # Heatmap
+        im, cbar = _heatmap(
+            M, reps, cols, ax=ax, cmap="viridis", cbarlabel="Score (0–1)"
+        )
+
+        # Remove grid (minor ticks)
+        ax.grid(False)
+        ax.set_xticks(np.arange(M.shape[1]))
+        ax.set_yticks(np.arange(M.shape[0]))
+
+        # Annotate values with reversed text color logic
+        def _annotate_heatmap_reversed(im, data=None, valfmt="{x:.3f}", textcolors=("white","black"), threshold=None, **textkw):
+            if data is None:
+                data = im.get_array()
+            if threshold is None:
+                threshold = np.nanmax(data) / 2.0
+            kw = dict(horizontalalignment="center", verticalalignment="center")
+            kw.update(textkw)
+            texts = []
+            for i in range(data.shape[0]):
+                for j in range(data.shape[1]):
+                    color_idx = int(data[i, j] > threshold)  # flipped back
+                    kw.update(color=textcolors[color_idx])
+                    text = im.axes.text(j, i, valfmt.format(x=data[i, j]), **kw)
+                    texts.append(text)
+            return texts
+
+        _annotate_heatmap_reversed(im, data=M, valfmt="{x:.3f}", fontsize=8)
+
+        ax.set_title(title, fontsize=12, pad=12)
+        fig.tight_layout()
+        plt.show()
+        if out_png is not None:
+            fig.savefig(out_png, dpi=150, facecolor="white")
+            print(f"[plot] Saved heatmap → {out_png}")
+        plt.close(fig)
+
 
     # ---------- PaCMAP ensuring ----------
     def _ensure_pacmap(tg: TopOGraph):
@@ -547,16 +612,6 @@ if _HAVE_SCANPY:
                 _safe_set_obsm(adata, key, Y)
 
 
-        # Default alias
-        if adata.obsm.get('X_msTopoMAP', None) is not None:
-            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_msTopoMAP'])
-        if adata.obsm.get('X_TopoMAP', None) is not None:
-            _safe_set_obsm(adata, 'X_TopoMAP_default', adata.obsm['X_TopoMAP'])
-        if adata.obsm.get('X_msTopoPaCMAP', None) is not None:
-            _safe_set_obsm(adata, 'X_TopoPaCMAP_default', adata.obsm['X_msTopoPaCMAP'])
-        if adata.obsm.get('X_TopoPaCMAP', None) is not None:
-            _safe_set_obsm(adata, 'X_TopoPaCMAP_default', adata.obsm['X_TopoPaCMAP'])
-
         # --- refined Markov operators (DM + msDM)
         _safe_set_obsp(adata, 'topometry_connectivities', getattr(tg, 'P_of_Z', None))
         _safe_set_obsp(adata, 'topometry_connectivities_ms', getattr(tg, 'P_of_msZ', None))
@@ -588,196 +643,204 @@ if _HAVE_SCANPY:
     def evaluate_representations(
         adata,
         tg,
+        return_df: bool = False,
+        print_results: bool = False,
+        plot_results: bool = True,
+        plot_path: str | None = None,
         *,
-        k_local: int = 30,
-        times: tuple = (1, 2, 4, 8),
-        r: int = 64,
-        symmetric_hint: bool = False,
-        verbose: bool = True,
+        # operator construction
+        metric: str = "euclidean",
+        n_neighbors: int = 30,
+        backend: str = "hnswlib",
+        n_jobs: int = -1,
+        # evaluation hyperparams
+        times = (1, 2, 4),
+        r: int = 32,
+        k_for_pf1: int = None,
+        symmetric_hint: bool = True,
+        # pretty printing
+        strip_obsm_prefix: str = "X_",
     ):
         """
-        Build diffusion operators for reference X (layers['scaled'] if available, else X)
-        and for every 2-D representation in adata.obsm, then compute preservation metrics.
-        Stores a DataFrame in adata.uns['topometry_representation_eval'] and returns it.
+        Evaluate all representations in `adata.obsm` by comparing their induced
+        diffusion operator to the reference operator `tg.base_kernel.P`.
+
+        Uses `topo_preserve_score` (PF1, PJS, SP, CT) and also
+        reports spectral similarity diagnostics and the raw CT trace gap.
+
+        Parameters
+        ----------
+        adata : AnnData
+            Must contain one or more embeddings/representations in .obsm.
+        tg : TopOGraph (fitted)
+            Provides the reference diffusion operator via `tg.base_kernel.P`.
+        return_df : bool, default=False
+            If True, returns a DataFrame with the results.
+        print_results : bool, default=False
+            If True, prints a table with the results.
+        plot_results : bool, default=True
+            If True, plots a heatmap with the results.
+        metric : str, default="euclidean"
+            Distance used to build the operator on each representation.
+        n_neighbors : int, default=30
+            Graph degree used to build each representation's operator.
+        backend : str, default="nmslib"
+            ANN backend for kNN graph construction in `get_P`.
+        n_jobs : int, default=-1
+            Parallelism for neighbor search where supported.
+        times : tuple(int), default=(1,2,4)
+            Diffusion times for Spectral Procrustes (SP).
+        r : int, default=32
+            Leading eigenpairs for spectral metrics.
+        k_for_pf1 : int or None, default=None
+            Top-k used by PF1; if None, each row uses its native sparsity.
+        symmetric_hint : bool, default=True
+            Hint for eigensolvers (operators are symmetrized inside).
+        strip_obsm_prefix : str, default="X_"
+            Purely cosmetic: removes this prefix when printing column headers.
+
+        Prints
+        ------
+        A table with columns = embeddings in `adata.obsm` (header stripped),
+        and rows for:
+        • PF1 (↑)
+        • PJS (↑)
+        • SP  (↑)
+        • CT-gap (↓)                   [raw |trace(L_X^+) − trace(L_Y^+)|]
         """
         import numpy as np
-        import pandas as pd
-        import scipy.sparse as sp
-        from sklearn.neighbors import NearestNeighbors
+        from scipy.sparse import csr_matrix, issparse
 
-        # metrics we will still reuse from the module
         from topo.eval.topo_metrics import (
-            rank_diffusion_correlation,
-            diffusion_knn_preservation,
-            sparse_neighborhood_f1,
-            rowwise_js_similarity,
-            diffusion_coordinates,   # we reuse this in the fixed Procrustes
-            _top_eigs_of_P,          # reuse stable eigen helper
-            _ensure_csr,
+            topo_preserve_score,
+            spectral_similarity,
+            commute_time_trace_gap,
+            get_P,
         )
 
-        # ---- helper: kNN diffusion operator (local scaling, symmetrize, row-stochastic)
-        def _knn_diffusion_operator(X, k=30, metric="euclidean"):
-            X = np.asarray(X)
-            n = X.shape[0]
-            k = min(k, n - 1)
-            nbrs = NearestNeighbors(n_neighbors=k + 1, metric=metric)
-            nbrs.fit(X)
-            dists, inds = nbrs.kneighbors(X, return_distance=True)  # (n, k+1) includes self
-            # exclude self
-            dists = dists[:, 1:]; inds = inds[:, 1:]
-            # local scales via distance to k-th neighbor
-            sigma_i = np.maximum(dists[:, -1], np.percentile(dists[:, -1], 5))
-            sigma_i[sigma_i <= 1e-12] = np.median(sigma_i[sigma_i > 0]) if np.any(sigma_i > 0) else 1.0
-            rows = np.repeat(np.arange(n), k)
-            cols = inds.reshape(-1)
-            dij2 = (dists.reshape(-1) ** 2)
-            sig_prod = np.repeat(sigma_i, k) * sigma_i[cols]
-            w = np.exp(-dij2 / (sig_prod + 1e-12))
-            A = sp.csr_matrix((w, (rows, cols)), shape=(n, n))
-            A = 0.5 * (A + A.T)
-            A.eliminate_zeros()
-            rs = np.asarray(A.sum(axis=1)).ravel()
-            rs[rs <= 0] = 1e-12
-            P = A.multiply(1.0 / rs[:, None]).tocsr()
-            P.eliminate_zeros()
-            return P
+        # -----------------------------
+        # 0) Reference operator (CSR)
+        # -----------------------------
+        PX_ref = tg.base_kernel.P
+        if not issparse(PX_ref):
+            PX_ref = csr_matrix(PX_ref)
 
-        # ---- local, fixed Spectral Procrustes (no undefined r_use)
-        def _spectral_procrustes_fixed(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False):
-            # eigenpairs
-            wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
-            wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
-            # choose r_use safely (skip trivial first)
-            r_use = int(max(1, min(Vx.shape[1] - 1, Vy.shape[1] - 1, 32)))
-            scores = []
-            for t in times:
-                Phix = diffusion_coordinates(wx, Vx, t, drop_first=True, r_use=r_use, normalize_cols=True)
-                Phiy = diffusion_coordinates(wy, Vy, t, drop_first=True, r_use=r_use, normalize_cols=True)
-                # mean-center
-                Phix = Phix - Phix.mean(0, keepdims=True)
-                Phiy = Phiy - Phiy.mean(0, keepdims=True)
-                # orthogonal Procrustes
-                # we can use np.linalg.lstsq on the cross-covariance to get R via SVD
-                C = Phiy.T @ Phix
-                U, _, VT = np.linalg.svd(C, full_matrices=False)
-                R = U @ VT
-                Yhat = Phiy @ R
-                sse = np.sum((Phix - Yhat) ** 2)
-                sst = np.sum(Phix ** 2)
-                r2 = 1.0 - (sse / (sst + 1e-12))
-                scores.append(float(r2))
-            return float(np.nanmean(scores))
+        # -----------------------------
+        # 1) Iterate over all obsm reps
+        # -----------------------------
+        obsm_keys = list(adata.obsm_keys())
 
-        # ---- local composite (TopoPreserve) using the fixed SP
-        def _topo_preserve_score_fixed(
-            Px, Py,
-            times=(1, 2, 4, 8),
-            k_local=30,
-            r=64,
-            symmetric_hint=False,
-            weights=dict(RDC=0.35, DkNP=0.25, PF1=0.15, PJS=0.15, SP=0.10),
-            k_for_pf1=None,
-        ):
-            # Global
-            rdc = rank_diffusion_correlation(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)  # [-1,1]
-            rdc01 = 0.5 * (rdc + 1.0)
-            # Local
-            dknp = diffusion_knn_preservation(Px, Py, times=times, r=r, k=k_local, symmetric_hint=symmetric_hint)  # [0,1]
-            # Operator-level
-            pf1 = sparse_neighborhood_f1(_ensure_csr(Px), _ensure_csr(Py), k=k_for_pf1)  # [0,1]
-            pjs = rowwise_js_similarity(_ensure_csr(Px), _ensure_csr(Py))                # ~[0,1]
-            # Spectral Procrustes (fixed)
-            spR2 = _spectral_procrustes_fixed(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)
-            sp01 = max(0.0, min(1.0, spR2))
-            # weighted sum (skip NaNs)
-            parts = dict(RDC=rdc01, DkNP=dknp, PF1=pf1, PJS=pjs, SP=sp01)
-            acc, wsum = 0.0, 0.0
-            for k, w in weights.items():
-                v = parts.get(k, np.nan)
-                if np.isfinite(v):
-                    acc += w * v
-                    wsum += w
-            return float(acc / (wsum + 1e-12)), parts
+        tp_score   = {}  # composite TopoPreserve score
+        parts_all  = {}  # PF1, PJS, SP, CT_score (+ we’ll also keep CT_gap)
+        spec_evW1  = {}  # spectral eigenvalue W1 (lower better)
+        spec_cos   = {}  # spectral subspace cosine   (higher better)
+        ct_gap_all = {}  # commute-time trace gap     (lower better)
 
-        # ---- reference operator from scaled layer (or X)
-        if "scaled" in adata.layers:
-            X_ref = adata.layers["scaled"]
-            if verbose:
-                print("[topometry] evaluate_representations: using adata.layers['scaled'] as reference.")
-        else:
-            X_ref = adata.X
-            if verbose:
-                print("[topometry] WARNING: 'scaled' layer not found. Using adata.X as reference.")
-        try:
-            P_ref = _knn_diffusion_operator(X_ref, k=k_local, metric="euclidean")
-        except Exception as e:
-            raise RuntimeError(f"Failed to build reference diffusion operator: {e}")
+        for key in obsm_keys:
+            Y = adata.obsm[key]  # (n, d)
 
-        # ---- collect candidate 2-D embeddings
-        def _is_valid_2d(Y):
-            try:
-                Y = np.asarray(Y)
-                return (Y.ndim == 2) and (Y.shape[1] == 2) and (Y.shape[0] == adata.n_obs)
-            except Exception:
-                return False
+            # Build diffusion operator for this representation
+            PY = get_P(
+                Y,
+                metric=metric,
+                n_neighbors=n_neighbors,
+                backend=backend,
+                n_jobs=n_jobs,
+            )
+            if not issparse(PY):
+                PY = csr_matrix(PY)
 
-        obsm_keys = [k for k, v in adata.obsm.items() if _is_valid_2d(v)]
-        if verbose:
-            print(f"[topometry] Found {len(obsm_keys)} 2-D embeddings for evaluation.")
+            # Composite score + parts (PF1, PJS, SP, CT_score)
+            score, parts = topo_preserve_score(
+                PX_ref, PY,
+                times=times,
+                r=r,
+                symmetric_hint=symmetric_hint,
+                k_for_pf1=k_for_pf1,
+            )
+            tp_score[key]  = score
+            parts_all[key] = parts  # contains PF1, PJS, SP, CT_score, CT_gap, CT_traces
+
+            # Spectral similarity diagnostics
+            spec = spectral_similarity(PX_ref, PY, r=r, symmetric_hint=symmetric_hint, return_details=True)
+            spec_evW1[key] = spec['eigenvalue_w1']
+            spec_cos[key]  = spec['subspace_cos']
+
+            # Raw commute-time trace gap (for visibility)
+            ct_gap_all[key] = parts['CT_gap']  # equivalent to commute_time_trace_gap(PX_ref, PY, r=r, symmetric_hint=symmetric_hint)
+
+        # -----------------------------
+        # 2) Pretty print as a table
+        # -----------------------------
+        def nice(name):
+            return name[len(strip_obsm_prefix):] if strip_obsm_prefix and name.startswith(strip_obsm_prefix) \
+                else name
+
+        cols = [nice(k) for k in obsm_keys]
+
+        def row_from_dict(title, dct, fmt="{:.3f}"):
+            vals = []
+            for k in obsm_keys:
+                v = dct.get(k, np.nan)
+                vals.append(fmt.format(v) if (v is not None and np.isfinite(v)) else "nan")
+            return title, vals
 
         rows = []
-        for key in obsm_keys:
-            label = key.replace("X_", "")
-            try:
-                P_y = _knn_diffusion_operator(adata.obsm[key], k=k_local, metric="euclidean")
-            except Exception as e:
-                if verbose:
-                    print(f"[topometry] Skipping {key}: failed to build diffusion operator ({e}).")
-                continue
+        rows.append(row_from_dict("PF1@k   (set overlap)      (↑)         ", {k: parts_all[k]['PF1']       for k in obsm_keys}))
+        rows.append(row_from_dict("PJS     (1 - JS rows)      (↑)         ", {k: parts_all[k]['PJS']       for k in obsm_keys}))
+        rows.append(row_from_dict("SP      (Procrustes R²)    (↑)         ", {k: parts_all[k]['SP']        for k in obsm_keys}))
+        rows.append(row_from_dict("CT-gap  |trace(L⁺) diff|   (↓)         ", ct_gap_all, fmt="{:.4f}"))
 
-            try:
-                comp, parts = _topo_preserve_score_fixed(
-                    P_ref, P_y,
-                    times=times,
-                    k_local=k_local,
-                    r=r,
-                    symmetric_hint=symmetric_hint,
-                    k_for_pf1=None,
-                )
-                # compute individual metrics explicitly as well for reporting
-                rdc = rank_diffusion_correlation(P_ref, P_y, times=times, r=r, symmetric_hint=symmetric_hint)
-                dknp = diffusion_knn_preservation(P_ref, P_y, times=times, r=r, k=k_local, symmetric_hint=symmetric_hint)
-                pf1 = sparse_neighborhood_f1(P_ref, P_y, k=None)
-                pjs = rowwise_js_similarity(P_ref, P_y)
-                spR2 = _spectral_procrustes_fixed(P_ref, P_y, times=times, r=r, symmetric_hint=symmetric_hint)
+        col_widths = [max(len(c), 9) for c in cols]
+        row_name_w = max(38, max(len(r[0]) for r in rows))  # keep row titles aligned
 
-                rows.append({
-                    "representation": label,
-                    "TopoPreserve": float(comp),
-                    "RDC": float(0.5 * (rdc + 1.0)),  # map [-1,1]→[0,1] for display
-                    "DkNP": float(dknp),
-                    "PF1": float(pf1),
-                    "PJS": float(pjs),
-                    "SP": float(max(0.0, min(1.0, spR2))),
-                })
-            except Exception as e:
-                if verbose:
-                    print(f"[topometry] Skipping {key}: metric computation failed ({e}).")
-                continue
+        header = " " * row_name_w + " | " + " | ".join(c.ljust(w) for c, w in zip(cols, col_widths))
+        sep    = "-" * len(header)
 
-        if not rows:
-            if verbose:
-                print("[topometry] No evaluation rows were produced.")
-            df = pd.DataFrame(columns=["representation", "TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"])
+        if print_results:
+            print(sep)
+            print(header)
+            print(sep)
+            for name, vals in rows:
+                line = name.ljust(row_name_w) + " | " + " | ".join(v.ljust(w) for v, w in zip(vals, col_widths))
+                print(line)
+            print(sep)
+
+        # -----------------------------
+        # 3) Persist a proper per-representation metrics table
+        # -----------------------------
+
+        if not obsm_keys:
+            df = pd.DataFrame(columns=[
+                "representation", "PF1", "PJS", "SP", "CT_gap", 
+            ])
         else:
-            df = pd.DataFrame(rows).sort_values("TopoPreserve", ascending=False).reset_index(drop=True)
+            def nice_key(k):
+                return k[len(strip_obsm_prefix):] if strip_obsm_prefix and k.startswith(strip_obsm_prefix) else k
+
+            records = []
+            for k in obsm_keys:
+                parts = parts_all.get(k, {})
+                records.append({
+                    "representation": nice_key(k),
+                    "PF1":         float(parts.get("PF1", np.nan)),
+                    "PJS":         float(parts.get("PJS", np.nan)),
+                    "SP":          float(parts.get("SP", np.nan)),
+                    "CT_gap":      float(ct_gap_all.get(k, np.nan)),
+                })
+
+            df = pd.DataFrame.from_records(records)
+            if "PF1" in df.columns:
+                df = df.sort_values("PF1", ascending=False).reset_index(drop=True)
 
         adata.uns["topometry_representation_eval"] = df
-        return df
 
+        if plot_results:
+            _plot_eval_heatmap(df, out_png=plot_path)
+        if return_df:
+            return df
 
-
+    
 
     def plot_riemann_diagnostics(
         adata,
@@ -856,7 +919,7 @@ if _HAVE_SCANPY:
 
         L = tg.base_kernel.L
 
-        def _make_plot(Y, L, proj_key, proj_nick, show=show):
+        def _make_plot(Y, L, proj_key, proj_nick, show=show):            
             fig, axs = plt.subplots(1, 3, figsize=figsize, dpi=dpi)
             fig.suptitle(f"Riemannian diagnostics - {proj_nick}", fontsize=title_fontsize)
             # plot using the mapped colors directly (do not pass cmap)
@@ -977,7 +1040,7 @@ if _HAVE_SCANPY:
                         except Exception:
                             pass
             axs[2].set_title("Local contraction / expansion", fontsize=title_fontsize-2)
-            plt.gca().set_aspect('equal'); plt.tight_layout()
+            plt.gca().set_aspect('equal'); plt.subplots_adjust(wspace=0.05); plt.tight_layout()
             if show:
                 plt.show()      # optional for interactive use
                 plt.close(fig)  # close only this fig after showing
@@ -1564,80 +1627,6 @@ if _HAVE_SCANPY:
         }
 
 
-    def geometry_preservation(
-        adata: AnnData,
-        tg: TopOGraph | None = None,
-        *,
-        verbose: bool = False,
-    ):
-        """
-        Compute geometry-preservation metrics for ALL 2D/ND representations in adata.obsm.
-        Stores a formatted table in adata.uns['geometry_metrics_table'].
-        """
-        Px = _first_non_none(
-            adata.obsp.get('topometry_connectivities_ms', None),
-            adata.obsp.get('topometry_connectivities', None)
-        )
-        if Px is None:
-            adata.uns["geometry_metrics_table"] = None
-            if verbose:
-                print("[TopOMetry] Geometry metrics skipped: no connectivities found.")
-            return
-
-        # collect all candidate reps
-        reps = {}
-        for k, Y in adata.obsm.items():
-            if Y is None:
-                continue
-            try:
-                arr = np.asarray(Y)
-                if arr.ndim == 2 and arr.shape[0] == adata.n_obs and arr.shape[1] >= 2:
-                    reps[k] = arr
-            except Exception:
-                continue
-        # ensure scaffolds included if present
-        for k in ('X_spectral_scaffold', 'X_ms_spectral_scaffold'):
-            if k in adata.obsm:
-                reps[k] = adata.obsm[k]
-
-        # Build operators
-        Py_ops = {}
-        for name, Y in reps.items():
-            try:
-                Py_ops[name] = _rowstochastic_from_coords(Y, k=int(max(10, min(30, Px.shape[0]-1))))
-            except Exception:
-                continue
-
-        rows = []
-        for name, Py in Py_ops.items():
-            try:
-                rdc = rank_diffusion_correlation(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
-                dknp15 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=15)
-                dknp30 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=30)
-                dknp60 = diffusion_knn_preservation(Px, Py, times=(1,2,4,8), r=64, k=60 if Px.shape[0] > 60 else max(5, Px.shape[0]//20))
-                dknp = float(np.nanmean([dknp15, dknp30, dknp60]))
-                pf1 = sparse_neighborhood_f1(Px, Py, k=None)
-                pjs = rowwise_js_similarity(Px, Py)
-                spR2 = spectral_procrustes(Px, Py, times=(1,2,4,8), r=64, symmetric_hint=False)
-                comp, parts = topo_preserve_score(Px, Py, times=(1,2,4,8), k_local=30, r=64, symmetric_hint=False)
-                rows.append(dict(
-                    representation=name,
-                    RDC=rdc, DkNP=dknp, PF1=pf1, PJS=pjs, SP=spR2, Composite=comp
-                ))
-            except Exception:
-                continue
-
-        if rows:
-            df = pd.DataFrame(rows).set_index("representation").sort_index()
-            df_display = df.copy()
-            df_display["RDC"] = 0.5 * (df_display["RDC"] + 1.0)
-            adata.uns["geometry_metrics_table"] = df_display
-            if verbose:
-                print(df_display.round(3))
-        else:
-            adata.uns["geometry_metrics_table"] = None
-            if verbose:
-                print("[TopOMetry] Geometry metrics produced no rows.")
 
 
     # --------------------------------------
@@ -1755,7 +1744,7 @@ if _HAVE_SCANPY:
             heatmap_top_genes=impute_heatmap_top_genes,
         )
 
-        geometry_preservation(adata, tg, verbose=False)
+        evaluate_representations(adata, tg, return_df=False, print_results=False, plot_results=False)
 
         return adata, tg
 
@@ -1873,11 +1862,8 @@ if _HAVE_SCANPY:
             heatmap_top_genes=impute_heatmap_top_genes,
         )
 
-        geometry_preservation(adata, tg, verbose=False)
-
-        # --- NEW: evaluate geometry preservation for all 2-D representations
         try:
-            evaluate_representations(adata, tg)
+            evaluate_representations(adata, tg, plot_results=False)
         except Exception as e:
             print(f"[topometry] Representation evaluation failed: {e}")
 
@@ -2062,6 +2048,7 @@ if _HAVE_SCANPY:
         with PdfPages(pdf_path) as pdf:
             # ===== INTRO PAGE: Geometry Preservation Benchmarks =====
             df_eval = adata.uns.get("topometry_representation_eval", None)
+
             fig = plt.figure(figsize=a4_landscape_inches, dpi=dpi)
             ax = fig.add_axes([0.04, 0.12, 0.92, 0.80])
             ax.axis('off')
@@ -2069,32 +2056,111 @@ if _HAVE_SCANPY:
             title = "Geometry Preservation Benchmarks"
             ax.set_title(title, fontsize=14, pad=10, loc='left')
 
-            if df_eval is None or df_eval.empty:
+            if df_eval is None or (hasattr(df_eval, "empty") and df_eval.empty):
                 ax.text(0.0, 0.9, "No evaluation results found.", fontsize=11, va='top')
             else:
-                # Format a small table
-                # Ensure column order
-                cols = ["representation", "TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"]
-                show_df = df_eval.loc[:, [c for c in cols if c in df_eval.columns]].copy()
+                # ---- Normalize df into a tidy (reps × metrics) numeric table ----
+                _df = df_eval.copy()
 
-                # pretty formatting
-                for c in ["TopoPreserve", "RDC", "DkNP", "PF1", "PJS", "SP"]:
-                    if c in show_df.columns:
-                        show_df[c] = show_df[c].map(lambda x: f"{x:0.3f}" if pd.notnull(x) else "n/a")
+                # Two common shapes:
+                # (A) wide-by-rep with metric rows → columns = representations, index = metric names
+                # (B) long/tidy with 'representation' column and metric columns
+                if "representation" in _df.columns:
+                    # Keep only known metric columns; map friendly names with arrows later
+                    metric_cols = [c for c in ["PF1","PJS","SP","CT_gap"]
+                                if c in _df.columns]
+                    reps = _df["representation"].astype(str).tolist()
+                    M = _df.set_index("representation")[metric_cols]  # reps × metrics
+                else:
+                    # Assume rows are metric names; columns are representations
+                    # Make reps × metrics
+                    M = _df.T.copy()
+                    # Try to keep a consistent metric order if present
+                    metric_cols = [c for c in ["PF1","PJS","SP","CT_gap"]
+                                if c in M.columns]
 
-                # draw table
+                # If some expected metrics are missing, keep whatever is there
+                if not metric_cols:
+                    metric_cols = list(M.columns)
+
+                # Coerce to floats where possible
+                for c in metric_cols:
+                    M[c] = pd.to_numeric(M[c], errors="coerce")
+                M = M[metric_cols]
+
+                # Pretty row labels with arrows (↑/↓)
+                row_labels_map = {
+                    "PF1":             "PF1 (↑)",
+                    "PJS":             "PJS (↑)",
+                    "SP":              "SP (↑)",
+                    "CT_gap":          "CT-gap |trace(L⁺) diff| (↓)",
+                }
+                display_rows = [row_labels_map.get(c, c) for c in metric_cols]
+
+                # Determine best-per-column (bold the max for ↑, min for ↓)
+                # Build a boolean mask same shape as table: best_mask[i_row, j_col]
+                is_high_better = np.array([("(↓)" not in row_labels_map.get(c, "")) for c in metric_cols], dtype=bool)
+                data_vals = M.values.astype(float)
+                best_mask = np.zeros_like(data_vals, dtype=bool)
+                for j in range(data_vals.shape[0]):  # iterate rows? — careful: M is reps × metrics
+                    pass
+                # Correct orientation: table shows reps as rows and metrics as columns.
+                # data_vals shape = (n_reps, n_metrics). Iterate each metric (column).
+                best_mask = np.zeros_like(data_vals, dtype=bool)
+                for j in range(data_vals.shape[1]):
+                    col = data_vals[:, j]
+                    if np.all(~np.isfinite(col)):
+                        continue
+                    if is_high_better[j]:
+                        target = np.nanmax(col)
+                        winners = np.isclose(col, target, equal_nan=False)
+                    else:
+                        target = np.nanmin(col)
+                        winners = np.isclose(col, target, equal_nan=False)
+                    best_mask[:, j] = winners
+
+                # Format numbers
+                fmt_vals = np.empty_like(data_vals, dtype=object)
+                for i in range(data_vals.shape[0]):
+                    for j in range(data_vals.shape[1]):
+                        v = data_vals[i, j]
+                        fmt_vals[i, j] = f"{v:.3f}" if np.isfinite(v) else "n/a"
+
+                # Build table (representations as rows; metrics as columns with arrows)
+                reps = [str(r) for r in M.index.tolist()]
+                col_headers = display_rows
+
+                # Ensure column order and shorten long headers for display
+                cols_full = ["representation", "PF1", "PJS", "SP", "CT_gap"]
+                short_map = {
+                    "eigenvalue_w1": "eigW1",
+                    "subspace_cos":  "subspaceCos",
+                    "CT_gap":        "CT-gap",
+                }
+                present = [c for c in cols_full if c in df_eval.columns]
+                show_df = df_eval.loc[:, present].copy()
+                show_df.columns = [short_map.get(c, c) for c in show_df.columns]
+
+                # Pretty formatting for numeric columns in [0,1] (and CT-gap/eigW1 too)
+                num_cols = [c for c in show_df.columns if c != "representation"]
+                for c in num_cols:
+                    show_df[c] = show_df[c].map(lambda x: f"{x:0.3f}" if pd.notnull(x) else "n/a")
+
+                # Draw table, forcing it to stay within page borders
+                ax.set_position([0.02, 0.18, 0.98, 0.68])  # left, bottom, width, height — tighter band
                 tbl = ax.table(
                     cellText=show_df.values,
-                    colLabels=show_df.columns,
+                    colLabels=[f"$\\bf{{{h}}}$" for h in show_df.columns],  # bold headers
                     loc='center',
                     cellLoc='center',
                     colLoc='center',
+                    colWidths=[1.0 / len(show_df.columns)] * len(show_df.columns),  # fit to axes width
                 )
                 tbl.auto_set_font_size(False)
-                tbl.set_fontsize(9)
-                tbl.scale(1.0, 1.25)
+                tbl.set_fontsize(8)  # slightly smaller to avoid clipping
+                #tbl.scale(0.9, 1.15)  # leaner horizontally, modest row height
 
-                # style header row
+                # Light styling
                 for (row, col), cell in tbl.get_celld().items():
                     if row == 0:
                         cell.set_facecolor('#f0f0f0')
@@ -2103,24 +2169,70 @@ if _HAVE_SCANPY:
                     else:
                         cell.set_edgecolor('#dddddd')
                         cell.set_linewidth(0.5)
+                try:
+                    for j, col_name in enumerate(show_df.columns):
+                        if col_name == "representation":
+                            continue
+                        # numeric values for this column
+                        vals = pd.to_numeric(df_eval[present[j]], errors='coerce') if present[j] in df_eval.columns else pd.to_numeric(show_df[col_name], errors='coerce')
+                        if vals.notna().any():
+                            # For “higher is better” metrics
+                            higher_is_better = {"PF1","PJS","SP"}
+                            # For “lower is better”
+                            lower_is_better  = {"CT-gap"}
+                            if col_name in higher_is_better:
+                                idx = int(vals.idxmax())
+                            elif col_name in lower_is_better:
+                                idx = int(vals.idxmin())
+                            else:
+                                continue
+                            # +1 for header row
+                            cell = tbl[(idx + 1, j)]
+                            cell.set_text_props(fontweight='bold')
+                except Exception:
+                    pass
 
-                # brief legend (expanded & wrapped)
-                ax2 = fig.add_axes([0.04, 0.06, 0.92, 0.06])  # slightly taller band than before
+                # # Style header row + left row labels
+                # for (rc, cc), cell in tbl.get_celld().items():
+                #     # Header row is rc == 0 in mpl tables when colLabels are provided
+                #     if rc == 0:
+                #         cell.set_facecolor('#f0f0f0')
+                #         cell.set_edgecolor('#cccccc')
+                #         cell.set_linewidth(0.8)
+                #         cell.get_text().set_fontweight('bold')
+                #     # Row labels live at cc == -1
+                #     if cc == -1 and rc > 0:
+                #         cell.get_text().set_fontweight('bold')
+                #         cell.set_edgecolor('#dddddd')
+                #         cell.set_linewidth(0.5)
+                #     # Body cells
+                #     if rc > 0 and cc >= 0:
+                #         cell.set_edgecolor('#dddddd')
+                #         cell.set_linewidth(0.5)
+
+                # Bold the top-performers in each metric column
+                # Body cells start at rc >= 1; our mask is (n_reps, n_metrics)
+                # n_reps, n_metrics = data_vals.shape
+                # for i in range(n_reps):
+                #     for j in range(n_metrics):
+                #         if best_mask[i, j]:
+                #             cell = tbl[i+1, j]  # +1 because header row is 0
+                #             cell.get_text().set_fontweight('bold')
+
+                # Expanded legend (wrapped)
+                ax2 = fig.add_axes([0.04, 0.05, 0.92, 0.09])  # taller band; keep inside margins
                 ax2.axis('off')
                 legend = (
-                    "TopoPreserve is a composite in [0,1] (higher is better) combining:\n"
-                    "• RDC — Rank Diffusion Correlation: Spearman correlation of diffusion distances across multiple timescales; robust to monotone rescalings and summarizes global geometry preservation.\n"
-                    "• DkNP — Diffusion kNN Preservation: fraction of overlap between diffusion-space k-nearest neighbors; measures local neighborhood stability.\n"
-                    "• PF1 — Sparse Neighborhood F1: F1 score comparing the top-k transition supports (row-wise) of the diffusion operators; insensitive to weights, sensitive to support overlap.\n"
-                    "• PJS — Row-wise Jensen–Shannon Similarity: 1 − JS divergence between per-row transition distributions; compares operators directly (not just distances).\n"
-                    "• SP — Spectral Procrustes (R²): alignment quality of multiscale diffusion coordinates up to a rotation; captures coordinate-level consistency.\n"
-                    "All individual scores are mapped to [0,1] for comparability; TopoPreserve is a weighted average."
+                    "• PF1 — Sparse Neighborhood F1: overlap of the top-k transition supports per row; focuses on whether the same neighbors are kept in the operator (weights ignored).\n"
+                    "• PJS — Row-wise Jensen–Shannon Similarity: compares the *probability distributions* of transitions for each cell; sensitive to how mass is redistributed.\n"
+                    "• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n"
+                    "• CT-gap is the absolute difference |trace(L⁺_ref) − trace(L⁺_rep)| (lower is better). Arrows in the table indicate the desirable direction."
                 )
                 ax2.text(0.0, 0.5, legend, va='center', fontsize=9, wrap=True)
 
-
             pdf.savefig(fig, dpi=dpi)
             plt.close(fig)
+
 
             # ===== PAGES 1 & 2: CLUSTERING (2×3 grid) =====
             show_keys = _pick_three(res_keys)
@@ -2703,18 +2815,8 @@ if _HAVE_SCANPY:
         filtering_diffusion_t: int = 3,
         filtering_null_t: int = 1,
         filtering_null_K: int = 500,
-        # pseudotime
-        pseudotime_null_seeds: int = 200,
-        pseudotime_multiscale: bool = True,
-        pseudotime_k: int = 64,
-        # imputation
-        impute_t: int = 8,
-        impute_which: str = "msZ",
-        # ID page
-        id_methods: list[str] = ("fsa", "mle"),
-        id_k_values: list[int] | None = None,
         # --- Report / I/O ---
-        output_dir: str = "./topometry_report",
+        output_dir: str = ".",
         filename: str = "topometry_report.pdf",
         dpi: int = 300,
         a4_landscape_inches: tuple[float, float] = (11.69, 8.27),

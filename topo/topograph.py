@@ -15,18 +15,7 @@ from topo.tpgraph.kernels import Kernel
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
-from topo.eval.topo_metrics import (
-    topo_preserve_score,
-    rank_diffusion_correlation,
-    diffusion_knn_preservation,
-    diffusion_trustworthiness,
-    diffusion_continuity,
-    diffusion_rank_biased_overlap,
-    multiscale_diffusion_emd,
-    spectral_procrustes,
-    spectral_similarity,
-    commute_time_trace_gap,
-)
+
 
 class TopOGraph(BaseEstimator, TransformerMixin):
     """
@@ -111,7 +100,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     cache : bool (optional, default True)
         Cache Kernel / Eigen objects in dicts.
 
-    verbosity : int (optional, default 1)
+    verbosity : int (optional, default 0)
         0: silent; 1: major steps; 2+: include layout messages; 3: full debug for neighborhoods.
 
     random_state : int or np.random.RandomState (optional, default 42)
@@ -172,7 +161,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  eigensolver='arpack',
                  backend='hnswlib',
                  cache=True,
-                 verbosity=1,
+                 verbosity=0,
                  random_state=42,
                  # ID defaults (both methods computed; `id_method` selects the size used)
                  id_method='fsa',

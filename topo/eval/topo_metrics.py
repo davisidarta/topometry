@@ -76,56 +76,6 @@ def _upper_triangle_vec(M):
     i, j = np.triu_indices(M.shape[0], k=1)
     return M[i, j]
 
-def _knn_from_distance(D, k):
-    """Return indices of k nearest neighbors for each row (excluding self)."""
-    n = D.shape[0]
-    k = min(k, n-1)
-    # partial sort for scalability
-    idx = np.argpartition(D, kth=k, axis=1)[:, :k+1]  # includes self likely
-    # refine to get exact top-k by value, drop self
-    rows = np.arange(n)[:, None]
-    vals = D[rows, idx]
-    # remove self if present: set its distance to +inf then take top-k
-    mask_self = idx == rows
-    vals[mask_self] = np.inf
-    order = np.argsort(vals, axis=1)
-    sel = order[:, :k]
-    nbrs = idx[rows, sel]
-    return nbrs  # (n,k)
-
-def _row_js_divergence(p, q, eps=1e-12):
-    """JS divergence between two row vectors p,q that sum to 1 (dense 1D arrays)."""
-    p = np.asarray(p, dtype=float)
-    q = np.asarray(q, dtype=float)
-    p = p + eps; q = q + eps
-    p = p / p.sum(); q = q / q.sum()
-    m = 0.5*(p+q)
-    kl_pm = np.sum(p * (np.log(p) - np.log(m)))
-    kl_qm = np.sum(q * (np.log(q) - np.log(m)))
-    return 0.5*(kl_pm + kl_qm)
-
-def _row_union_dense(P_row, P_ind, Q_row, Q_ind, n=None, eps=1e-12):
-    """
-    Build dense aligned vectors over the union of supports of two sparse rows.
-    Returns p_vec, q_vec (same length), where each is probability-mass-aligned.
-    """
-    # supports
-    Su = np.union1d(P_ind, Q_ind)
-    # maps
-    mp = {c: i for i, c in enumerate(P_ind)}
-    mq = {c: i for i, c in enumerate(Q_ind)}
-    p = np.zeros(Su.size, dtype=float)
-    q = np.zeros(Su.size, dtype=float)
-    for j, col in enumerate(Su):
-        if col in mp:
-            p[j] = P_row[mp[col]]
-        if col in mq:
-            q[j] = Q_row[mq[col]]
-    # tiny prior + renormalize
-    p = p + eps; q = q + eps
-    p = p / p.sum(); q = q / q.sum()
-    return p, q, Su
-
 def _topk_support_from_row(data, ind, k):
     if k is None or k >= data.size:
         return set(ind.tolist())
@@ -351,141 +301,6 @@ def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, 
         scores.append(max(0.0, min(1.0, r2)))
     return float(np.nanmean(scores))
 
-# ----------------------------
-# 2) Local geometry
-# ----------------------------
-def diffusion_knn_preservation(Px, Py, times=(1, 2, 4, 8), r=64, k=30, symmetric_hint=False):
-    """
-    Local geometry agreement via diffusion-space kNN overlap.
-
-    Parameters
-    ----------
-    Px, Py : (n, n) csr_matrix or ndarray
-        Diffusion operators to compare.
-    times : tuple of int, default=(1,2,4,8)
-        Diffusion times; we average over t.
-    r : int, default=64
-        Eigenpairs for diffusion distances.
-    k : int, default=30
-        Number of nearest neighbors per node under diffusion distance.
-    symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
-
-    Returns
-    -------
-    score : float in [0, 1]
-        Average fraction of overlap of kNN sets per node across t. 1.0 means
-        perfect local preservation in diffusion space.
-
-    Notes
-    -----
-    - Rebuild kNN under D_t for each P and compare overlaps per node.
-    - More faithful to the Markov/diffusive geometry than raw Euclidean kNN.
-    """
-    wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
-    wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
-    n = Px.shape[0]
-    vals = []
-    for t in times:
-        Dx = diffusion_distance_from_eigs(wx, Vx, t)
-        Dy = diffusion_distance_from_eigs(wy, Vy, t)
-        Nx = _knn_from_distance(Dx, k)
-        Ny = _knn_from_distance(Dy, k)
-        overlap = [(len(set(Nx[i]).intersection(set(Ny[i]))) / float(k)) for i in range(n)]
-        vals.append(np.mean(overlap))
-    return float(np.mean(vals))
-
-def diffusion_trustworthiness(Px, Py, times=(1,2,4,8), r=64, k=30, symmetric_hint=False):
-    """
-    Trustworthiness metric in diffusion space.
-
-    Parameters
-    ----------
-    Px, Py : (n, n) csr_matrix or ndarray
-        Diffusion operators. Px is the reference ("high-dimensional" diffusion),
-        Py is the test representation ("low-dimensional" diffusion).
-    times : tuple of int, default=(1,2,4,8)
-        Diffusion timescales for evaluation.
-    r : int, default=64
-        Number of eigenpairs used for diffusion distances.
-    k : int, default=30
-        Number of neighbors per node to consider.
-    symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
-
-    Returns
-    -------
-    trust : float in [0,1]
-        Average trustworthiness score across timescales. Higher is better.
-
-    Notes
-    -----
-    - Trustworthiness penalizes points that are *false neighbors* in the
-      low-dimensional space: nodes that appear in the kNN set of Py but are far
-      in Px.
-    - Computed in the diffusion space, not raw Euclidean.
-    - Values close to 1 indicate that low-dimensional neighborhoods contain few
-      false positives relative to diffusion neighborhoods in Px.
-    """
-
-    def _trust(D_high, D_low, k):
-        n = D_high.shape[0]
-        # ranks (argsort twice to get rank indices)
-        R_high = np.argsort(np.argsort(D_high, axis=1), axis=1)
-        R_low = np.argsort(np.argsort(D_low, axis=1), axis=1)
-        t_sum = 0.0
-        for i in range(n):
-            # neighbors in low space (exclude self rank 0)
-            nbrs_low = np.argsort(D_low[i])  # full order
-            nbrs_low = nbrs_low[nbrs_low != i][:k]
-            # penalty: those that are in low-k but rank_high > k
-            for j in nbrs_low:
-                rank_high = R_high[i, j]
-                if rank_high > k:
-                    t_sum += (rank_high - k)
-        denom = n * k * (2*n - 3*k - 1)
-        return 1.0 - (2.0 / denom) * t_sum
-    wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
-    wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
-    vals = []
-    for t in times:
-        Dx = diffusion_distance_from_eigs(wx, Vx, t)
-        Dy = diffusion_distance_from_eigs(wy, Vy, t)
-        vals.append(_trust(Dx, Dy, k))
-    return float(np.mean(vals))
-
-def diffusion_continuity(Px, Py, times=(1,2,4,8), r=64, k=30, symmetric_hint=False):
-    """
-    Continuity metric in diffusion space (reverse trustworthiness).
-
-    Parameters
-    ----------
-    Px, Py : (n, n) csr_matrix or ndarray
-        Diffusion operators. Px is treated as the "reference" (high-dimensional),
-        Py as the "embedding" (low-dimensional).
-    times : tuple of int, default=(1,2,4,8)
-        Diffusion timescales for evaluation.
-    r : int, default=64
-        Number of eigenpairs for diffusion distances.
-    k : int, default=30
-        Number of neighbors to consider.
-    symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
-
-    Returns
-    -------
-    cont : float in [0,1]
-        Continuity score averaged across timescales. Higher is better.
-
-    Notes
-    -----
-    - Continuity measures how well *high-dimensional neighbors* are recovered
-      in the low-dimensional representation.
-    - It is the counterpart of trustworthiness (which measures false neighbors).
-    - Computed here by reusing `diffusion_trustworthiness` with Px,Py swapped.
-    """
-
-    return diffusion_trustworthiness(Py, Px, times=times, r=r, k=k, symmetric_hint=symmetric_hint)
 
 def diffusion_rank_biased_overlap(Px, Py, times=(1,2,4,8), r=64, p=0.9, k_max=100, symmetric_hint=False):
     """
@@ -552,45 +367,116 @@ def diffusion_rank_biased_overlap(Px, Py, times=(1,2,4,8), r=64, p=0.9, k_max=10
         vals.append(np.mean(rbo_i) if rbo_i else np.nan)
     return float(np.nanmean(vals))
 
-# ----------------------------
-# 3) Operator-level similarity
-# ----------------------------
-def rowwise_js_similarity(Px, Py, eps=1e-12):
+def rowwise_js_similarity(Px, Py, eps: float = 1e-12, topk: int = None, return_per_row: bool = False):
     """
-    Operator-level similarity via row-wise Jensen–Shannon (JS) similarity.
+    Row-wise Jensen–Shannon (JS) similarity between two diffusion operators.
+
+    Given two (row-stochastic) operators Px and Py (csr_matrices or ndarrays),
+    we compare each row i as a discrete probability distribution over columns
+    (neighbors) and compute the Jensen–Shannon divergence JS(p_i, q_i).
+    We then report a bounded similarity in [0, 1] via:
+
+        JS-similarity = 1 - mean_i JS(p_i, q_i)
+
+    where JS(·,·) = 0 for identical distributions and ≤ log(2) in nats;
+    we use the standard normalized/base-e version implemented below.
 
     Parameters
     ----------
     Px, Py : (n, n) csr_matrix or ndarray
-        Row-stochastic operators to compare.
+        Row-stochastic diffusion/transition operators to compare.
+        (They need not be strictly stochastic; rows are renormalized internally.)
     eps : float, default=1e-12
-        Small positive value added before renormalization for numerical stability.
+        Small positive value added before per-row renormalization for numerical stability.
+    topk : int or None, default=None
+        If provided, restrict each row to its top-k entries by probability mass
+        **before** comparing (helps robustness on very sparse / noisy rows).
+        If None, we compare using the full sparse support (union of supports).
+    return_per_row : bool, default=False
+        If True, also return the per-row JS similarities (1 - JS_i) as a 1D array.
 
     Returns
     -------
     sim : float in [0, 1]
-        1 - mean(JS divergence) across rows. Higher is better.
-        Uses per-row union of supports (sparse) to stay O(k) per node.
+        1 - mean(JS divergence) across rows (higher is better).
+    per_row : ndarray, optional
+        Returned only if `return_per_row=True`. Per-row (1 - JS_i) scores.
 
     Notes
     -----
-    - JS is symmetric and bounded; we map to a similarity via 1 - JS.
-    - Compares transition distributions directly (not distances).
+    • Operates sparsely: for each row we build vectors over the **union** of
+      the supports of Px[i, :] and Py[i, :] (unless topk is set, in which case
+      supports are first truncated to top-k).
+    • Sensitive to **weights** (transition probabilities), unlike set-overlap metrics.
+    • If a row is empty in both operators, it is skipped.
     """
+    import numpy as np
+    import scipy.sparse as sp
+
+    def _ensure_csr(P):
+        if not sp.isspmatrix_csr(P):
+            P = sp.csr_matrix(P)
+        P.eliminate_zeros()
+        return P
+
+    def _row_js_divergence(p, q):
+        # p, q are dense 1D arrays over same support; not necessarily normalized
+        p = np.asarray(p, dtype=float) + eps
+        q = np.asarray(q, dtype=float) + eps
+        p /= p.sum()
+        q /= q.sum()
+        m = 0.5 * (p + q)
+        # KL in nats; JS = 0.5*(KL(p||m) + KL(q||m))
+        js = 0.5 * (np.sum(p * (np.log(p) - np.log(m))) +
+                    np.sum(q * (np.log(q) - np.log(m))))
+        return float(js)
+
+    def _topk_from_row(data, ind, k):
+        if k is None or k >= data.size:
+            return ind, data
+        sel = np.argpartition(data, -k)[-k:]
+        return ind[sel], data[sel]
 
     Px = _ensure_csr(Px); Py = _ensure_csr(Py)
     n = Px.shape[0]
-    js = []
+    one_minus_js = []
+
     for i in range(n):
+        # Sparse slices
         p_row = Px.data[Px.indptr[i]:Px.indptr[i+1]]
         p_ind = Px.indices[Px.indptr[i]:Px.indptr[i+1]]
         q_row = Py.data[Py.indptr[i]:Py.indptr[i+1]]
         q_ind = Py.indices[Py.indptr[i]:Py.indptr[i+1]]
+
         if p_row.size == 0 and q_row.size == 0:
-            continue
-        p_vec, q_vec, _ = _row_union_dense(p_row, p_ind, q_row, q_ind)
-        js.append(_row_js_divergence(p_vec, q_vec))
-    return float(1.0 - np.mean(js)) if js else np.nan
+            continue  # skip fully empty rows
+
+        # Optional top-k truncation
+        if topk is not None:
+            p_ind, p_row = _topk_from_row(p_row, p_ind, topk)
+            q_ind, q_row = _topk_from_row(q_row, q_ind, topk)
+
+        # Align to union of supports
+        Su = np.union1d(p_ind, q_ind)
+        mp = {c: j for j, c in enumerate(p_ind)}
+        mq = {c: j for j, c in enumerate(q_ind)}
+        p_vec = np.zeros(Su.size, dtype=float)
+        q_vec = np.zeros(Su.size, dtype=float)
+        for t, col in enumerate(Su):
+            if col in mp:
+                p_vec[t] = p_row[mp[col]]
+            if col in mq:
+                q_vec[t] = q_row[mq[col]]
+
+        js = _row_js_divergence(p_vec, q_vec)
+        # Map divergence → similarity in [0,1]; JS ≤ ln(2); clip for safety
+        js = min(js, np.log(2.0))
+        one_minus_js.append(1.0 - (js / np.log(2.0)))
+
+    sim = float(np.mean(one_minus_js)) if one_minus_js else np.nan
+    if return_per_row:
+        return sim, np.asarray(one_minus_js, dtype=float)
+    return sim
 
 def sparse_neighborhood_f1(Px, Py, k=None):
     """
@@ -777,84 +663,131 @@ def commute_time_trace_gap(Px, Py, r=64, symmetric_hint=False, hutchinson_probes
     return float(abs(tx - ty))
 
 # ----------------------------
-# 4) Composite score
+# Composite score
 # ----------------------------
 
 def topo_preserve_score(
     Px, Py,
     times=(1, 2, 4, 8),
-    k_local=30,
-    r=64,
-    symmetric_hint=False,
-    weights=dict(RDC=0.35, DkNP=0.25, PF1=0.15, PJS=0.15, SP=0.10),
-    k_for_pf1=None,
+    r: int = 64,
+    symmetric_hint: bool = False,
+    k_for_pf1: int = None,
+    weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30, CT=0.10),
 ):
     """
-    Compute the composite **TopoPreserve score** (≈[0,1], higher is better).
+    Composite **TopoPreserve score** using four operator-aware metrics
+    (higher is better; returns ≈[0,1] after internal normalizations).
 
-    This aggregates:
-      - RDC  (global rank correlation of diffusion distances)      → higher better
-      - DkNP (diffusion kNN preservation)                          → higher better
-      - PF1  (sparse neighborhood F1 overlap)                      → higher better
-      - PJS  (row-wise Jensen–Shannon similarity of transitions)   → higher better
-      - SP   (spectral Procrustes R^2 alignment)                    → higher better
+    Components
+    ----------
+    • PF1  : F1@k on top-k transition neighborhoods per row (set overlap).
+             Range [0,1], higher is better. (Weight-insensitive.)
+    • PJS  : Row-wise Jensen–Shannon similarity of transitions (1 − JS, normalized).
+             Range [0,1], higher is better. (Weight-sensitive.)
+    • SP   : Spectral Procrustes R^2 alignment of diffusion coordinates (average over `times`).
+             Range [0,1], higher is better. (Global/meso geometry.)
+    • CT   : Commute-time connectivity agreement, normalized from the raw
+             trace gap of Laplacian pseudoinverses:
+                 gap = |trace(L_X^+) − trace(L_Y^+)|
+                 score_CT = 1 − gap / (trace(L_X^+) + trace(L_Y^+) + ε)
+             Range [0,1], higher is better (1 = identical traces).
 
     Parameters
     ----------
     Px, Py : (n, n) csr_matrix or ndarray
-        Diffusion operators to compare.
-    times : tuple of int, default=(1,2,4,8)
-        Diffusion timescales for multiscale averaging.
-    k_local : int, default=30
-        Neighborhood size for D-kNP.
+        Diffusion (transition) operators to compare.
+    times : tuple of int, default=(1, 2, 4, 8)
+        Diffusion times for Spectral Procrustes. Ignored by the other components.
     r : int, default=64
-        Eigenpairs for spectral approximations.
+        Leading eigenpairs used for spectral metrics (SP and CT internals).
     symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
-    weights : dict, default={RDC=0.35, DkNP=0.25, PF1=0.15, PJS=0.15, SP=0.10}
-        Mixing weights for the components; renormalized if any component is NaN.
+        If True, treat operators as symmetric for eigensolvers (stability hint).
     k_for_pf1 : int or None, default=None
-        k used in PF1 (top-k transitions per row). If None, uses natural sparsity.
+        Top-k used in PF1. If None, each row uses its native sparsity.
+    weights : dict, default={PF1=0.30, PJS=0.30, SP=0.30, CT=0.10}
+        Mixture weights for the four components. Any NaN component is skipped
+        and remaining weights are renormalized.
 
     Returns
     -------
     score : float
-        Weighted average of component scores (≈[0,1]).
+        Weighted average of the component scores in ≈[0,1] (higher is better).
     parts : dict
-        Component scores after mapping to [0,1] where needed:
-          - 'RDC' : RDC mapped from [-1,1] → [0,1] via (ρ+1)/2
-          - 'DkNP': [0,1]
-          - 'PF1' : [0,1]
-          - 'PJS' : [0,1]
-          - 'SP'  : R^2 clipped to [0,1]
+        {
+          'PF1'      : float in [0,1],
+          'PJS'      : float in [0,1],
+          'SP'       : float in [0,1],
+          'CT_score' : float in [0,1],   # normalized score used in the mixture
+          'CT_gap'   : float >= 0,       # raw |trace(L_X^+) − trace(L_Y^+)|
+          'CT_traces': (tx, ty)          # individual traces for reference
+        }
 
     Notes
     -----
-    - Intended for topometry operators but agnostic to source.
-    - Use the per-metric functions for detailed diagnostics; use this composite
-      when you need a single headline score.
+    • PF1 (set) and PJS (weight) together capture **local** neighborhood fidelity.
+    • SP captures **global/meso** geometry via diffusion eigencoordinates.
+    • CT_score summarizes **global connectivity** similarity via the Kirchhoff index proxy.
+    • All components are operator-native (diffusion/graph-based), aligning with
+      TopoMAP/DM objectives more directly than raw Euclidean metrics.
     """
+    import numpy as np
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
 
+    # --- helpers (mirror commute_time_trace_gap internals so we can normalize CT) ---
+    def _ensure_csr(P):
+        if not sp.isspmatrix_csr(P):
+            P = sp.csr_matrix(P)
+        P.eliminate_zeros()
+        return P
 
-    # Global
-    rdc = rank_diffusion_correlation(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)  # [-1,1]
-    rdc01 = 0.5*(rdc + 1.0)
+    def _trace_pinv_laplacian(P):
+        # Symmetrize to an affinity, then build normalized Laplacian
+        A = (P + P.T) * 0.5
+        A = _ensure_csr(A)
+        d = np.asarray(A.sum(axis=1)).ravel()
+        d[d <= 0] = 1e-12
+        Dm12 = sp.diags(1.0 / np.sqrt(d))
+        Lsym = sp.eye(A.shape[0], format='csr') - Dm12 @ A @ Dm12
+        # Smallest eigenvalues of Lsym; drop the trivial 0 mode
+        k = min(int(r) + 1, A.shape[0] - 1) if A.shape[0] > 2 else 1
+        vals, _ = spla.eigsh(Lsym, k=k, which='SM', tol=1e-4,
+                             maxiter=A.shape[0]*5, v0=np.ones(A.shape[0]))
+        vals = np.sort(vals)
+        vals = vals[1:]  # drop the 0 eigenvalue
+        vals = vals[vals > 1e-12]
+        return float(np.sum(1.0 / vals)) if vals.size else np.inf
 
-    spR2 = spectral_procrustes(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)  # can be <0..1
-    sp01 = max(0.0, min(1.0, spR2))
+    # --- ensure CSR ---
+    Px = _ensure_csr(Px); Py = _ensure_csr(Py)
 
-    # Local
-    dknp = diffusion_knn_preservation(Px, Py, times=times, r=r, k=k_local, symmetric_hint=symmetric_hint)  # [0,1]
+    # --- components ---
+    # PF1: set-overlap of top-k transition supports
+    pf1 = sparse_neighborhood_f1(Px, Py, k=k_for_pf1)
 
-    # Operator-level
-    pf1 = sparse_neighborhood_f1(Px, Py, k=k_for_pf1)  # [0,1]
-    pjs = rowwise_js_similarity(Px, Py)                # ~[0,1]
+    # PJS: weight-sensitive per-row transition similarity (bounded, normalized)
+    pjs = rowwise_js_similarity(Px, Py)
 
-    # Weighted sum (renormalize missing)
-    parts = dict(RDC=rdc01, DkNP=dknp, PF1=pf1, PJS=pjs, SP=sp01)
-    wsum = 0.0; acc = 0.0
-    for k, w in weights.items():
-        v = parts.get(k, np.nan)
+    # SP: spectral Procrustes R^2 over diffusion coordinates
+    spR2 = spectral_procrustes(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)
+
+    # CT: compute traces and normalized score from the raw gap
+    tx = _trace_pinv_laplacian(Px)
+    ty = _trace_pinv_laplacian(Py)
+    ct_gap = float(abs(tx - ty))
+    ct_score = float(1.0 - (ct_gap / (tx + ty + 1e-12)))
+    ct_score = max(0.0, min(1.0, ct_score))
+
+    parts = dict(PF1=pf1, PJS=pjs, SP=spR2, CT_score=ct_score, CT_gap=ct_gap, CT_traces=(tx, ty))
+
+    # --- weighted mixture with renormalization over finite components ---
+    acc, wsum = 0.0, 0.0
+    for key, w in weights.items():
+        # CT uses the normalized 'CT_score' key
+        name = key if key != 'CT' else 'CT_score'
+        v = parts.get(name, np.nan)
         if np.isfinite(v):
-            wsum += w; acc += w * v
-    return float(acc / (wsum + 1e-12)), parts
+            acc += float(w) * float(v)
+            wsum += float(w)
+    score = float(acc / (wsum + 1e-12)) if wsum > 0 else np.nan
+    return score, parts
