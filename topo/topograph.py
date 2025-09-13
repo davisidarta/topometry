@@ -113,7 +113,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     id_ks : int or iterable (default 50)
     id_metric : str (default 'euclidean')
     id_quantile : float (default 0.99; for 'fsa' only)
-    id_min_components : int (default 16)
+    id_min_components : int (default 64)
     id_max_components : int (default 512)
     id_headroom : float (default 0.5)
 
@@ -169,7 +169,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  id_ks=50,
                  id_metric='euclidean',
                  id_quantile=0.99,
-                 id_min_components=128,
+                 id_min_components=64,
                  id_max_components=1024,
                  id_headroom=0.5,
                  ):
@@ -428,8 +428,22 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._scaffold_components_dm = k_sel
 
         # IMPORTANT: ensure eigendecomposition will compute at least this many
-        # (keep user-requested n_eigs if it is larger)
         self.n_eigs = int(max(self.n_eigs, k_sel))
+
+        # Normalize keys so accessors & intrinsic_dim can read them
+        mle_global  = float(mle_details.get('global_id_mle', np.nan))
+        mle_local   = mle_details.get('local_id_mle', None)
+        fsa_global  = float(fsa_details.get('quantile_value', np.nan))   # robust global proxy
+        fsa_local   = fsa_details.get('robust_cell_id', None)
+
+        # Cache for downstream report / accessors
+        self.global_dimensionality = {'mle': mle_global, 'fsa': fsa_global}
+        self.local_dimensionality  = {'mle': mle_local,  'fsa': fsa_local}
+
+        # Keep details available (back-compat)
+        self._id_details['mle'] = mle_details
+        self._id_details['fsa'] = fsa_details
+
 
     # ---------------------------------------------------------------------
     # High-level fit (builds everything) – dual scaffold
@@ -439,7 +453,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Build base kNN, base kernel P(X). Compute both msDM and DM eigenbases (dual scaffold).
         Estimate intrinsic dimensionality (both FSA and MLE; store details). Size the scaffolds.
         Build kNN and refined graphs/operators on each scaffold (msDM, DM). Prepare spectral init.
-        Compute standard projections (MAP and PaCMAP) on both scaffolds when available.
+        Compute standard projections (MAP and PaCMAP) on both scaffolds.
 
         Parameters
         ----------
@@ -539,11 +553,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print(f' Base kernel ({self.base_kernel_version}) fitted in {self.runtimes["Kernel_X"]:.3f} sec')
 
-        if self.metric != 'precomputed':
+        if self.base_metric != 'precomputed':
             self._automated_sizing(X if X is not None else self.base_kernel.X)
             if self.verbosity >= 1:
                 print(f"Automated sizing (pre-eigs) → target components: {self._scaffold_components_ms} "
                     f"(n_eigs set to {self.n_eigs})")
+                
 
         # Compute eigenbases
         if self.verbosity >= 1:
@@ -679,19 +694,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     # ---------------------------------------------------------------------
     # Public properties / getters (stable user API)
     # ---------------------------------------------------------------------
-    @property
-    def knn_X(self):
-        """Initial kNN graph on X."""
-        if self.base_knn_graph is None:
-            raise AttributeError("knn_X is not available. Call .fit(X) first.")
-        return self.base_knn_graph
-
-    @property
-    def P_of_X(self):
-        """Diffusion operator on X (from the base kernel)."""
-        if self.base_kernel is None:
-            raise AttributeError("P_of_X is not available. Call .fit(X) first.")
-        return self.base_kernel.P
 
     def spectral_scaffold(self, multiscale: bool = True):
         """
@@ -713,10 +715,22 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if key not in self.EigenbasisDict:
             raise AttributeError("Requested spectral scaffold not found. Ensure .fit() completed.")
         return self.EigenbasisDict[key].transform(X=None)
-
+    
     @property
     def eigenvalues(self):
-        """Eigenvalues of the active eigenbasis (msDM by default)."""
+        """
+        Eigenvalues of the active eigenbasis (msDM by default).
+
+        Returns
+        -------
+        np.ndarray
+            Array of eigenvalues corresponding to the currently active eigenbasis.
+
+        Raises
+        ------
+        AttributeError
+            If eigenvalues are unavailable (e.g., `.fit(X)` has not been called).
+        """
         if self.current_eigenbasis is None:
             raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
@@ -724,63 +738,194 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     # --- Dual scaffold accessors ---
     @property
     def knn_msZ(self):
-        """kNN graph in the msDM scaffold space."""
+        """
+        kNN graph in the multiscale Diffusion Map (msDM) scaffold space.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            k-nearest neighbor adjacency matrix for the msDM scaffold.
+
+        Raises
+        ------
+        AttributeError
+            If the msDM kNN graph is not available (e.g., `.fit(X)` has not been called).
+        """
         if self._knn_msZ is None:
             raise AttributeError("knn_msZ is not available. Call .fit(X) first.")
         return self._knn_msZ
 
     @property
     def knn_Z(self):
-        """kNN graph in the DM scaffold space."""
+        """
+        kNN graph in the standard Diffusion Map (DM) scaffold space.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            k-nearest neighbor adjacency matrix for the DM scaffold.
+
+        Raises
+        ------
+        AttributeError
+            If the DM kNN graph is not available (e.g., `.fit(X)` has not been called).
+        """
         if self._knn_Z is None:
             raise AttributeError("knn_Z is not available. Call .fit(X) first.")
         return self._knn_Z
 
     @property
     def P_of_msZ(self):
-        """Diffusion operator on the msDM scaffold (refined graph kernel)."""
+        """
+        Diffusion operator on the msDM scaffold.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Refined diffusion operator (row-stochastic) constructed on the msDM scaffold.
+
+        Raises
+        ------
+        AttributeError
+            If the msDM diffusion operator is not available (e.g., `.fit(X)` has not been called).
+        """
         if self._kernel_msZ is None:
             raise AttributeError("P_of_msZ is not available. Call .fit(X) first.")
         return self._kernel_msZ.P
 
     @property
     def P_of_Z(self):
-        """Diffusion operator on the DM scaffold (refined graph kernel)."""
+        """
+        Diffusion operator on the DM scaffold.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Refined diffusion operator (row-stochastic) constructed on the DM scaffold.
+
+        Raises
+        ------
+        AttributeError
+            If the DM diffusion operator is not available (e.g., `.fit(X)` has not been called).
+        """
         if self._kernel_Z is None:
             raise AttributeError("P_of_Z is not available. Call .fit(X) first.")
         return self._kernel_Z.P
 
-    # --- Intrinsic-dimension getters ---
-    def global_id_mle(self):
-        """Return the global intrinsic-dimension estimate from MLE (median-of-locals), msDM scaffold."""
-        det = self._id_details.get('mle', None)
-        if det is None:
-            raise AttributeError("MLE details not available. Call .fit(X) first.")
-        return float(det.get('global_id_mle', np.nan))
+    @property
+    def knn_X(self):
+        """
+        Initial kNN graph in the input (X) space.
 
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            k-nearest neighbor adjacency matrix built directly from the input data.
+
+        Raises
+        ------
+        AttributeError
+            If the base kNN graph is not available (e.g., `.fit(X)` has not been called).
+        """
+        if self.base_knn_graph is None:
+            raise AttributeError("knn_X is not available. Call .fit(X) first.")
+        return self.base_knn_graph
+
+    @property
+    def P_of_X(self):
+        """
+        Diffusion operator on the input (X) space.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Diffusion operator (row-stochastic) constructed on the base input kNN graph.
+
+        Raises
+        ------
+        AttributeError
+            If the diffusion operator on X is not available (e.g., `.fit(X)` has not been called).
+        """
+        if self.base_kernel is None:
+            raise AttributeError("P_of_X is not available. Call .fit(X) first.")
+        return self.base_kernel.P
+
+
+    @property
+    def global_id_mle(self):
+        """
+        Global intrinsic dimensionality estimated by the Maximum Likelihood Estimator (MLE).
+
+        Returns
+        -------
+        float
+            The global MLE dimension estimate, as computed during `.fit(X)`.
+
+        Raises
+        ------
+        AttributeError
+            If MLE details are not available (e.g., `.fit(X)` has not been called).
+        """
+        det = getattr(self, "_id_details", {}).get('mle', None)
+        if det is None: 
+            raise AttributeError("MLE details not available. Call .fit(X) first.")
+        return float(det.get('global_id_mle', 
+                            (self.global_dimensionality or {}).get('mle', np.nan)))
+
+    @property
     def global_id_fsa(self):
-        """Return the global intrinsic-dimension proxy from FSA (quantile over local estimates), msDM scaffold."""
-        det = self._id_details.get('fsa', None)
+        """
+        Global intrinsic dimensionality estimated by the Fisher Separability Analysis (FSA) method.
+
+        Notes
+        -----
+        Uses the quantile value of the robust per-cell ID distribution (before applying headroom)
+        as a global proxy.
+
+        Returns
+        -------
+        float
+            The global FSA dimension estimate, as computed during `.fit(X)`.
+
+        Raises
+        ------
+        AttributeError
+            If FSA details are not available (e.g., `.fit(X)` has not been called).
+        """
+        det = getattr(self, "_id_details", {}).get('fsa', None)
         if det is None:
             raise AttributeError("FSA details not available. Call .fit(X) first.")
-        # quantile of robust_cell_id before headroom; this is the global proxy used by FSA
-        return float(det.get('quantile_value', np.nan))
+        return float(det.get('quantile_value', 
+                            (self.global_dimensionality or {}).get('fsa', np.nan)))
 
+    @property
     def local_ids(self):
         """
-        Return local intrinsic-dimension arrays as a dict:
-            {'mle': <local_id_mle (msDM)>, 'fsa': <robust_cell_id (msDM)>}
+        Local intrinsic dimensionality estimates per sample.
+
+        Returns
+        -------
+        dict
+            Dictionary with per-sample ID vectors:
+              • 'mle' → per-sample estimates from Maximum Likelihood Estimator (MLE).
+              • 'fsa' → per-sample estimates from Fisher Separability Analysis (FSA).
+
+        Raises
+        ------
+        AttributeError
+            If local ID details are not available (e.g., `.fit(X)` has not been called).
         """
         out = {}
-        det_mle = self._id_details.get('mle', None)
-        det_fsa = self._id_details.get('fsa', None)
+        det_mle = getattr(self, "_id_details", {}).get('mle', None)
+        det_fsa = getattr(self, "_id_details", {}).get('fsa', None)
         if det_mle is not None:
-            out['mle'] = det_mle.get('local_id_mle', None)
+            out['mle'] = det_mle.get('local_id_mle', (self.local_dimensionality or {}).get('mle', None))
         if det_fsa is not None:
-            out['fsa'] = det_fsa.get('robust_cell_id', None)
+            out['fsa'] = det_fsa.get('robust_cell_id', (self.local_dimensionality or {}).get('fsa', None))
         if not out:
             raise AttributeError("Local ID details not available. Call .fit(X) first.")
         return out
+
 
     # --- Embedding getters (properties) ---
     @property

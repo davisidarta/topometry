@@ -304,11 +304,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                     self.diffusion_operator = diffusion_operator(
                         X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
                 target = self.diffusion_operator
-                if self.t is not None:
-                    if self.t > 1:
-                        self.powered_operator = np.linalg.matrix_power(
-                            self.diffusion_operator, int(self.t))
-                        target = self.powered_operator
 
             elif self.method == 'msDM':
                 if symmetric:
@@ -326,41 +321,32 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             else:
                 target = X
         evals, evecs = eigendecompose(target, eigensolver=self.eigensolver, n_components=self.n_components,
-                                      largest=largest, eigen_tol=self.eigen_tol, random_state=self.random_state, verbose=self.verbose)
+                                    largest=largest, eigen_tol=self.eigen_tol, random_state=self.random_state, verbose=self.verbose)
+
         if self.drop_first:
             evals = evals[1:]
             evecs = evecs[:, 1:]
+
         if self.estimate_eigengap:
             max_eigs = int(np.sum(evals > 0, axis=0))
             if self.method not in ['LE', 'top', 'bottom']:
                 first_diff = np.diff(evals)
                 eg = np.argmax(first_diff) + 1
-                if max_eigs == len(evals):
-                    self.eigengap = max_eigs
-                else:
-                    self.eigengap = eg
+                self.eigengap = max_eigs if max_eigs == len(evals) else eg
             else:
                 self.eigengap = max_eigs
+
+        # Normalize eigenvectors if DM/msDM; store, but DO NOT build embedding here.
         if self.method in ['DM', 'msDM']:
-            if symmetric:
+            if symmetric and self.D_inv_sqrt_ is not None:
                 evecs = self.D_inv_sqrt_.dot(evecs)
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-            if self.method == 'DM':
-                self.embedding = evecs * evals
-            elif self.method == 'msDM':
-                if np.shape(evecs)[1] <= 5: # use all evecs
-                    self.embedding = evecs * (evals / (1 - evals))
-                else:
-                    use_eigs = int(np.sum(evals > 0, axis=0))
-                    eigs_idx = list(range(1, int(use_eigs)))
-                    eig_vals = np.ravel(evals[eigs_idx])
-                    self.embedding = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
-        else:
-            self.embedding = evecs
+
         self.eigenvectors = evecs
-        self.eigenvalues = evals
+        self.eigenvalues  = evals
         return self
+
 
     def rescale(self, use_eigs=50):
         """
@@ -406,34 +392,46 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def transform(self, X=None):
         """
-        Here for scikit-learn compability. 
-
-        Parameters
-        ----------
-
-        X : array-like, shape (n_samples, n_features)
-            Data matrix. Here for scikit-learn compability.
-
-        Returns
-        -------
-        evecs : array-like, shape (n_samples, n_components)
-            Eigenvectors of the matrix. If using 'msDM', returns the multiscaled eigenvectors.
-        evals : array-like, shape (n_components, )
-            Eigenvalues of the matrix. Returned only if return_evals is True.
+        Return the current representation. For DM/msDM, compute the embedding
+        from stored eigenpairs on-the-fly:
+        - DM:  evecs * (evals ** t)
+        - msDM: evecs[:, 1:use] * (λ / (1 - λ))   (same as before)
         """
-
         if self.eigenvectors is None:
             return ValueError('The estimator has not been fitted yet.')
-        if self.method == 'DM' or self.method == 'msDM':
-            if self.return_evals:
-                return self.embedding, self.eigenvalues
-            else:
-                return self.embedding
-        else:
+
+        # Return eigenvectors/evals for non-diffusion methods.
+        if self.method not in ['DM', 'msDM']:
             if self.return_evals:
                 return self.eigenvectors, self.eigenvalues
             else:
                 return self.eigenvectors
+
+        evecs = self.eigenvectors
+        evals = self.eigenvalues
+
+        if self.method == 'DM':
+            t = int(self.t) if (self.t is not None and self.t > 1) else 1
+            lam = evals ** t  # apply diffusion time here (no powering in fit)
+            emb = evecs * lam
+            self.embedding = emb
+
+        elif self.method == 'msDM':
+            # original msDM scaling
+            if evecs.shape[1] <= 5:
+                emb = evecs * (evals / (1 - evals))
+            else:
+                use_eigs = int(np.sum(evals > 0, axis=0))
+                eigs_idx = list(range(1, int(use_eigs)))
+                eig_vals = np.ravel(evals[eigs_idx])
+                emb = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
+            self.embedding = emb
+
+        if self.return_evals:
+            return self.embedding, self.eigenvalues
+        else:
+            return self.embedding
+
             
 
     def fit_transform(self, X):
