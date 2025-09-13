@@ -580,32 +580,89 @@ if _HAVE_SCANPY:
         adata.obsm["X_spectral_scaffold"]    = tg.spectral_scaffold(multiscale=False)[:, :getattr(tg, "_scaffold_components_dm", tg.n_eigs)]
 
         # (2) store projections if requested/available
+        # Normalize a single string to a tuple
+        if isinstance(projections, str):
+            projections = (projections,)
+
+        # Pretty names used in adata.obsm keys
+        pretty_map = {"MAP": "TopoMAP", "PaCMAP": "TopoPaCMAP"}
+
+        # Map requested method & scale -> TopOGraph property name
+        prop_map = {
+            "MAP":    {False: "TopoMAP",     True: "msTopoMAP"},
+            "PaCMAP": {False: "TopoPaCMAP",  True: "msTopoPaCMAP"},
+        }
+
+        def _get_projection_if_available(tg, method: str, multiscale: bool):
+            """Return embedding array if the corresponding property exists, else None."""
+            prop = prop_map[method][multiscale]
+            try:
+                return getattr(tg, prop)  # property raises AttributeError if missing
+            except AttributeError:
+                return None
+
+        def _ensure_projection(tg, method: str, multiscale: bool):
+            """Compute projection only if not already available; return the array or None."""
+            Y = _get_projection_if_available(tg, method, multiscale)
+            if Y is None:
+                tg.project(projection_method=method, multiscale=multiscale)
+                Y = _get_projection_if_available(tg, method, multiscale)
+            return Y
+
         for proj in projections:
-            try:
-                tg.project(projection_method=proj, multiscale=True)
-                adata.obsm[f"X_ms{proj}"] = getattr(tg, f"ms{proj}")
-            except Exception:
-                pass
-            try:
-                tg.project(projection_method=proj, multiscale=False)
-                adata.obsm[f"X_{proj}"] = getattr(tg, proj)
-            except Exception:
-                pass
+            if proj not in prop_map:
+                # Unknown projection name; skip safely
+                continue
+            pretty = pretty_map.get(proj, proj)  # e.g., "MAP" -> "TopoMAP"
+
+            # Multiscale (msDM)
+            Y_ms = _ensure_projection(tg, proj, multiscale=True)
+            if Y_ms is not None:
+                adata.obsm[f"X_ms{pretty}"] = Y_ms      # X_msTopoMAP / X_msTopoPaCMAP
+
+            # Single-scale DM
+            Y_dm = _ensure_projection(tg, proj, multiscale=False)
+            if Y_dm is not None:
+                adata.obsm[f"X_{pretty}"] = Y_dm        # X_TopoMAP / X_TopoPaCMAP
 
         # (3) clustering on refined DM graph (tg.P_of_Z)
         if do_leiden:
             import scanpy as sc
             from scipy.sparse import issparse, csr_matrix
-            P = tg.P_of_Z
-            P = P if issparse(P) else csr_matrix(P)
-            sc.pp.neighbors(adata, use_rep=None, n_neighbors=tg.graph_knn, method="umap", key_added="_topo_tmp")
-            # replace with our graph connectivity/affinities from tg
+
+            def _csr(A):
+                return A if issparse(A) else csr_matrix(A)
+
+            # --- DM refined operator ---
+            P = _csr(tg.P_of_Z)
+            # Make it available to the report:
+            adata.obsp["topometry_connectivities"] = P
+            # (We use the same matrix as a reasonable proxy for distances)
+            adata.obsp["topometry_distances"] = P
+
+            # --- msDM refined operator (if present) ---
+            P_ms = getattr(tg, "P_of_msZ", None)
+            if P_ms is not None:
+                P_ms = _csr(P_ms)
+                adata.obsp["topometry_connectivities_ms"] = P_ms
+                adata.obsp["topometry_distances_ms"] = P_ms
+
+            # Build a temporary neighbors_key for Leiden using our P
+            sc.pp.neighbors(
+                adata,
+                use_rep=None,
+                n_neighbors=tg.graph_knn,
+                method="umap",
+                key_added="_topo_tmp",
+            )
             adata.uns["_topo_tmp"]["connectivities"] = P
             adata.uns["_topo_tmp"]["distances"] = P  # acceptable proxy
+
             for i, res in enumerate(leiden_resolutions):
-                key = f"{leiden_key_base}_{res:g}"
+                key = f"{leiden_key_base}_res{res:g}"
                 sc.tl.leiden(adata, resolution=res, neighbors_key="_topo_tmp", key_added=key)
-            primary = f"{leiden_key_base}_{leiden_resolutions[leiden_primary_index]:g}"
+
+            primary = f"{leiden_key_base}_res{leiden_resolutions[leiden_primary_index]:g}"
             adata.obs[leiden_key_base] = adata.obs[primary].astype("category")
 
         return tg
@@ -1617,7 +1674,7 @@ if _HAVE_SCANPY:
         graph_kernel_version: str = "bw_adaptive",
         diff_t: int = 1,
         n_jobs: int = -1,
-        verbosity: int = 1,
+        verbosity: int = 0,
         random_state: int = 42,
         id_method: str = "mle",
         id_ks: int | list[int] = 50,
@@ -1721,126 +1778,6 @@ if _HAVE_SCANPY:
         return adata, tg
 
 
-
-    def run_topometry_analysis(
-        adata: AnnData,
-        *,
-        # TopOGraph hyperparameters (passed to fit_adata via **kwargs)
-        base_knn: int = 30,
-        graph_knn: int = 30,
-        min_eigs: int = 100,
-        base_metric: str = "cosine",
-        graph_metric: str = "euclidean",
-        graph_kernel_version: str = "bw_adaptive",
-        diff_t: int = 1,
-        n_jobs: int = -1,
-        verbosity: int = 1,
-        random_state: int = 42,
-        id_method: str = "mle",
-        id_ks: int | list[int] = 50,
-        id_min_components: int = 16,
-        id_max_components: int = 512,
-        id_headroom: float = 0.5,
-        # projections
-        projections: tuple[str, ...] = ("MAP", "PaCMAP"),
-        # clustering
-        do_leiden: bool = True,
-        leiden_key_base: str = "topo_clusters",
-        leiden_resolutions: list[float] | tuple[float, ...] = (0.2, 0.8, 1.2),
-        leiden_primary_index: int = 1,
-        # spectral selectivity
-        spec_weight_mode: str = "lambda_over_one_minus_lambda",
-        spec_k_neighbors: int = 30,
-        spec_smooth_P: str | None = None,
-        spec_smooth_t: int = 0,
-        groupby_candidates: list[str] | None = None,
-        # riemann diagnostics
-        riem_center: str = "median",
-        riem_diffusion_t: int = 8,
-        riem_diffusion_op: str | None = "X",
-        riem_normalize: str = "symmetric",
-        riem_clip_percentile: float = 2.0,
-        # imputation
-        impute_layer: str = "X",
-        impute_raw: bool = False,
-        impute_which: str = "msZ",
-        impute_t_grid: list[int] | tuple[int, ...] = (1, 2, 4, 8, 16),
-        impute_null_K: int = 1000,
-        impute_heatmap_top_genes: int = 100,
-    ):
-        """
-        Run the full pipeline by composing the new stepwise functions.
-
-        Returns
-        -------
-        tg : TopOGraph
-        """
-        tg = fit_adata(
-            adata, tg=None,
-            projections=projections,
-            do_leiden=do_leiden,
-            leiden_key_base=leiden_key_base,
-            leiden_resolutions=leiden_resolutions,
-            leiden_primary_index=leiden_primary_index,
-            base_knn=base_knn,
-            graph_knn=graph_knn,
-            min_eigs=min_eigs,
-            base_metric=base_metric,
-            graph_metric=graph_metric,
-            graph_kernel_version=graph_kernel_version,
-            diff_t=diff_t,
-            n_jobs=n_jobs,
-            verbosity=verbosity,
-            random_state=random_state,
-            id_method=id_method,
-            id_ks=id_ks,
-            id_min_components=id_min_components,
-            id_max_components=id_max_components,
-            id_headroom=id_headroom,
-        )
-
-        intrinsic_dim(
-            adata, tg,
-            id_methods=("fsa", "mle"),
-            id_k_values=None,
-            n_jobs=n_jobs,
-        )
-
-        spectral_selectivity(
-            adata, tg,
-            weight_mode=spec_weight_mode,
-            k_neighbors=spec_k_neighbors,
-            smooth_P=spec_smooth_P,
-            smooth_t=spec_smooth_t,
-            groupby_candidates=(groupby_candidates or [leiden_key_base, "leiden", "cell_type"]),
-        )
-
-        riemann_diagnostics(
-            adata, tg,
-            center=riem_center,
-            diffusion_t=riem_diffusion_t,
-            diffusion_op=riem_diffusion_op,
-            normalize=riem_normalize,
-            clip_percentile=riem_clip_percentile,
-        )
-
-        impute_adata(
-            adata, tg,
-            layer=impute_layer,
-            raw=impute_raw,
-            which=impute_which,
-            impute_t_grid=impute_t_grid,
-            null_K=impute_null_K,
-            heatmap_top_genes=impute_heatmap_top_genes,
-        )
-
-        try:
-            evaluate_representations(adata, tg, plot_results=False)
-        except Exception as e:
-            print(f"[topometry] Representation evaluation failed: {e}")
-
-        # Return only the fitted TopOGraph; adata is modified in-place
-        return tg
 
 
     # --------------------------------------
@@ -2119,11 +2056,11 @@ if _HAVE_SCANPY:
             )
             ax.text(0.0, y, s1, ha='left', va='top', fontsize=11, linespacing=1.25, wrap=True)
             # advance y by a rough number of lines (count \n plus an estimate for wrapped lines)
-            s1_lines = s1.count("\n") + 5  # small buffer for wrapped lines
+            s1_lines = s1.count("\n") + 3  # small buffer for wrapped lines
             y -= s1_lines * line_h_small
 
             # add two blank lines between sections
-            y -= 2 * line_h_small
+            y -= 1 * line_h_small
 
             # SECTION 2: Fitted statistics
             ax.text(0.0, y, "Fitted statistics", ha='left', va='top', fontsize=12, weight='bold')
@@ -2146,7 +2083,7 @@ if _HAVE_SCANPY:
             y -= s2_lines * line_h_small
 
             # add two blank lines between sections
-            y -= 2 * line_h_small
+            y -= 1 * line_h_small
 
             # SECTION 3: What’s available next (place near the bottom)
             ax.text(0.0, y, "What you can use next:", ha='left', va='top', fontsize=12, weight='bold')
@@ -2589,8 +2526,8 @@ if _HAVE_SCANPY:
 
             ax_exp = fig.add_axes([0.06, 0.06, 0.88, 0.06]); ax_exp.axis('off')
             ax_exp.text(0.0, 0.5,
-                        "Imputation uses diffusion (P^t) on the refined TopoMetry graph to denoise expression. "
-                        "QC compares mean absolute gene–gene correlations against null (per-gene permutations) across t. "
+                        "Imputation uses diffusion (P^t) on the refined TopoMetry graph to denoise expression. \n"
+                        "QC compares mean absolute gene–gene correlations against null (per-gene permutations) across t. \n"
                         "Best t minimizes the empirical null p-value (ties broken by max z-score).",
                         fontsize=9, va='center')
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
@@ -2622,7 +2559,7 @@ if _HAVE_SCANPY:
                 for c in pick:
                     idx = np.where(labels.values == c)[0]
                     if idx.size == 0: continue
-                    ksel = int(round(0.7 * idx.size))
+                    ksel = int(round(0.1 * idx.size))
                     chosen = rng.choice(idx, size=max(1, min(ksel, idx.size)), replace=False)
                     mask[chosen] = True
                 sim_key = "_simulated_state_for_example"
@@ -2672,7 +2609,7 @@ if _HAVE_SCANPY:
                 del adata.obs[_cleanup_sim_key_after]
 
             # ===== PART 9: PURE NOISE FILTERING CONTROL =====
-            P = adata.obsp.get('topometry_connectivities_ms', None)
+            P = tg.P_of_msZ
             evecs, evals = None, None
             try:
                 key_e = 'msDM with ' + tg.base_kernel_version
