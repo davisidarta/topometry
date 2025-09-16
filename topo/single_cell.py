@@ -2475,10 +2475,10 @@ if _HAVE_SCANPY:
             legend_top = (
                 "Geometry preservation compares the diffusion operator on the reference space, Pₓ (built on adata.X), "
                 "to the operator induced by each representation, Pᵧ. \n When Pᵧ ≈ Pₓ, both global and local geometry are "
-                "well preserved. TopoMetry's geometry preservation scores are:\n"
-                "• PF1 — Sparse Neighborhood F1: overlap of top-k transition supports per row (neighbor set consistency).\n"
-                "• PJS — Row-wise Jensen–Shannon Similarity: similarity of full transition distributions per cell.\n"
-                "• SP — Spectral Procrustes R²: alignment quality of spectral scaffold coordinates (up to rotation).\n"
+                "well preserved. TopoMetry's geometry preservation scores are:\n \n"
+                "• PF1 — Sparse Neighborhood F1: overlap of the top-k transition supports per row; focuses on whether the same neighbors are kept in the operator (weights ignored).\n  \n"
+                "• PJS — Row-wise Jensen–Shannon Similarity: compares the probability distributions of transitions for each cell; sensitive to how mass is redistributed.\n  \n"
+                "• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n  \n"
                 "Scores range from 0 to 1.0. Higher is better for all scores."
             )
 
