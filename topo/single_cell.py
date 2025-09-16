@@ -245,7 +245,7 @@ if _HAVE_SCANPY:
         else:
             ax_diff.vlines(max_eigs, ax_diff.get_ylim()[0], ax_diff.get_ylim()[1], linestyles="--", label='Eigengap')
 
-    def _plot_id_histograms_original(ax_fsa, ax_mle, id_est: IntrinsicDim | None):
+    def plot_id_histograms(ax_fsa, ax_mle, id_est: IntrinsicDim | None):
         def _one(ax, method_name: str):
             if (id_est is None) or (method_name not in id_est.local_id) or (len(id_est.local_id[method_name]) == 0):
                 ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center'); return
@@ -2621,7 +2621,7 @@ if _HAVE_SCANPY:
                     "\n• PJS — Row-wise Jensen–Shannon Similarity: compares the probability distributions of transitions for each cell; sensitive to how mass is redistributed.\n"
                     "\n• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n"
                 )
-                ax2.text(0.0, 0.5, legend, va='center', fontsize=9, wrap=True)
+                ax2.text(0.0, 0.5, legend, va='center', fontsize=11, wrap=True)
 
             pdf.savefig(fig, dpi=dpi)
             plt.close(fig)
@@ -2637,7 +2637,7 @@ if _HAVE_SCANPY:
             # ID histograms (original style)
             ax_fsa = fig.add_subplot(gs[1, 0]); ax_mle = fig.add_subplot(gs[1, 1])
             id_est = adata.uns.get('intrinsic_dim_estimator', None)
-            _plot_id_histograms_original(ax_fsa, ax_mle, id_est)
+            plot_id_histograms(ax_fsa, ax_mle, id_est)
 
             #fig.suptitle("Scaffold eigenspectrum / intrinsic dimensionality", y=0.98, fontsize=14)
             fig.text(0.02, 0.98, "Scaffold eigenspectrum and intrinsic dimensionality estimates", fontsize=16, weight='bold', va='center', ha='left')
@@ -2727,7 +2727,7 @@ if _HAVE_SCANPY:
                         "useful for spotting bottlenecks, hubs, or spread-out manifolds in the cellular landscape."
                     )
                     # left=0.04, baseline ~0.12 from bottom; anchor at top of band
-                    fig.text(0.08, 0.14, guide, ha='left', va='top', fontsize=11, wrap=True)
+                    fig.text(0.08, 0.18, guide, ha='left', va='top', fontsize=11, wrap=True)
 
                     ax_exp = fig.add_axes([0.035, 0.07, 0.93, 0.16])
                     ax_exp.axis('off')
@@ -2806,7 +2806,7 @@ if _HAVE_SCANPY:
                     "Radius (spectral radius): Euclidean norm of standardized scaffold coordinates (‖Z‖₂); a proxy for distance from the origin in spectral space, "
                     "often correlating with progress along diffusion time."
                 )
-                leg_ax.text(0.0, 0.5, legend_text, ha='left', va='center', fontsize=8.5, wrap=True)
+                leg_ax.text(0.0, 0.5, legend_text, ha='left', va='center', fontsize=11, wrap=True)
 
                 #fig.suptitle(f"Spectral selectivity — {variant}", y=0.98, fontsize=12)
                 if variant == 'msDM':
@@ -3036,7 +3036,7 @@ if _HAVE_SCANPY:
                 f"GTV raw: {_fmt(gtv_raw)} | GTV filtered: {_fmt(gtv_flt)} | Δ: {_fmt(gtv_raw - gtv_flt)} | "
                 f"Spectral energy (low+mid): raw={_fmt(spec_energy_raw)}, filtered={_fmt(spec_energy_flt)}"
             )
-            axt.text(0.0, 1.0, txt, fontsize=9, va='top')
+            axt.text(0.0, 1.0, txt, fontsize=11, va='top')
             pdf.savefig(fig, dpi=dpi); plt.close(fig)
 
             for tmp in ['_gf_null_mean','_gf_null_std']:
