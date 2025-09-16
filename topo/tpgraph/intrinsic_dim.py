@@ -381,7 +381,7 @@ def automated_scaffold_sizing(
                 'method': 'fsa',
                 'ks': ks_use,
                 'per_k_local_id': per_k_local,
-                'robust_cell_id': robust_cell_id,
+                'local_id': robust_cell_id,
                 'quantile_value': qv,
                 'selected_n_components': n_components,
             }
@@ -420,8 +420,8 @@ def automated_scaffold_sizing(
             return n_components, {
                 'method': 'mle',
                 'k': k_int,
-                'local_id_mle': local,
-                'global_id_mle': gid,
+                'local_id': local,
+                'global_id': gid,
                 'selected_n_components': n_components,
             }
         return n_components

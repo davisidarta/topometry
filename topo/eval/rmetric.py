@@ -262,14 +262,14 @@ def plot_riemann_metric_localized(
     scale_mode="anisotropy",
     scale_gain=1.0,
     scale_base="auto",
-    alpha=0.25,
+    alpha=None,
     edgecolor=None,
     facecolor=None,
     ax=None,
     seed=7,
     zorder=2,
     show_points=True,
-    colors=None,              # per-sample colors (numeric, categorical, or color specs)
+    colors=None,
     cmap="viridis",
     vmin=None,
     vmax=None,
@@ -278,6 +278,75 @@ def plot_riemann_metric_localized(
     point_size=6,
     scatter_kw=None,
 ):
+    """
+    Plot localized Riemannian indicatrices (ellipses) over a 2-D embedding.
+
+    Each selected point i is annotated with an ellipse derived from the local
+    metric G[i] (eigenpairs → axes & orientation). Ellipse sizes are scaled to
+    remain within current axes limits (rotation-safe circumscribed-circle bound).
+    Optional per-sample colors control both the point color and the ellipse color.
+
+    Parameters
+    ----------
+    Y : (n, 2) array-like
+        2-D embedding coordinates.
+    L : (n, n) array-like or sparse matrix
+        Graph Laplacian (will be symmetrized). Used only if `G_emb` is None.
+    G_emb : (n, 2, 2) array-like, optional
+        Precomputed embedding-space Riemann metric per point. If None, computed
+        from (Y, L).
+    n_plot : int, default 1500
+        Number of points for which to draw ellipses (uniform random subset).
+    scale_mode : {"anisotropy","trace","det","none"}, default "anisotropy"
+        How to derive a per-point scalar factor from G to modulate ellipse axes
+        (passed to `_scaling_values`).
+    scale_gain : float, default 1.0
+        Global multiplicative scale factor for ellipse axes.
+    scale_base : {"auto"} or float, default "auto"
+        Base axis scale in embedding units; "auto" uses 5% of the largest span.
+    alpha : float, optional
+        Global alpha for filled ellipses when `colors` is not provided.
+    edgecolor : color, optional
+        Ellipse edge color. Defaults to "k".
+    facecolor : color, optional
+        Ellipse face color when `colors` is not provided. Defaults to "C0".
+    ax : matplotlib.axes.Axes, optional
+        Target axes. If None, uses current axes.
+    seed : int, default 7
+        RNG seed for selecting the subset of points to annotate.
+    zorder : int, default 2
+        Z-order for ellipses; points are drawn at `zorder-2`.
+    show_points : bool, default True
+        Whether to scatter the raw embedding points.
+    colors : array-like, optional
+        Per-sample colors (numeric, categorical, or matplotlib color specs).
+        If numeric, `cmap`, `vmin`, `vmax` apply. Drives both points & ellipses.
+    cmap : str or Colormap, default "viridis"
+        Colormap for numeric `colors`.
+    vmin, vmax : float, optional
+        Color scaling limits for numeric `colors`.
+    point_alpha : float, default 0.6
+        Alpha for the scatter points.
+    ellipse_alpha : float, optional
+        Alpha for filled ellipses. If None and `colors` is provided, the fill
+        inherits the point alpha while edges remain opaque.
+    point_size : float, default 6
+        Marker size for scatter points.
+    scatter_kw : dict, optional
+        Extra kwargs forwarded to `ax.scatter`.
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axes with the plot.
+
+    Notes
+    -----
+    - The embedding is centered before plotting.
+    - Ellipses are clipped to remain within axes limits via a conservative
+      circumscribed-circle scaling.
+    """
+
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
     Y = _center(Y)
@@ -405,17 +474,79 @@ def plot_riemann_metric_global(
     respect_existing_limits=True,
 ):
     """
-    Draw grid-averaged indicatrices with:
-      • Poisson-like thinning to reduce ellipse overlap (min center separation).
-      • Ellipse facecolor driven by local expansion/contraction (centered logdet).
+    Plot grid-averaged Riemannian indicatrices over a 2-D embedding.
 
-    Coloring:
-      deformation at a grid site = average of per-cell deformation of its k_avg neighbors.
-      vmin/vmax can be supplied or inferred (symmetric clipping).
+    Builds a regular grid over the embedding extent, averages the local metric
+    G over the k nearest embedded points per grid site, and draws one ellipse
+    per selected site. A thinning step enforces a minimum center separation to
+    limit overlap. Ellipse face colors encode local contraction/expansion via a
+    centered log-determinant scalar field (computed or provided).
 
-    Non-overlap:
-      greedy selection of grid sites with pairwise spacing >= min_sep_factor * base.
+    Parameters
+    ----------
+    Y : (n, 2) array-like
+        2-D embedding coordinates.
+    L : (n, n) array-like or sparse matrix
+        Graph Laplacian (symmetrized). Used if `G_emb` is None and to compute
+        deformation when `deformation_vals` is None.
+    G_emb : (n, 2, 2) array-like, optional
+        Precomputed embedding-space Riemann metric per point. If None, computed
+        from (Y, L).
+    grid_res : int, default 20
+        Number of grid steps along each axis.
+    k_avg : int, default 16
+        Number of nearest embedded points to average per grid site.
+    scale_mode : {"anisotropy","trace","det","none"}, default "anisotropy"
+        Per-site axis modulation strategy (see `_scaling_values`).
+    scale_gain : float, default 1.0
+        Global multiplicative scale for ellipse axes.
+    scale_base : {"auto"} or float, default "auto"
+        Base axis scale in embedding units; "auto" uses 5% of the largest span.
+    alpha : float, default 0.35
+        Ellipse face alpha.
+    edgecolor : color, default "k"
+        Ellipse edge color.
+    cmap : str or Colormap, default "coolwarm"
+        Colormap for contraction/expansion.
+    vmin, vmax : float, optional
+        Fixed color limits. If None, inferred symmetrically from the field.
+    ax : matplotlib.axes.Axes, optional
+        Target axes. If None, uses current axes.
+    zorder : int, default 3
+        Z-order for the ellipses; points are drawn at `zorder-3`.
+    show_points : bool, default True
+        Whether to draw background scatter of embedded points.
+    point_alpha : float, default 0.25
+        Alpha for background scatter.
+    point_size : float, default 4
+        Size for background scatter points.
+    scatter_kw : dict, optional
+        Extra kwargs to forward to `ax.scatter`.
+    min_sep_factor : float, default 0.9
+        Minimum center separation as a fraction of `scale_base` for thinning.
+    choose_strong_first : bool, default True
+        If True, greedy selection prefers grid sites with larger |deformation|.
+    deformation_vals : (n,) array-like, optional
+        Precomputed contraction/expansion scalar per point (centered log det).
+        If None, computed by `calculate_deformation(...)`.
+    deformation_kwargs : dict, optional
+        Extra kwargs forwarded to `calculate_deformation` when `deformation_vals`
+        is None.
+    respect_existing_limits : bool, default True
+        If True, reuse existing axes limits when not at default (0,1); otherwise
+        derive from the embedding extent.
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axes with the plot.
+
+    Notes
+    -----
+    - Ellipses are scaled so their circumscribed circle fits within the axes box.
+    - The deformation field is averaged over `k_avg` neighbors per grid site.
     """
+
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
     from matplotlib import cm, colors as mcolors
@@ -583,15 +714,64 @@ def calculate_deformation(
     Y,
     L,
     G_emb=None,
-    center="median",            # {'median','mean', float}
-    use_dual=False,             # if True, compute with dual metric H so that val = -logdet(H)
-    diffusion_t=0,              # integer steps of graph diffusion smoothing on the scalar field
-    diffusion_op=None,          # optional Markov operator P; if None and diffusion_t>0, built from L
+    center="median",
+    use_dual=False,
+    diffusion_t=0,
+    diffusion_op=None,
     re_center_after_diffusion=True,
-    clip_percentile=2.0,        # robust clipping for color limits
-    normalize="symmetric",      # {'symmetric','none'}
+    clip_percentile=2.0,
+    normalize="symmetric",
     return_limits=True,
 ):
+    """
+    Compute a per-point contraction/expansion scalar from the embedding metric.
+
+    The scalar is the centered log-determinant of the local metric:
+      val_i = log det(G_i) − center, with optional diffusion smoothing.
+    If `use_dual=True`, treats the input as the dual metric H and returns
+      val_i = −log det(H_i) − center (equivalently, minus the log-det).
+
+    Parameters
+    ----------
+    Y : (n, 2) array-like
+        2-D embedding coordinates.
+    L : (n, n) array-like or sparse matrix
+        Graph Laplacian (symmetrized). Used if `G_emb` is None and to build a
+        diffusion operator when `diffusion_t > 0` and `diffusion_op` is None.
+    G_emb : (n, 2, 2) array-like, optional
+        Precomputed embedding-space Riemann metric per point. If None, computed
+        from (Y, L).
+    center : {"median","mean"} or float, default "median"
+        How to center the log-det values (robust median, mean, or explicit value).
+    use_dual : bool, default False
+        If True, compute −log det(H) instead of log det(G).
+    diffusion_t : int, default 0
+        Number of steps of diffusion smoothing on the scalar field.
+    diffusion_op : (n, n) array-like, optional
+        Markov operator P for smoothing. If None and `diffusion_t>0`, a random-walk
+        operator is built from L.
+    re_center_after_diffusion : bool, default True
+        If True, re-apply centering after diffusion smoothing.
+    clip_percentile : float, default 2.0
+        Percentile for robust clipping used to derive display limits.
+    normalize : {"symmetric","none"}, default "symmetric"
+        If "symmetric", color limits are ±max(|clipped vals|); otherwise [lo, hi].
+    return_limits : bool, default True
+        If True, also return effective (vmin, vmax) for plotting.
+
+    Returns
+    -------
+    vals : (n,) ndarray
+        Centered (and optionally smoothed) log-det scalar per sample.
+    (vmin, vmax) : tuple of float
+        Effective color limits (only if `return_limits=True`).
+
+    Notes
+    -----
+    - Eigenvalues are clipped away from 0 before taking logs for numerical stability.
+    - When building P from L, a random-walk normalization (row-stochastic) is used.
+    """
+
     """
     Returns:
         vals : (n,) centered log-det(G) [<0 contraction, >0 expansion]
@@ -679,10 +859,76 @@ def plot_metric_contraction_expansion(
     diffusion_op=None,
     re_center_after_diffusion=True,
     plot_strong_last=True,
-    legend_fontsize=9,         # NEW: control fontsize of colorbar label
-    title="Local contraction / expansion",  # NEW: optional title
-    title_fontsize=11,         # NEW: control fontsize of title
+    legend_fontsize=9,
+    title="Local contraction / expansion",
+    title_fontsize=11,
 ):
+    """
+    Scatter plot of local contraction/expansion over a 2-D embedding.
+
+    Colors are the centered log-determinant of the (dual) metric at each point,
+    optionally smoothed by diffusion. Points with strongest magnitude can be
+    drawn last to emphasize structure.
+
+    Parameters
+    ----------
+    Y : (n, 2) array-like
+        2-D embedding coordinates.
+    L : (n, n) array-like or sparse matrix
+        Graph Laplacian (symmetrized). Used to compute the metric and, if needed,
+        a diffusion operator.
+    G_emb : (n, 2, 2) array-like, optional
+        Precomputed embedding-space Riemann metric per point. If None, computed
+        from (Y, L).
+    center : {"median","mean"} or float, default "median"
+        How to center the log-det values before coloring.
+    normalize : {"symmetric","none"}, default "symmetric"
+        Color normalization for auto limits (±max vs. [lo, hi]).
+    clip_percentile : float, default 2.0
+        Percentile used for robust limit derivation.
+    s : float, default 6
+        Marker size.
+    alpha : float, default 0.9
+        Marker alpha.
+    cmap : str or Colormap, default "coolwarm"
+        Colormap for the scalar field.
+    vmin, vmax : float, optional
+        Fixed color limits; if None, computed from data.
+    show_colorbar : bool, default True
+        Whether to draw a colorbar.
+    ax : matplotlib.axes.Axes, optional
+        Target axes. If None, uses current axes.
+    zorder : int, default 1
+        Z-order of the scatter.
+    use_dual : bool, default False
+        If True, color by −log det(H) (dual metric).
+    diffusion_t : int, default 0
+        Number of steps of diffusion smoothing on the scalar field.
+    diffusion_op : (n, n) array-like, optional
+        Markov operator P for smoothing. If None and `diffusion_t>0`, built from L.
+    re_center_after_diffusion : bool, default True
+        Re-apply centering after smoothing.
+    plot_strong_last : bool, default True
+        If True, draw largest |values| last to improve visual prominence.
+    legend_fontsize : float, default 9
+        Font size for the colorbar label.
+    title : str, default "Local contraction / expansion"
+        Figure title.
+    title_fontsize : float, default 11
+        Font size for the title.
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axes with the scatter.
+    vals : (n,) ndarray
+        The centered (and optionally smoothed) log-det values used for coloring.
+
+    Notes
+    -----
+    - Axes limits are padded by 6% of the embedding span and aspect is set to 1:1.
+    """
+
     if plt is None:
         raise RuntimeError("matplotlib is required for plotting.")
 

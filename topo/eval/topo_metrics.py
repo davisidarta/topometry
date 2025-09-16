@@ -672,7 +672,7 @@ def topo_preserve_score(
     r: int = 64,
     symmetric_hint: bool = False,
     k_for_pf1: int = None,
-    weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30, CT=0.10),
+    weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30),
 ):
     """
     Composite **TopoPreserve score** using four operator-aware metrics
@@ -686,11 +686,6 @@ def topo_preserve_score(
              Range [0,1], higher is better. (Weight-sensitive.)
     • SP   : Spectral Procrustes R^2 alignment of diffusion coordinates (average over `times`).
              Range [0,1], higher is better. (Global/meso geometry.)
-    • CT   : Commute-time connectivity agreement, normalized from the raw
-             trace gap of Laplacian pseudoinverses:
-                 gap = |trace(L_X^+) − trace(L_Y^+)|
-                 score_CT = 1 − gap / (trace(L_X^+) + trace(L_Y^+) + ε)
-             Range [0,1], higher is better (1 = identical traces).
 
     Parameters
     ----------
@@ -699,12 +694,12 @@ def topo_preserve_score(
     times : tuple of int, default=(1, 2, 4, 8)
         Diffusion times for Spectral Procrustes. Ignored by the other components.
     r : int, default=64
-        Leading eigenpairs used for spectral metrics (SP and CT internals).
+        Leading eigenpairs used for spectral metrics (SP internals).
     symmetric_hint : bool, default=False
         If True, treat operators as symmetric for eigensolvers (stability hint).
     k_for_pf1 : int or None, default=None
         Top-k used in PF1. If None, each row uses its native sparsity.
-    weights : dict, default={PF1=0.30, PJS=0.30, SP=0.30, CT=0.10}
+    weights : dict, default={PF1=0.30, PJS=0.30, SP=0.30}
         Mixture weights for the four components. Any NaN component is skipped
         and remaining weights are renormalized.
 
@@ -717,16 +712,12 @@ def topo_preserve_score(
           'PF1'      : float in [0,1],
           'PJS'      : float in [0,1],
           'SP'       : float in [0,1],
-          'CT_score' : float in [0,1],   # normalized score used in the mixture
-          'CT_gap'   : float >= 0,       # raw |trace(L_X^+) − trace(L_Y^+)|
-          'CT_traces': (tx, ty)          # individual traces for reference
         }
 
     Notes
     -----
     • PF1 (set) and PJS (weight) together capture **local** neighborhood fidelity.
     • SP captures **global/meso** geometry via diffusion eigencoordinates.
-    • CT_score summarizes **global connectivity** similarity via the Kirchhoff index proxy.
     • All components are operator-native (diffusion/graph-based), aligning with
       TopoMAP/DM objectives more directly than raw Euclidean metrics.
     """
@@ -771,21 +762,12 @@ def topo_preserve_score(
     # SP: spectral Procrustes R^2 over diffusion coordinates
     spR2 = spectral_procrustes(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)
 
-    # CT: compute traces and normalized score from the raw gap
-    tx = _trace_pinv_laplacian(Px)
-    ty = _trace_pinv_laplacian(Py)
-    ct_gap = float(abs(tx - ty))
-    ct_score = float(1.0 - (ct_gap / (tx + ty + 1e-12)))
-    ct_score = max(0.0, min(1.0, ct_score))
-
-    parts = dict(PF1=pf1, PJS=pjs, SP=spR2, CT_score=ct_score, CT_gap=ct_gap, CT_traces=(tx, ty))
+    parts = dict(PF1=pf1, PJS=pjs, SP=spR2)
 
     # --- weighted mixture with renormalization over finite components ---
     acc, wsum = 0.0, 0.0
     for key, w in weights.items():
-        # CT uses the normalized 'CT_score' key
-        name = key if key != 'CT' else 'CT_score'
-        v = parts.get(name, np.nan)
+        v = parts.get(key, np.nan)
         if np.isfinite(v):
             acc += float(w) * float(v)
             wsum += float(w)

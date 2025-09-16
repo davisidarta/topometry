@@ -1,4 +1,4 @@
-# TopOMetry high-level API - the TopOGraph class
+# TopoMetry high-level API - the TopOGraph class
 #
 # Author: David S Oliveira <david.oliveira(at)dpag(dot)ox(dot)ac(dot)uk>
 #
@@ -31,7 +31,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
       • eigenvalues         : eigenvalues of the active eigenbasis (msDM by default)
       • MAP / msMAP         : 2D MAP layouts from DM/msDM refined graphs
       • PaCMAP / msPaCMAP   : 2D PaCMAP layouts from DM/msDM refined graphs
-      • global_id_mle(), global_id_fsa(), local_ids(): intrinsic-dimension details
+      • global_id, local_ids: intrinsic-dimension details
 
     Legacy benchmarking and combinatorial exploration remain available through:
       • BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict
@@ -43,10 +43,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         k-nearest-neighbors for the base input space.
 
     graph_knn : int (optional, default 30)
-        k-nearest-neighbors for the scaffold (Z) space.
+        k-nearest-neighbors for the refined graph built on the spectral scaffold (Z) space.
 
-    n_eigs : int (optional, default 100)
-        Number of eigenpairs to compute (basis size cap).
+    min_eigs : int (optional, default 100)
+        Minimum number of eigenpairs to compute (spectral scaffold size cap).
 
     base_kernel : topo.tpgraph.Kernel (optional, default None)
         If provided and already fitted, X is not required.
@@ -113,8 +113,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     id_ks : int or iterable (default 50)
     id_metric : str (default 'euclidean')
     id_quantile : float (default 0.99; for 'fsa' only)
-    id_min_components : int (default 64)
-    id_max_components : int (default 512)
+    id_min_components : int (default 128)
+    id_max_components : int (default 1024)
     id_headroom : float (default 0.5)
 
     Attributes
@@ -144,13 +144,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def __init__(self,
                  base_knn=30,
                  graph_knn=30,
-                 min_eigs=100,
+                 min_eigs=128,
                  n_jobs=-1,
+                 projection_methods=['MAP','PaCMAP'],
                  base_kernel=None,
                  base_kernel_version='bw_adaptive',
-                 eigenmap_method='DM',  # deprecated
-                 laplacian_type='normalized',
-                 projection_method='MAP',
+                 eigenmap_method=None,  # deprecated
+                 laplacian_type='normalized', # deprecated
                  graph_kernel_version='bw_adaptive',
                  base_metric='cosine',
                  graph_metric='euclidean',
@@ -169,12 +169,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                  id_ks=50,
                  id_metric='euclidean',
                  id_quantile=0.99,
-                 id_min_components=64,
+                 id_min_components=128,
                  id_max_components=1024,
                  id_headroom=0.5,
                  ):
         # Core config
-        self.projection_method = projection_method
+        self.projection_methods = projection_methods
         self.diff_t = diff_t
         self.n_eigs = min_eigs
         self.base_knn = base_knn
@@ -307,49 +307,23 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         except ImportError:
             self._have_faiss = False
 
+        def _noANN_lib(self):
+            print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+            self.backend = 'sklearn'
+
         if self.backend == 'hnswlib':
             if not self._have_hnswlib:
                 if self._have_nmslib:
                     self.backend = 'nmslib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
                 else:
-                    self.backend = 'sklearn'
+                    self._noANN_lib()
         elif self.backend == 'nmslib':
-            if not self._have_nmslib:
-                if self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
-                else:
-                    self.backend = 'sklearn'
-        elif self.backend == 'annoy':
-            if not self._have_annoy:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                elif self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
-                else:
-                    self.backend = 'sklearn'
-        elif self.backend == 'faiss':
-            if not self._have_faiss:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                elif self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                else:
-                    self.backend = 'sklearn'
+            if self._have_hnswlib:
+                self.backend = 'hnswlib'
+            else:
+                self._noANN_lib()
         else:
-            print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-            self.backend = 'sklearn'
+            self._noANN_lib()
 
     def _parse_random_state(self):
         if self.random_state is None:
@@ -383,9 +357,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         max_cap = min(int(self.id_max_components), max(2, n - 2))
 
         # FSA on X (quantile/robust proxy)
-        n_fsa, fsa_details = automated_scaffold_sizing(
+        n_eigs_automated, id_details = automated_scaffold_sizing(
             X,
-            method='fsa',
+            method=self.id_method,
             ks=self.id_ks,
             backend=self.backend,
             metric=self.id_metric,
@@ -397,52 +371,22 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             random_state=self.random_state,
             return_details=True,
         )
-        self._id_details['fsa'] = fsa_details
-
-        # MLE on X (median-of-locals)
-        n_mle, mle_details = automated_scaffold_sizing(
-            X,
-            method='mle',
-            ks=self.id_ks,
-            backend=self.backend,
-            metric=self.id_metric,
-            n_jobs=self.n_jobs if self.n_jobs != -1 else None,
-            min_components=int(self.id_min_components),
-            max_components=int(max_cap),
-            headroom=float(self.id_headroom),
-            random_state=self.random_state,
-            use_median=True,
-            return_details=True,
-        )
-        self._id_details['mle'] = mle_details
-
-        # choose by configured method
-        if str(self.id_method).lower().strip() == 'fsa':
-            k_sel = int(n_fsa)
-        else:
-            k_sel = int(n_mle)
+        self._id_details[self.id_method] = id_details
 
         # finalize scaffold component counts (same for msDM/DM at this stage)
-        k_sel = int(max(2, min(k_sel, max_cap)))
+        k_sel = int(max(2, min(n_eigs_automated, max_cap)))
         self._scaffold_components_ms = k_sel
         self._scaffold_components_dm = k_sel
 
-        # IMPORTANT: ensure eigendecomposition will compute at least this many
         self.n_eigs = int(max(self.n_eigs, k_sel))
-
-        # Normalize keys so accessors & intrinsic_dim can read them
-        mle_global  = float(mle_details.get('global_id_mle', np.nan))
-        mle_local   = mle_details.get('local_id_mle', None)
-        fsa_global  = float(fsa_details.get('quantile_value', np.nan))   # robust global proxy
-        fsa_local   = fsa_details.get('robust_cell_id', None)
+        local   = id_details.get('local_id_mle', None)
 
         # Cache for downstream report / accessors
-        self.global_dimensionality = {'mle': mle_global, 'fsa': fsa_global}
-        self.local_dimensionality  = {'mle': mle_local,  'fsa': fsa_local}
+        self.global_dimensionality = k_sel
+        self.local_dimensionality  = local
 
         # Keep details available (back-compat)
-        self._id_details['mle'] = mle_details
-        self._id_details['fsa'] = fsa_details
+        self._id_details[self.id_method] = id_details
 
 
     # ---------------------------------------------------------------------
@@ -676,8 +620,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # Spectral layout (2D) using msZ by default (for convenient init)
         _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
 
-        # Projections: MAP & PaCMAP for BOTH scaffolds when available
-        for proj in ['MAP', 'PaCMAP']:
+        # Projections for both scaffolds
+        for proj in self.projection_methods:
             # msDM
             try:
                 self.project(projection_method=proj, multiscale=True)
@@ -852,7 +796,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
 
     @property
-    def global_id_mle(self):
+    def global_id(self):
         """
         Global intrinsic dimensionality estimated by the Maximum Likelihood Estimator (MLE).
 
@@ -866,37 +810,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If MLE details are not available (e.g., `.fit(X)` has not been called).
         """
-        det = getattr(self, "_id_details", {}).get('mle', None)
-        if det is None: 
-            raise AttributeError("MLE details not available. Call .fit(X) first.")
-        return float(det.get('global_id_mle', 
-                            (self.global_dimensionality or {}).get('mle', np.nan)))
+        return self.global_dimensionality
 
-    @property
-    def global_id_fsa(self):
-        """
-        Global intrinsic dimensionality estimated by the Fisher Separability Analysis (FSA) method.
-
-        Notes
-        -----
-        Uses the quantile value of the robust per-cell ID distribution (before applying headroom)
-        as a global proxy.
-
-        Returns
-        -------
-        float
-            The global FSA dimension estimate, as computed during `.fit(X)`.
-
-        Raises
-        ------
-        AttributeError
-            If FSA details are not available (e.g., `.fit(X)` has not been called).
-        """
-        det = getattr(self, "_id_details", {}).get('fsa', None)
-        if det is None:
-            raise AttributeError("FSA details not available. Call .fit(X) first.")
-        return float(det.get('quantile_value', 
-                            (self.global_dimensionality or {}).get('fsa', np.nan)))
 
     @property
     def local_ids(self):
@@ -916,12 +831,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             If local ID details are not available (e.g., `.fit(X)` has not been called).
         """
         out = {}
-        det_mle = getattr(self, "_id_details", {}).get('mle', None)
-        det_fsa = getattr(self, "_id_details", {}).get('fsa', None)
-        if det_mle is not None:
-            out['mle'] = det_mle.get('local_id_mle', (self.local_dimensionality or {}).get('mle', None))
-        if det_fsa is not None:
-            out['fsa'] = det_fsa.get('robust_cell_id', (self.local_dimensionality or {}).get('fsa', None))
+        det = getattr(self, "_id_details", {}).get(self.id_method, None)
+        if det is not None:
+            out[self.id_method] = det.get('local_id', (self.local_dimensionality or {}).get(self.id_method, None))
         if not out:
             raise AttributeError("Local ID details not available. Call .fit(X) first.")
         return out
@@ -1065,7 +977,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         landmarks=None,
         landmark_method='kmeans',
         n_neighbors=None,
-        num_iters=500,
+        num_iters=300,
         multiscale=True,
         # ---- NEW: checkpointing passthrough (MAP) ----
         save_every=None,                 # int or None. If int>0, store Y every `save_every` epochs
@@ -1096,7 +1008,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             raise ValueError('n_neighbors must be an integer')
 
         if projection_method is None:
-            projection_method = self.projection_method
+            projection_method = self.projection_methods[0]
 
         # choose which refined graph to use
         if multiscale:
