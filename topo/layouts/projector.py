@@ -54,7 +54,7 @@ class Projector(BaseEstimator, TransformerMixin):
     projection_method : str (optional, default 'Isomap').
         Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses and 'MAP' relies
         on code that is adapted from UMAP. Current options are:
-            * ['Isomap']() - one of the first manifold learning methods
+            * 'Isomap' - one of the first manifold learning methods
             * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
             * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
             * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)

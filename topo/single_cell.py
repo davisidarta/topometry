@@ -552,35 +552,25 @@ if _HAVE_SCANPY:
         if need_refit:
             tg.fit(adata.X)
 
-        # From here on, reuse the fitted tg (new or reused). Populate adata:
-        # (1) store scaffolds
+        # (1) store scaffolds (TopOGraph.spectral_scaffold already returns UoM aggregates if enabled)
         adata.obsm["X_ms_spectral_scaffold"] = tg.spectral_scaffold(multiscale=True)[:, :getattr(tg, "_scaffold_components_ms", tg.n_eigs)]
         adata.obsm["X_spectral_scaffold"]    = tg.spectral_scaffold(multiscale=False)[:, :getattr(tg, "_scaffold_components_dm", tg.n_eigs)]
 
-        # (2) store projections if requested/available
-        # Normalize a single string to a tuple
+        # (2) store projections if requested/available (unchanged loop; properties now resolve UoM)
         if isinstance(projections, str):
             projections = (projections,)
-
-        # Pretty names used in adata.obsm keys
         pretty_map = {"MAP": "TopoMAP", "PaCMAP": "TopoPaCMAP"}
-
-        # Map requested method & scale -> TopOGraph property name
-        prop_map = {
-            "MAP":    {False: "TopoMAP",     True: "msTopoMAP"},
-            "PaCMAP": {False: "TopoPaCMAP",  True: "msTopoPaCMAP"},
-        }
+        prop_map = {"MAP": {False: "TopoMAP", True: "msTopoMAP"},
+                    "PaCMAP": {False: "TopoPaCMAP", True: "msTopoPaCMAP"}}
 
         def _get_projection_if_available(tg, method: str, multiscale: bool):
-            """Return embedding array if the corresponding property exists, else None."""
             prop = prop_map[method][multiscale]
             try:
-                return getattr(tg, prop)  # property raises AttributeError if missing
+                return getattr(tg, prop)
             except AttributeError:
                 return None
 
         def _ensure_projection(tg, method: str, multiscale: bool):
-            """Compute projection only if not already available; return the array or None."""
             Y = _get_projection_if_available(tg, method, multiscale)
             if Y is None:
                 tg.project(projection_method=method, multiscale=multiscale)
@@ -589,59 +579,91 @@ if _HAVE_SCANPY:
 
         for proj in projections:
             if proj not in prop_map:
-                # Unknown projection name; skip safely
                 continue
-            pretty = pretty_map.get(proj, proj)  # e.g., "MAP" -> "TopoMAP"
-
-            # Multiscale (msDM)
+            pretty = pretty_map.get(proj, proj)
             Y_ms = _ensure_projection(tg, proj, multiscale=True)
             if Y_ms is not None:
-                adata.obsm[f"X_ms{pretty}"] = Y_ms      # X_msTopoMAP / X_msTopoPaCMAP
-
-            # Single-scale DM
+                adata.obsm[f"X_ms{pretty}"] = Y_ms
             Y_dm = _ensure_projection(tg, proj, multiscale=False)
             if Y_dm is not None:
-                adata.obsm[f"X_{pretty}"] = Y_dm        # X_TopoMAP / X_TopoPaCMAP
+                adata.obsm[f"X_{pretty}"] = Y_dm
 
-        # (3) clustering on refined DM graph (tg.P_of_Z)
-        if do_leiden:
+        try:
+            if getattr(tg, "uom_enabled", False) and getattr(tg, "uom_comp_labels_", None) is not None:
+                adata.obs["topometry_component"] = pd.Categorical(tg.uom_comp_labels_.astype(str))
+        except Exception:
+            pass
+
+        def _csr(A):
+            return A if issparse(A) else csr_matrix(A)
+
+        def _do_leiden(
+            adata,
+            tg,
+            P,
+            *,
+            leiden_key_base: str,
+            leiden_resolutions: list[float] | tuple[float, ...],
+            leiden_primary_index: int,
+            neighbors_key: str,
+            out_connectivities_key: str,
+            out_distances_key: str,
+        ):
             import scanpy as sc
-            from scipy.sparse import issparse, csr_matrix
+            # expose to obsp
+            adata.obsp[out_connectivities_key] = P
+            adata.obsp[out_distances_key] = P
+            # reuse neighbors slot if compatible
+            need_fit = True
+            if neighbors_key in adata.uns:
+                conn = adata.uns[neighbors_key].get("connectivities", None)
+                if conn is not None and getattr(conn, "shape", None) == P.shape:
+                    need_fit = False
+            if need_fit:
+                use_rep = None
+                if "X_ms_spectral_scaffold" in adata.obsm_keys():
+                    use_rep = "X_ms_spectral_scaffold"
+                elif "X_spectral_scaffold" in adata.obsm_keys():
+                    use_rep = "X_spectral_scaffold"
+                sc.pp.neighbors(
+                    adata,
+                    use_rep=use_rep,
+                    n_neighbors=2,
+                    method="umap",
+                    key_added=neighbors_key,
+                )
+            adata.uns[neighbors_key]["connectivities"] = P
+            adata.uns[neighbors_key]["distances"] = P
+            for res in leiden_resolutions:
+                key = f"{leiden_key_base}_res{res:g}"
+                sc.tl.leiden(adata, resolution=res, neighbors_key=neighbors_key, key_added=key)
+            primary = f"{leiden_key_base}_res{leiden_resolutions[leiden_primary_index]:g}"
+            adata.obs[leiden_key_base] = adata.obs[primary].astype("category")
 
-            def _csr(A):
-                return A if issparse(A) else csr_matrix(A)
-
-            # --- DM refined operator ---
-            P = _csr(tg.P_of_Z)
-            # Make it available to the report:
-            adata.obsp["topometry_connectivities"] = P
-            # (We use the same matrix as a reasonable proxy for distances)
-            adata.obsp["topometry_distances"] = P
-
-            # --- msDM refined operator (if present) ---
+        # single unified path (UoM returns block-diagonal via properties)
+        if do_leiden:
+            P_dm = _csr(tg.P_of_Z)
+            _do_leiden(
+                adata, tg, P_dm,
+                leiden_key_base=leiden_key_base,
+                leiden_resolutions=leiden_resolutions,
+                leiden_primary_index=leiden_primary_index,
+                neighbors_key="_topo_tmp_dm",
+                out_connectivities_key="topometry_connectivities",
+                out_distances_key="topometry_distances",
+            )
             P_ms = getattr(tg, "P_of_msZ", None)
             if P_ms is not None:
                 P_ms = _csr(P_ms)
-                adata.obsp["topometry_connectivities_ms"] = P_ms
-                adata.obsp["topometry_distances_ms"] = P_ms
-
-            # Build a temporary neighbors_key for Leiden using our P
-            sc.pp.neighbors(
-                adata,
-                use_rep=None,
-                n_neighbors=tg.graph_knn,
-                method="umap",
-                key_added="_topo_tmp",
-            )
-            adata.uns["_topo_tmp"]["connectivities"] = P
-            adata.uns["_topo_tmp"]["distances"] = P  # acceptable proxy
-
-            for i, res in enumerate(leiden_resolutions):
-                key = f"{leiden_key_base}_res{res:g}"
-                sc.tl.leiden(adata, resolution=res, neighbors_key="_topo_tmp", key_added=key)
-
-            primary = f"{leiden_key_base}_res{leiden_resolutions[leiden_primary_index]:g}"
-            adata.obs[leiden_key_base] = adata.obs[primary].astype("category")
+                _do_leiden(
+                    adata, tg, P_ms,
+                    leiden_key_base=f"{leiden_key_base}_ms",
+                    leiden_resolutions=leiden_resolutions,
+                    leiden_primary_index=leiden_primary_index,
+                    neighbors_key="_topo_tmp_ms",
+                    out_connectivities_key="topometry_connectivities_ms",
+                    out_distances_key="topometry_distances_ms",
+                )
 
         return tg
 
@@ -2404,9 +2426,9 @@ if _HAVE_SCANPY:
                 "   2) refines their geometry with diffusion,\n"
                 "   3) constructs a spectral scaffold capturing the data geometry (akin to diffusion maps),\n"
                 "   4) learns a second, refined graph and its Laplacian operators,\n"
-                "   5) uses the scaffold and refined graph to produce faithful 2-D views (TopoMAP / TopoPaCMAP) that"
-                "      preserve global and local structure better than direct PCA/UMAP in many datasets.\n \n"
-                "   • Quantifies distortions in low-dimensional representations and provides intuitive diagnostic plots.\n \n"
+                "   5) uses the scaffold and refined graph to produce faithful 2-D views (TopoMAP / TopoPaCMAP) that "
+                "preserve global and local structure better than direct PCA/UMAP in many datasets.\n \n"
+                "   • TopoMetry also quantifies distortions in low-dimensional representations and provides intuitive diagnostic plots.\n \n"
                 "   • Extra tools: intrinsic dimensionality estimation, spectral selectivity (axes linked to biology),"
                 " and graph-diffusion for pseudotime analysis, imputation, denoising and filtering."
             )
@@ -2430,7 +2452,7 @@ if _HAVE_SCANPY:
                 f"• k-nearest neighbors for base graph: {base_knn} / metric: {base_metric} / kernel version: {_safe(bk_ver)}\n"
                 f"• k-nearest neighbors for refined graph: {graph_knn} / metric: {graph_metric} / kernel version: {_safe(gk_ver)}\n"
             )
-            ax.text(0.0, y, s2, ha='left', va='top', fontsize=10, linespacing=1.30, wrap=True)
+            ax.text(0.0, y, s2, ha='left', va='top', fontsize=11, linespacing=1.30, wrap=True)
             s2_lines = s2.count("\n") + 2
             y -= s2_lines * line_h_small
 
@@ -2441,15 +2463,21 @@ if _HAVE_SCANPY:
             ax.text(0.0, y, "What you can use next:", ha='left', va='top', fontsize=12, weight='bold')
             y -= line_h_medium
             avail = []
-            avail.append("• 2-D views: " + (", ".join(embeddings_available) if embeddings_available else "(none cached)") + " in adata.obsm")
+            avail.append("• Spectral scaffold coordinates: in `adata.obsm['X_spectral_scaffold']` and `adata.obsm['X_multiscale_scaffold']`")
+            avail.append("  - Construct your own neighborhood graphs on these scaffolds using `sc.pp.neighbors(adata, use_rep='X_spectral_scaffold')`" \
+            " to generate custom UMAPs, clusters, etc." )
+            avail.append("  - For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_msDM with bw_adaptive', n_neighbors=10)` ." )
+            avail.append("• 2-D layouts: " + (", ".join(embeddings_available) if embeddings_available else "(none cached)") + " in adata.obsm")
+            avail.append("  - Visualize gene expression and metadata in `adata.obs` using `sc.pl.embedding(adata, basis='TopoMAP',...)` ." )
             avail.append("• Graphs: " + (", ".join(graphs_available) if graphs_available else "(none cached)") + " in adata.obsp")
+            avail.append("• Imputed data: : imputed/smoothed signals stored in `adata.layers['topo_imputation']`." )
             if cluster_keys:
                 avail.append("• Clustering results: " + ", ".join(cluster_keys[:8]) + (" ..." if len(cluster_keys) > 8 else "") + " in adata.obs")
             if best_geo_line:
                 avail.append(best_geo_line)
 
             s3 = "\n".join(avail)
-            ax.text(0.0, y, s3, ha='left', va='top', fontsize=10, linespacing=1.30, wrap=True)
+            ax.text(0.0, y, s3, ha='left', va='top', fontsize=11, linespacing=1.30, wrap=True)
 
             # (no extra tip box; Section 3 replaces the old footer tip as requested)
 
@@ -2797,16 +2825,16 @@ if _HAVE_SCANPY:
                 leg_ax = fig.add_axes([0.04, 0.045, 0.92, 0.06])  # x, y, w, h (fractions of figure)
                 leg_ax.axis('off')
                 legend_text = (
-                    "EAS (Entropy-based Axis Selectivity): in [0,1]; higher means each cell’s energy is concentrated on a single spectral axis. "
+                    "• EAS (Entropy-based Axis Selectivity): in [0,1]; higher means each cell’s energy is concentrated on a single spectral axis. "
                     "Computed from squared, standardized scaffold coordinates with eigenvalue weights (default λ/(1−λ)).\n"
-                    "RayScore: highlights coherent radial progressions along a dominant axis; defined as sigmoid(neighborhood radial z-score) × EAS. "
+                    "• RayScore: highlights coherent radial progressions along a dominant axis; defined as sigmoid(neighborhood radial z-score) × EAS. "
                     "Large values indicate ray-like trajectories pointing outward; axis sign is stored separately.\n"
-                    "LAC (Local Axial Coherence): fraction of local variance explained by the first principal component (EVR₁) within k-NN; "
+                    "• LAC (Local Axial Coherence): fraction of local variance explained by the first principal component (EVR₁) within k-NN; "
                     "near 1.0 indicates locally 1-D structure aligned with a single axis.\n"
-                    "Radius (spectral radius): Euclidean norm of standardized scaffold coordinates (‖Z‖₂); a proxy for distance from the origin in spectral space, "
+                    "• Radius (spectral radius): Euclidean norm of standardized scaffold coordinates (‖Z‖₂); a proxy for distance from the origin in spectral space, "
                     "often correlating with progress along diffusion time."
                 )
-                leg_ax.text(0.0, 0.5, legend_text, ha='left', va='center', fontsize=11, wrap=True)
+                leg_ax.text(0.0, 0.5, legend_text, ha='left', va='center', fontsize=9, wrap=True)
 
                 #fig.suptitle(f"Spectral selectivity — {variant}", y=0.98, fontsize=12)
                 if variant == 'msDM':

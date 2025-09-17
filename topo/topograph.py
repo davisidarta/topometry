@@ -141,38 +141,40 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Legacy storage for advanced/benchmarking use-cases.
     """
 
+    # --- Updated constructor (__init__) with UoM flag & state ----------------
     def __init__(self,
-                 base_knn=30,
-                 graph_knn=30,
-                 min_eigs=128,
-                 n_jobs=-1,
-                 projection_methods=['MAP','PaCMAP'],
-                 base_kernel=None,
-                 base_kernel_version='bw_adaptive',
-                 eigenmap_method=None,  # deprecated
-                 laplacian_type='normalized', # deprecated
-                 graph_kernel_version='bw_adaptive',
-                 base_metric='cosine',
-                 graph_metric='euclidean',
-                 diff_t=1,
-                 delta=1.0,
-                 sigma=0.1,
-                 low_memory=False,
-                 eigen_tol=1e-8,
-                 eigensolver='arpack',
-                 backend='hnswlib',
-                 cache=True,
-                 verbosity=0,
-                 random_state=42,
-                 # ID defaults (both methods computed; `id_method` selects the size used)
-                 id_method='fsa',
-                 id_ks=50,
-                 id_metric='euclidean',
-                 id_quantile=0.99,
-                 id_min_components=128,
-                 id_max_components=1024,
-                 id_headroom=0.5,
-                 ):
+                base_knn=30,
+                graph_knn=30,
+                min_eigs=128,
+                n_jobs=-1,
+                projection_methods=['MAP','PaCMAP'],
+                base_kernel=None,
+                base_kernel_version='bw_adaptive',
+                eigenmap_method=None,  # deprecated
+                laplacian_type='normalized', # deprecated
+                graph_kernel_version='bw_adaptive',
+                base_metric='cosine',
+                graph_metric='euclidean',
+                diff_t=1,
+                delta=1.0,
+                sigma=0.1,
+                low_memory=False,
+                eigen_tol=1e-8,
+                eigensolver='arpack',
+                backend='hnswlib',
+                cache=True,
+                verbosity=0,
+                random_state=0,
+                # ID defaults (both methods computed; `id_method` selects the size used)
+                id_method='fsa',
+                id_ks=50,
+                id_metric='euclidean',
+                id_quantile=0.99,
+                id_min_components=128,
+                id_max_components=1024,
+                id_headroom=0.5,
+                uom=False,
+                ):
         # Core config
         self.projection_methods = projection_methods
         self.diff_t = diff_t
@@ -254,9 +256,43 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._kernel_msZ = None
         self._kernel_Z = None
 
-        # Snapshots storage (for MAP checkpointing) — ensure attributes exist
+        # Snapshots storage (for MAP checkpointing)
         self.msTopoMAP_snapshots = []
         self.TopoMAP_snapshots = []
+
+        # ------------------ Union-of-Manifolds state ------------------
+        self.uom_enabled = bool(uom)
+        self.uom_comp_labels_ = None                 # shape (n,)
+        self.uom_components_ = None                  # list of np.ndarray indices (per component)
+
+        # Per-component stores (lists aligned with uom_components_)
+        self.uom_knn_X_list = None   # list[csr_matrix] per component (kNN on X_i)
+        self.knn_X_uom = None        # aggregated block-diagonal kNN(X)
+        self.P_of_X_uom = None       # aggregated block-diagonal P_of_X
+        self.uom_BaseKernel_list = None              # list[Kernel] (P_of_Xi)
+        self.uom_DMEig_list = None                   # list[EigenDecomposition]
+        self.uom_msDMEig_list = None                 # list[EigenDecomposition]
+        self.uom_eigenvalues_dm_list = None   # list[np.ndarray], per-component DM eigenvalues
+        self.uom_eigenvalues_ms_list = None   # list[np.ndarray], per-component msDM eigenvalues
+        self._uom_active_mode = "msDM"        # track which mode is considered 'active' for summaries
+        self.uom_Z_list = None                       # list[np.ndarray]
+        self.uom_msZ_list = None                     # list[np.ndarray]
+        self.uom_knn_Z_list = None                   # list[csr_matrix]
+        self.uom_knn_msZ_list = None                 # list[csr_matrix]
+        self.uom_Kernel_Z_list = None                # list[Kernel]
+        self.uom_Kernel_msZ_list = None              # list[Kernel]
+
+        # Aggregated UoM views
+        self.Z_uom = None
+        self.msZ_uom = None
+        self.knn_Z_uom = None
+        self.knn_msZ_uom = None
+        self.P_of_Z_uom = None
+        self.P_of_msZ_uom = None
+        self._uom_axis_slices = None                 # list[(start,end)] per component
+        # --- UoM cached components (user- or auto-computed) ---
+        self.uom_comp_labels_: Optional[np.ndarray] = None   # shape (n,) or None
+        self.uom_components_: Optional[list[np.ndarray]] = None
 
     # ---------------------------------------------------------------------
     # Representation & internals
@@ -389,33 +425,310 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._id_details[self.id_method] = id_details
 
 
+    def _csr(self, A): 
+        return A if sp.isspmatrix_csr(A) else A.tocsr()
+
+    def _to_float32_csr(self, A: sp.csr_matrix) -> sp.csr_matrix:
+        A = self._csr(A)
+        if A.dtype != np.float32:
+            A = A.astype(np.float32, copy=False)
+        return A
+
+    def _symmetrize_geometric(self, P: sp.csr_matrix) -> sp.csr_matrix:
+        """S_ij = sqrt(P_ij * P_ji) on overlapping support (CSR float32)."""
+        P = self._to_float32_csr(P)
+        S = P.multiply(P.T)
+        if S.nnz == 0:
+            return S
+        S.data = np.sqrt(S.data.astype(np.float64)).astype(np.float32, copy=False)
+        S.eliminate_zeros()
+        return S
+
+    def _normalized_laplacian(self, A: sp.csr_matrix) -> sp.csr_matrix:
+        A = self._to_float32_csr(A)
+        n = A.shape[0]
+        d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64).clip(min=1e-12)
+        Dmh = sp.diags((1.0 / np.sqrt(d)).astype(np.float32))
+        return sp.eye(n, dtype=np.float32, format="csr") - (Dmh @ A @ Dmh)
+
+    def _eigengap_k(self, vals: np.ndarray, k_max: int, k_min: int = 2) -> int:
+        vals = np.asarray(vals, dtype=float)
+        if vals.size <= 2: return max(k_min, min(k_max, 2))
+        gaps = np.diff(vals)
+        if gaps.size <= 1: return max(k_min, min(k_max, 2))
+        j = int(np.argmax(gaps[1:])) + 1
+        return int(max(k_min, min(k_max, j + 1)))
+
+    def _mbkm(self, X: np.ndarray, n_clusters: int, random_state: int = 0) -> np.ndarray:
+        from sklearn.cluster import MiniBatchKMeans
+        n_use = int(max(2, n_clusters))
+        batch = int(min(2048, max(256, 8 * n_use * n_use)))
+        km = MiniBatchKMeans(
+            n_clusters=n_use, batch_size=batch, n_init=10, max_no_improvement=30,
+            reassignment_ratio=0.01, random_state=random_state, verbose=0,
+        )
+        return km.fit_predict(X.astype(np.float32, copy=False))
+
+    def _consolidate_macros_via_conductance(self, W: sp.csr_matrix, labels: np.ndarray, max_iters: int = 100):
+        W = self._to_float32_csr(W)
+        labels = labels.copy()
+        it = 0
+        while it < max_iters:
+            it += 1
+            uniq = np.unique(labels)
+            if uniq.size <= 2:
+                break
+            deg = np.asarray(W.sum(axis=1)).ravel().astype(np.float64)
+            phi, idx_list = [], []
+            # Merge macros whose volume is tiny vs median (e.g., < 0.6 * median)
+            vols = [float(W[idx, :].sum()) for idx in idx_list]
+            med_vol = np.median(vols) if len(vols) else 0.0
+            tiny = [i for i, v in enumerate(vols) if v < 0.6 * med_vol and len(idx_list[i]) > 0]
+
+            for t in tiny:
+                idx_t = idx_list[t]
+                # find strongest neighbor to merge into
+                best_neighbor, best_w = None, -1.0
+                for j, idx_other in enumerate(idx_list):
+                    if j == t or len(idx_other) == 0:
+                        continue
+                    w = float(W[np.ix_(idx_t, idx_other)].sum())
+                    if w > best_w:
+                        best_w = w
+                        best_neighbor = j
+                if best_neighbor is not None:
+                    labels[idx_t] = uniq[best_neighbor]
+            # reindex after tiny merges before computing phi
+            _, labels = np.unique(labels, return_inverse=True)
+            for g in uniq:
+                idx = np.where(labels == g)[0]
+                idx_list.append(idx)
+                comp = W[np.ix_(idx, idx)]
+                internal = (comp.sum() - comp.diagonal().sum()).astype(np.float64)
+                ext = (deg[idx].sum() - 2.0 * internal).astype(np.float64)
+                phi.append(float(ext / (ext + 2.0 * internal + 1e-12)))
+            phi = np.array(phi, dtype=float)
+            if phi.size < 3: break
+            q1, q3 = np.percentile(phi, [25, 75]); thr = q3 + 1.0 * (q3 - q1)
+            mask = phi > thr
+            if not mask.any(): break
+            worst_pos = int(np.argmax(phi * mask))
+            idx_worst = idx_list[worst_pos]
+            best_neighbor, best_w = None, -1.0
+            for pos, idx_other in enumerate(idx_list):
+                if pos == worst_pos: continue
+                w = float(W[np.ix_(idx_worst, idx_other)].sum())
+                if w > best_w: best_w, best_neighbor = w, uniq[pos]
+            if best_neighbor is None: break
+            labels[idx_worst] = best_neighbor
+        _, labels_new = np.unique(labels, return_inverse=True)
+        return labels_new
+
+    # -------------------- Louvain (pure SciPy) --------------------
+    def _louvain_micro(self, S: sp.csr_matrix, random_state: int = 0, max_passes: int = 100, gamma: float = 0.85):
+        """
+        Greedy Louvain (modularity) on weighted undirected graph S (CSR).
+        Returns micro labels (ints). No external deps.
+        """
+        rng = np.random.RandomState(int(random_state))
+        S = self._to_float32_csr(S)
+        n = S.shape[0]
+        if n <= 2 or S.nnz == 0:
+            return np.zeros(n, dtype=int)
+
+        # Modularity constants
+        w = float(S.sum())                # total graph weight (sum of all edges)
+        if w <= 0: 
+            return np.zeros(n, dtype=int)
+        m2 = w                            # 2m in standard notation if S has each edge once per direction
+        ki = np.asarray(S.sum(axis=1)).ravel().astype(np.float64)  # degree/strength per node
+
+        # init: each node in its own community
+        labels = np.arange(n, dtype=int)
+        # community strength (sum of degrees) and internal weights
+        com_deg = ki.copy()               # sum of degrees in community
+        com_in = np.zeros(n, dtype=np.float64)   # 2 * internal edge weight per community
+
+        # Precompute neighbors lists (& weights) for speed
+        S = S.tocsr()
+        indptr, indices, data = S.indptr, S.indices, S.data
+
+        improved = True
+        passes = 0
+        while improved and passes < max_passes:
+            improved = False
+            passes += 1
+            order = np.arange(n); rng.shuffle(order)
+
+            for v in order:
+                v_lab = labels[v]
+                k_v = ki[v]
+                # remove v from its community
+                # contribution removal: we’ll adjust when computing deltas; implicit here
+
+                # neighborhood community weights: sum of weights from v to each neighbor's community
+                start, end = indptr[v], indptr[v+1]
+                nbrs = indices[start:end]
+                wts  = data[start:end]
+
+                # accumulate weights per community
+                com_w = {}
+                for u, wvu in zip(nbrs, wts):
+                    cu = labels[u]
+                    com_w[cu] = com_w.get(cu, 0.0) + float(wvu)
+
+                # compute best move (ΔQ)
+                best_c, best_dq = v_lab, 0.0
+                # remove v from its current community: compute com_deg without v
+                com_deg_v_removed = com_deg[v_lab] - k_v
+
+                for c, k_v_in in com_w.items():
+                    if c == v_lab and com_deg_v_removed <= 0:
+                        # staying put, but treat as candidate with dq=0
+                        continue
+                    # ΔQ (modularity) for moving v -> c (Newman-Girvan, weighted)
+                    # ΔQ = [k_v_in - k_v * (sum_deg_c) / m2] / m2 * 2  (simplified constants folded)
+                    dq = k_v_in - gamma * (k_v * (com_deg[c]) / m2)
+
+                    if c != v_lab and dq > best_dq:
+                        best_dq, best_c = dq, c
+                if best_c != v_lab and best_dq > 1e-12:
+                    # apply move
+                    labels[v] = best_c
+                    com_deg[v_lab] -= k_v
+                    com_deg[best_c] += k_v
+                    improved = True
+
+            # optional: relabel communities to be compact
+            _, labels = np.unique(labels, return_inverse=True)
+
+        return labels
+
+    # -------------------- main API (Louvain micro; rest unchanged) --------------------
+    def uom_find_components(self, P: sp.csr_matrix, random_state: int = 0, consolidate: bool = True, max_passes: int = 100, gamma: float = 0.85):
+        """
+        Discover disconnected "macro" components under the Union-of-Manifolds (UoM) hypothesis
+        using the refined TopoMetry operator (self.graph_kernel.P).
+
+        Workflow
+        --------
+        1. Symmetrize P via geometric mean → conservative similarity S.
+        2. If S already disconnected, return its connected components.
+        3. Micro partition: greedy Louvain clustering on S, with resolution γ < 1.
+        4. Build a supergraph W (micro × micro), edge weights = sum of S across partitions.
+        5. Macro partition: eigengap spectral clustering on W with MiniBatchKMeans.
+        6. Optional consolidation: merge fragile macros using a conductance outlier rule.
+        7. Propagate macro labels back to all cells.
+
+        Parameters
+        ----------
+        random_state : int or None, default=None
+            Random seed for stochastic parts (MiniBatchKMeans initialization,
+            node visiting order in Louvain).  
+            If None, falls back to `self.random_state`.
+
+        consolidate : bool, default=True
+            Whether to run a final **consolidation pass** on the macro components.  
+            Uses conductance-based outlier detection to merge flimsy macros into stronger
+            neighbors. Helps avoid over-splitting into many weak components.  
+            Set False to return the raw spectral partition.
+
+        gamma : float, default=0.85
+            Resolution parameter for Louvain modularity at the **micro** partition step.  
+            - γ < 1 → favors fewer, larger micro-communities (coarser).  
+            - γ > 1 → favors more, smaller micro-communities (finer).  
+            Lowering below 1 is generally helpful for UoM, as it avoids too many spurious
+            micro splits that later cascade into excess macro components.
+
+        max_passes : int, default=100
+            Maximum number of Louvain refinement passes over all nodes.  
+            Each pass shuffles nodes and attempts greedy modularity improvements.  
+            Larger values increase stability at the cost of runtime. Usually
+            20–50 passes are sufficient; 100 is a safe ceiling.
+
+        Returns
+        -------
+        n_comp : int
+            Number of discovered UoM components (macro-level).
+
+        labels : ndarray of shape (n_samples,)
+            Integer component label for each cell (0 .. n_comp-1).
+            These labels reflect the final macro components after optional consolidation.
+        """
+        from scipy.sparse.csgraph import connected_components
+        from scipy.sparse.linalg import eigsh
+
+        S = self._symmetrize_geometric(P)
+        n = S.shape[0]
+        if S.nnz == 0:
+            return np.zeros(n, dtype=int)
+
+        n_cc, cc_labels = connected_components(S, directed=False, return_labels=True)
+        if n_cc > 2:
+            return n_cc, cc_labels
+
+        # (3) micro via Louvain with resolution γ < 1
+        micro = self._louvain_micro(S, random_state=random_state, max_passes=max_passes, gamma=gamma)
+        _, micro_labels = np.unique(micro, return_inverse=True)
+        k = micro_labels.max() + 1
+
+        # (4) supergraph W (unchanged)
+        rows, cols = S.nonzero()
+        vals = np.asarray(S[rows, cols]).ravel()
+        mr, mc = micro_labels[rows], micro_labels[cols]
+        u = mr < mc
+        if not np.any(u):
+            return np.zeros(n, dtype=int)
+
+        r, c, w = mr[u], mc[u], vals[u]
+        idx = r * k + c
+        acc = np.bincount(idx, weights=w, minlength=k * k).astype(np.float32, copy=False).reshape(k, k)
+        W = sp.csr_matrix(acc + acc.T, dtype=np.float32)
+
+        if W.nnz == 0 or k <= 2:
+            return np.zeros(n, dtype=int) if k <= 1 else micro_labels
+
+        # (5) macro spectral + MBKM with slightly smaller k_max
+        Lw = self._normalized_laplacian(W)
+        k_max = int(min(8, max(3, np.floor(np.sqrt(k) + 1))))   # <- tweak
+        nev = int(min(k_max + 1, max(2, k - 1)))
+        vals_w, vecs_w = eigsh(Lw, k=nev, which="SM")
+        order = np.argsort(vals_w)
+        vals_w, vecs_w = vals_w[order], vecs_w[:, order]
+        k_macro = self._eigengap_k(vals_w[:nev], k_max=k_max, k_min=2)
+        Uw = vecs_w[:, :k_macro]
+        Uw /= (np.linalg.norm(Uw, axis=1, keepdims=True) + 1e-12)
+        macro = self._mbkm(Uw, n_clusters=k_macro, random_state=random_state)
+
+        # (6) stronger consolidation
+        if consolidate and np.unique(macro).size > 2:
+            macro = self._consolidate_macros_via_conductance(W, macro)
+
+        labels = macro[micro_labels]
+        n_comp = int(np.unique(labels).size)
+        self.uom_comp_labels_ = labels
+        self.uom_components_  = [np.where(labels == c)[0] for c in np.unique(labels)]
+        return n_comp, labels
+
+
+
+        
     # ---------------------------------------------------------------------
     # High-level fit (builds everything) – dual scaffold
     # ---------------------------------------------------------------------
     def fit(self, X=None, **kwargs):
         """
         Build base kNN, base kernel P(X). Compute both msDM and DM eigenbases (dual scaffold).
-        Estimate intrinsic dimensionality (both FSA and MLE; store details). Size the scaffolds.
-        Build kNN and refined graphs/operators on each scaffold (msDM, DM). Prepare spectral init.
-        Compute standard projections (MAP and PaCMAP) on both scaffolds.
-
-        Parameters
-        ----------
-        X : array-like or sparse matrix
-            High-dimensional data (Z-score normalized is recommended).
-
-        **kwargs : passed to `topo.base.ann.kNN()`
-
-        Returns
-        -------
-        self
+        Optionally (uom=True), detect disconnected components and build per-component
+        scaffolds and refined graphs; aggregate them into block-diagonal operators and
+        concatenated coordinates with no cross-component edges.
         """
-        # Basic checks
+        # Basic checks (as before)
         if self.base_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying',
                                             'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
             raise ValueError("Invalid base_kernel_version.")
         if self.graph_kernel_version not in ['fuzzy', 'cknn', 'bw_adaptive', 'bw_adaptive_alpha_decaying',
-                                             'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
+                                            'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian']:
             raise ValueError("Invalid graph_kernel_version.")
         if (X is not None) and ((self.n_eigs - 1 > X.shape[0]) or (self.n_eigs - 1 > X.shape[1])):
             raise ValueError("n_eigs must be less than the number of samples and observations in X")
@@ -497,143 +810,406 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print(f' Base kernel ({self.base_kernel_version}) fitted in {self.runtimes["Kernel_X"]:.3f} sec')
 
+        # Global automated sizing (diagnostics / BC)
         if self.base_metric != 'precomputed':
             self._automated_sizing(X if X is not None else self.base_kernel.X)
             if self.verbosity >= 1:
                 print(f"Automated sizing (pre-eigs) → target components: {self._scaffold_components_ms} "
                     f"(n_eigs set to {self.n_eigs})")
-                
 
-        # Compute eigenbases
-        if self.verbosity >= 1:
-            print('Computing eigenbasis (once on P); deriving DM/msDM embeddings in transform()...')
+        self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-        dm_key = 'DM with ' + str(self.base_kernel_version)
-        ms_key = 'msDM with ' + str(self.base_kernel_version)
-
-        if dm_key not in self.EigenbasisDict:
-            t0 = time.time()
-            dm_eig = EigenDecomposition(
-                n_components=self.n_eigs,
-                method='DM',                 # <- fit on P; no powering; DM uses λ**t in transform()
-                eigensolver=self.eigensolver,
-                eigen_tol=self.eigen_tol,
-                drop_first=True,
-                weight=True,
-                t=self.diff_t,
-                random_state=self.random_state,
-                verbose=self.bases_graph_verbose
-            ).fit(self.base_kernel)
-            self.EigenbasisDict[dm_key] = dm_eig
-            self.runtimes[dm_key] = time.time() - t0
+        # --- UoM branch: detect components and build per-component pipelines ---
+        if self.uom_enabled:
             if self.verbosity >= 1:
-                print(f' DM/msDM eigenpairs computed in {self.runtimes[dm_key]:.3f} sec')
+                print('UoM: detecting disconnected components in P(X) and building per-component scaffolds/graphs...')
+
+            class _ProxyKernel:
+                __slots__ = ("P", "K")
+                def __init__(self, P): self.P = P; self.K = P
+
+            if (self.uom_comp_labels_ is not None) and (self.uom_comp_labels_.shape[0] == self.n):
+                labels = self.uom_comp_labels_
+                n_comp = int(np.unique(labels).size)
+                if self.verbosity >= 1:
+                    print(f"UoM: using precomputed component labels (n={n_comp}).")
+            else:
+                # Build components on the refined operator (already available now)
+                n_comp, labels = self.uom_find_components(P=self.base_kernel.P)
+                if self.verbosity >= 1:
+                    print(f"UoM: computed component labels on refined graph (n={n_comp}).")
+
+            self.uom_comp_labels_ = labels
+            self.uom_components_  = [np.where(labels == c)[0] for c in np.unique(labels)]
+
+            # Prepare per-component containers
+            self.uom_knn_X_list, self.uom_BaseKernel_list, self.uom_DMEig_list, self.uom_msDMEig_list = [], [], [], []
+            self.uom_Z_list, self.uom_msZ_list = [], []
+            self.uom_knn_Z_list, self.uom_knn_msZ_list = [], []
+            self.uom_Kernel_Z_list, self.uom_Kernel_msZ_list = [], []
+
+            # Helper for per-component sizing (without touching global state)
+            def _local_size(Xi, n_max):
+                n_i = Xi.shape[0]
+                cap = min(int(self.id_max_components), max(2, n_i - 2))
+                k_auto, _det = automated_scaffold_sizing(
+                    Xi,
+                    method=self.id_method,
+                    ks=self.id_ks,
+                    backend=self.backend,
+                    metric=self.id_metric,
+                    n_jobs=self.n_jobs if self.n_jobs != -1 else None,
+                    quantile=self.id_quantile,
+                    min_components=int(min(self.id_min_components, cap)),
+                    max_components=int(min(cap, n_max)),
+                    headroom=float(self.id_headroom),
+                    random_state=self.random_state,
+                    return_details=True,
+                )
+                return int(max(2, min(k_auto, cap)))
+
+            # Build per-component products
+            for I in self.uom_components_:
+                n_i = int(I.size)
+                # Tiny components: fallback to trivial coordinates & identity operator
+                if n_i < 3:
+                    # Tiny components: fallback to trivial coordinates & identity operator
+                    Zi = np.zeros((n_i, 1), dtype=np.float32)
+                    msZi = Zi.copy()
+                    self.uom_Z_list.append(Zi)
+                    self.uom_msZ_list.append(msZi)
+
+                    # Graphs: 1-NN (self-loop) / identity diffusion
+                    P_block = sp.eye(n_i, format='csr', dtype=np.float32)
+                    self.uom_knn_Z_list.append(P_block.copy())
+                    self.uom_knn_msZ_list.append(P_block.copy())
+
+                    # Use proxy kernels instead of Kernel()
+                    KZ   = _ProxyKernel(P_block)
+                    KmsZ = _ProxyKernel(P_block)
+                    Ki   = _ProxyKernel(P_block)
+
+                    self.uom_Kernel_Z_list.append(KZ)
+                    self.uom_Kernel_msZ_list.append(KmsZ)
+                    self.uom_BaseKernel_list.append(Ki)
+                    self.uom_DMEig_list.append(None)
+                    self.uom_msDMEig_list.append(None)
+                    continue
+
+                # Build a fresh per-component kNN 
+                k_neighbors_i = min(self.base_knn, max(1, n_i - 1))
+                if self.base_metric == 'precomputed':
+                    Xi = (X[np.ix_(I, I)] if X is not None else
+                        (self.base_kernel.X[np.ix_(I, I)] if getattr(self.base_kernel, 'X', None) is not None else None))
+                else:
+                    Xi = (X[I] if (X is not None) else
+                        (self.base_kernel.X[I] if getattr(self.base_kernel, 'X', None) is not None else None))
+
+                knn_i = kNN(
+                    Xi,
+                    n_neighbors=k_neighbors_i,
+                    metric=self.base_metric,
+                    n_jobs=self.n_jobs,
+                    backend=self.backend,
+                    return_instance=False,
+                    verbose=False,
+                    **kwargs
+                )
+                self.uom_knn_X_list.append(knn_i)
+
+                Ki, _ = self._compute_kernel_from_version_knn(
+                    knn_i,
+                    min(self.base_knn, max(1, n_i - 1)),
+                    self.base_kernel_version,
+                    {} if self.low_memory else self.BaseKernelDict,
+                    suffix=f'_uom_X[{n_i}]',
+                    low_memory=self.low_memory,
+                    data_for_expansion=Xi,
+                    base=True
+                )
+                self.uom_BaseKernel_list.append(Ki)
+
+                # Per-component sizing (initial suggestion)
+                k_i = _local_size(Xi if Xi is not None else knn_i, n_max=n_i - 2)
+
+                # --- NEW: clamp against the actual N seen by the eigensolver ---
+                # (ARPACK requires k < N; use the Kernel's matrix shape, not just n_i)
+                Ki_mat = getattr(Ki, "K", None)
+                if Ki_mat is None:
+                    Ki_mat = getattr(Ki, "P", None)
+                N_i = int(Ki_mat.shape[0])
+
+                # Tiny safety: if something slipped through
+                if N_i <= 2:
+                    # fall back to the tiny-component path (same as your earlier branch)
+                    Zi = np.zeros((N_i, 1), dtype=np.float32)
+                    msZi = Zi.copy()
+                    self.uom_Z_list.append(Zi)
+                    self.uom_msZ_list.append(msZi)
+                    P_block = sp.eye(N_i, format='csr', dtype=np.float32)
+                    self.uom_knn_Z_list.append(P_block.copy())
+                    self.uom_knn_msZ_list.append(P_block.copy())
+                    self.uom_Kernel_Z_list.append(_ProxyKernel(P_block))
+                    self.uom_Kernel_msZ_list.append(_ProxyKernel(P_block))
+                    self.uom_BaseKernel_list.append(_ProxyKernel(P_block))
+                    self.uom_DMEig_list.append(None)
+                    self.uom_msDMEig_list.append(None)
+                    continue
+
+                # Final requested k: strictly less than N_i
+                k_req = int(min(max(k_i, 2), N_i - 1, self.n_eigs))
+                k_req = max(1, k_req)  # absolute lower bound
+
+                # Eigens on P_of_Xi with guaranteed k_req < N_i
+                eig_dm_i = EigenDecomposition(
+                    n_components=k_req,
+                    method='DM',
+                    eigensolver=self.eigensolver,
+                    eigen_tol=self.eigen_tol,
+                    drop_first=True,
+                    weight=True,
+                    t=self.diff_t,
+                    random_state=self.random_state,
+                    verbose=False
+                ).fit(Ki)
+
+                eig_ms_i = copy.deepcopy(eig_dm_i); eig_ms_i.method = 'msDM'
+                # Store per-component eigenvalues (DM & msDM; same spectrum, different transforms at use-time)
+                self.uom_eigenvalues_dm_list.append(np.array(eig_dm_i.eigenvalues, copy=True))
+                self.uom_eigenvalues_ms_list.append(np.array(eig_ms_i.eigenvalues, copy=True))
+                
+                k_avail = eig_dm_i.eigenvalues.shape[0]
+                k_use = min(k_i, k_avail)
+                Zi   = eig_dm_i.transform()[:, :k_use]
+                eig_ms_i = copy.deepcopy(eig_dm_i); eig_ms_i.method = 'msDM'
+                msZi = eig_ms_i.transform()[:, :k_use]
+
+                self.uom_DMEig_list.append(eig_dm_i); self.uom_msDMEig_list.append(eig_ms_i)
+                self.uom_Z_list.append(Zi); self.uom_msZ_list.append(msZi)
+
+                # kNN on Zi / msZi
+                k_graph_i = min(self.graph_knn, max(1, n_i - 1))
+                knn_Z_i = kNN(Zi, n_neighbors=k_graph_i, metric=self.graph_metric,
+                            n_jobs=self.n_jobs, backend=self.backend, return_instance=False,
+                            verbose=False, **kwargs)
+                knn_msZ_i = kNN(msZi, n_neighbors=k_graph_i, metric=self.graph_metric,
+                                n_jobs=self.n_jobs, backend=self.backend, return_instance=False,
+                                verbose=False, **kwargs)
+                self.uom_knn_Z_list.append(knn_Z_i); self.uom_knn_msZ_list.append(knn_msZ_i)
+
+                # Refined kernels on Zi / msZi
+                KZ_i, _ = self._compute_kernel_from_version_knn(
+                    knn_Z_i, k_graph_i, self.graph_kernel_version,
+                    {} if self.low_memory else self.GraphKernelDict,
+                    suffix=f'_uom_Z[{n_i}]',
+                    low_memory=self.low_memory,
+                    data_for_expansion=Zi,
+                    base=False
+                )
+                KmsZ_i, _ = self._compute_kernel_from_version_knn(
+                    knn_msZ_i, k_graph_i, self.graph_kernel_version,
+                    {} if self.low_memory else self.GraphKernelDict,
+                    suffix=f'_uom_msZ[{n_i}]',
+                    low_memory=self.low_memory,
+                    data_for_expansion=msZi,
+                    base=False
+                )
+                self.uom_Kernel_Z_list.append(KZ_i); self.uom_Kernel_msZ_list.append(KmsZ_i)
+
+            # Aggregate (no cross-edges): place blocks at original indices
+            n = self.n
+            # Coordinates: concatenate columns with per-component slices
+            total_cols_Z = int(sum(z.shape[1] for z in self.uom_Z_list))
+            total_cols_msZ = int(sum(z.shape[1] for z in self.uom_msZ_list))
+            self.Z_uom = np.zeros((n, total_cols_Z), dtype=np.float32)
+            self.msZ_uom = np.zeros((n, total_cols_msZ), dtype=np.float32)
+            self._uom_axis_slices = []
+            c0 = 0
+            for I, Zi in zip(self.uom_components_, self.uom_Z_list):
+                c1 = c0 + Zi.shape[1]
+                self.Z_uom[I, c0:c1] = Zi
+                self._uom_axis_slices.append((c0, c1))
+                c0 = c1
+            c0 = 0
+            for I, msZi in zip(self.uom_components_, self.uom_msZ_list):
+                c1 = c0 + msZi.shape[1]
+                self.msZ_uom[I, c0:c1] = msZi
+                c0 = c1
+
+            # Graphs/operators: sparse assembly with block placement at (I, I)
+            def _place_blocks(block_list):
+                M = sp.lil_matrix((n, n), dtype=np.float32)
+                for I, B in zip(self.uom_components_, block_list):
+                    M[np.ix_(I, I)] = B
+                return M.tocsr()
+            self.knn_X_uom = _place_blocks(self.uom_knn_X_list)
+            self.P_of_X_uom = _place_blocks([K.P for K in self.uom_BaseKernel_list])
+            self.knn_Z_uom = _place_blocks(self.uom_knn_Z_list)
+            self.knn_msZ_uom = _place_blocks(self.uom_knn_msZ_list)
+            self.P_of_Z_uom = _place_blocks([K.P for K in self.uom_Kernel_Z_list])
+            self.P_of_msZ_uom = _place_blocks([K.P for K in self.uom_Kernel_msZ_list])
+
+            # Set an 'active eigenbasis' label for consistency in getters that check it
+            self.current_eigenbasis = f"UoM_{self._uom_active_mode}"
+            self.eigenbasis = None  # not a single global object; per-component lists are stored instead
+
+            # Set active refined graphs to UoM aggregates
+            self._knn_Z = self.knn_Z_uom
+            self._knn_msZ = self.knn_msZ_uom
+
+            # Lightweight proxy kernels for properties
+            self._kernel_Z = _ProxyKernel(self.P_of_Z_uom)
+            self._kernel_msZ = _ProxyKernel(self.P_of_msZ_uom)
+
+            # Spectral layout using UoM msZ operator by default
+            _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+
+            # Projections for both scaffolds (UoM-backed)
+            for proj in self.projection_methods:
+                try:
+                    self.project(projection_method=proj, multiscale=True)
+                except Exception as e:
+                    warnings.warn(f"Projection '{proj}' on msZ (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
+                try:
+                    self.project(projection_method=proj, multiscale=False)
+                except Exception as e:
+                    warnings.warn(f"Projection '{proj}' on Z/DM (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
+
+            # Optionally free per-component heavy objects if low_memory
+            if self.low_memory:
+                self.uom_BaseKernel_list = None
+                self.uom_DMEig_list = None
+                self.uom_msDMEig_list = None
+                self.uom_Kernel_Z_list = None
+                self.uom_Kernel_msZ_list = None
+
+            return self  # UoM path ends here
         else:
-            dm_eig = self.EigenbasisDict[dm_key]
+            # --- Compute global eigenbases (kept for BC/diagnostics) -------------
+            if self.verbosity >= 1:
+                print('Computing eigenbasis (once on P); deriving DM/msDM embeddings in transform()...')
 
-        # Clone dm_eig → ms_eig (share eigenpairs; different transform rule)
-        if ms_key not in self.EigenbasisDict:
-            ms_eig = copy.deepcopy(dm_eig)
-            ms_eig.method = 'msDM'
-            self.EigenbasisDict[ms_key] = ms_eig
-        else:
-            ms_eig = self.EigenbasisDict[ms_key]
+            dm_key = 'DM with ' + str(self.base_kernel_version)
+            ms_key = 'msDM with ' + str(self.base_kernel_version)
 
-        # Active eigenbasis (default msDM)
-        self.current_eigenbasis = ms_key
-        self.eigenbasis = self.EigenbasisDict[self.current_eigenbasis]
+            if dm_key not in self.EigenbasisDict:
+                t0 = time.time()
+                dm_eig = EigenDecomposition(
+                    n_components=self.n_eigs,
+                    method='DM',
+                    eigensolver=self.eigensolver,
+                    eigen_tol=self.eigen_tol,
+                    drop_first=True,
+                    weight=True,
+                    t=self.diff_t,
+                    random_state=self.random_state,
+                    verbose=self.bases_graph_verbose
+                ).fit(self.base_kernel)
+                self.EigenbasisDict[dm_key] = dm_eig
+                self.runtimes[dm_key] = time.time() - t0
+                if self.verbosity >= 1:
+                    print(f' DM/msDM eigenpairs computed in {self.runtimes[dm_key]:.3f} sec')
+            else:
+                dm_eig = self.EigenbasisDict[dm_key]
 
-        # kNN in msZ
-        if self.verbosity >= 1:
-            print('Computing neighborhood graph (msZ space)...')
-        t0 = time.time()
-        ms_target = ms_eig.transform()[:, :self._scaffold_components_ms]
-        self._knn_msZ = kNN(
-            ms_target,
-            n_neighbors=self.graph_knn,
-            metric=self.graph_metric,
-            n_jobs=self.n_jobs,
-            backend=self.backend,
-            return_instance=False,
-            verbose=self.bases_graph_verbose,
-            **kwargs
-        )
-        self.runtimes['kNN_msZ'] = time.time() - t0
-        if self.verbosity >= 1:
-            print(f' msZ kNN computed in {self.runtimes["kNN_msZ"]:.3f} sec')
+            if ms_key not in self.EigenbasisDict:
+                ms_eig = copy.deepcopy(dm_eig)
+                ms_eig.method = 'msDM'
+                self.EigenbasisDict[ms_key] = ms_eig
+            else:
+                ms_eig = self.EigenbasisDict[ms_key]
 
-        # kNN in Z (DM)
-        if self.verbosity >= 1:
-            print('Computing neighborhood graph (Z [DM] space)...')
-        t0 = time.time()
-        dm_target = dm_eig.transform()[:, :self._scaffold_components_dm]
-        self._knn_Z = kNN(
-            dm_target,
-            n_neighbors=self.graph_knn,
-            metric=self.graph_metric,
-            n_jobs=self.n_jobs,
-            backend=self.backend,
-            return_instance=False,
-            verbose=self.bases_graph_verbose,
-            **kwargs
-        )
-        self.runtimes['kNN_Z'] = time.time() - t0
-        if self.verbosity >= 1:
-            print(f' Z (DM) kNN computed in {self.runtimes["kNN_Z"]:.3f} sec')
+            # Active eigenbasis (default msDM)
+            self.current_eigenbasis = ms_key
+            self.eigenbasis = self.EigenbasisDict[self.current_eigenbasis]
 
-        # Graph kernel -> P(msZ)
-        t0 = time.time()
-        self._kernel_msZ, self.GraphKernelDict = self._compute_kernel_from_version_knn(
-            self._knn_msZ,
-            self.graph_knn,
-            self.graph_kernel_version,
-            self.GraphKernelDict,
-            suffix=' from ' + ms_key,
-            low_memory=self.low_memory,
-            data_for_expansion=ms_eig.transform(),
-            base=False
-        )
-        self.runtimes['Kernel_msZ'] = time.time() - t0
-        if self.verbosity >= 1:
-            print(f' Graph kernel (msZ/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_msZ"]:.3f} sec')
+            # kNN in msZ
+            if self.verbosity >= 1:
+                print('Computing neighborhood graph (msZ space)...')
+            t0 = time.time()
+            ms_target = ms_eig.transform()[:, :self._scaffold_components_ms]
+            self._knn_msZ = kNN(
+                ms_target,
+                n_neighbors=self.graph_knn,
+                metric=self.graph_metric,
+                n_jobs=self.n_jobs,
+                backend=self.backend,
+                return_instance=False,
+                verbose=self.bases_graph_verbose,
+                **kwargs
+            )
+            self.runtimes['kNN_msZ'] = time.time() - t0
+            if self.verbosity >= 1:
+                print(f' msZ kNN computed in {self.runtimes["kNN_msZ"]:.3f} sec')
 
-        # Graph kernel -> P(Z) (DM)
-        t0 = time.time()
-        self._kernel_Z, self.GraphKernelDict = self._compute_kernel_from_version_knn(
-            self._knn_Z,
-            self.graph_knn,
-            self.graph_kernel_version,
-            self.GraphKernelDict,
-            suffix=' from ' + dm_key,
-            low_memory=self.low_memory,
-            data_for_expansion=dm_eig.transform(),
-            base=False
-        )
-        self.runtimes['Kernel_Z'] = time.time() - t0
-        if self.verbosity >= 1:
-            print(f' Graph kernel (Z/DM/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_Z"]:.3f} sec')
+            # kNN in Z (DM)
+            if self.verbosity >= 1:
+                print('Computing neighborhood graph (Z [DM] space)...')
+            t0 = time.time()
+            dm_target = dm_eig.transform()[:, :self._scaffold_components_dm]
+            self._knn_Z = kNN(
+                dm_target,
+                n_neighbors=self.graph_knn,
+                metric=self.graph_metric,
+                n_jobs=self.n_jobs,
+                backend=self.backend,
+                return_instance=False,
+                verbose=self.bases_graph_verbose,
+                **kwargs
+            )
+            self.runtimes['kNN_Z'] = time.time() - t0
+            if self.verbosity >= 1:
+                print(f' Z (DM) kNN computed in {self.runtimes["kNN_Z"]:.3f} sec')
 
-        # Keep legacy single "current" graph kernel pointer (msDM by default)
-        self.graph_kernel = self._kernel_msZ
-        self.current_graphkernel = self.graph_kernel_version + ' from ' + ms_key
+            # Graph kernels -> P(msZ), P(Z)
+            t0 = time.time()
+            self._kernel_msZ, self.GraphKernelDict = self._compute_kernel_from_version_knn(
+                self._knn_msZ,
+                self.graph_knn,
+                self.graph_kernel_version,
+                self.GraphKernelDict,
+                suffix=' from ' + ms_key,
+                low_memory=self.low_memory,
+                data_for_expansion=ms_eig.transform(),
+                base=False
+            )
+            self.runtimes['Kernel_msZ'] = time.time() - t0
+            if self.verbosity >= 1:
+                print(f' Graph kernel (msZ/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_msZ"]:.3f} sec')
 
-        # Spectral layout (2D) using msZ by default (for convenient init)
-        _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+            t0 = time.time()
+            self._kernel_Z, self.GraphKernelDict = self._compute_kernel_from_version_knn(
+                self._knn_Z,
+                self.graph_knn,
+                self.graph_kernel_version,
+                self.GraphKernelDict,
+                suffix=' from ' + dm_key,
+                low_memory=self.low_memory,
+                data_for_expansion=dm_eig.transform(),
+                base=False
+            )
+            self.runtimes['Kernel_Z'] = time.time() - t0
+            if self.verbosity >= 1:
+                print(f' Graph kernel (Z/DM/{self.graph_kernel_version}) fitted in {self.runtimes["Kernel_Z"]:.3f} sec')
 
-        # Projections for both scaffolds
-        for proj in self.projection_methods:
-            # msDM
-            try:
-                self.project(projection_method=proj, multiscale=True)
-            except Exception as e:
-                warnings.warn(f"Projection '{proj}' on msZ failed or requires extra dependency: {e}", RuntimeWarning)
-            # DM
-            try:
-                self.project(projection_method=proj, multiscale=False)
-            except Exception as e:
-                warnings.warn(f"Projection '{proj}' on Z (DM) failed or requires extra dependency: {e}", RuntimeWarning)
+            # Keep legacy single "current" graph kernel pointer (msDM by default)
+            self.graph_kernel = self._kernel_msZ
+            self.current_graphkernel = self.graph_kernel_version + ' from ' + ms_key
+
+            # Spectral layout and projections (global)
+            _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+            for proj in self.projection_methods:
+                try:
+                    self.project(projection_method=proj, multiscale=True)
+                except Exception as e:
+                    warnings.warn(f"Projection '{proj}' on msZ failed or requires extra dependency: {e}", RuntimeWarning)
+                try:
+                    self.project(projection_method=proj, multiscale=False)
+                except Exception as e:
+                    warnings.warn(f"Projection '{proj}' on Z (DM) failed or requires extra dependency: {e}", RuntimeWarning)
 
         return self
+
 
     # ---------------------------------------------------------------------
     # Public properties / getters (stable user API)
@@ -642,6 +1218,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     def spectral_scaffold(self, multiscale: bool = True):
         """
         Return spectral scaffold coordinates.
+        If UoM is enabled, return the aggregated UoM coordinates (concatenated columns,
+        rows in original sample order). Otherwise return the global scaffold.
 
         Parameters
         ----------
@@ -652,6 +1230,16 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         -------
         np.ndarray, shape (n_samples, n_eigs)
         """
+        if self.uom_enabled:
+            if multiscale:
+                if self.msZ_uom is None:
+                    raise AttributeError("UoM msZ scaffold not available. Call .fit(X) with uom=True.")
+                return self.msZ_uom
+            else:
+                if self.Z_uom is None:
+                    raise AttributeError("UoM Z scaffold not available. Call .fit(X) with uom=True.")
+                return self.Z_uom
+        # Non-UoM
         if multiscale:
             key = 'msDM with ' + str(self.base_kernel_version)
         else:
@@ -663,18 +1251,30 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def eigenvalues(self):
         """
-        Eigenvalues of the active eigenbasis (msDM by default).
+        Eigenvalues of the active eigenbasis.
 
         Returns
         -------
-        np.ndarray
-            Array of eigenvalues corresponding to the currently active eigenbasis.
-
-        Raises
-        ------
-        AttributeError
-            If eigenvalues are unavailable (e.g., `.fit(X)` has not been called).
+        np.ndarray or dict
+            - Standard mode (uom=False): 1-D np.ndarray (msDM by default).
+            - UoM mode (uom=True): dict with per-component eigenvalue arrays:
+                {
+                'mode': 'msDM' or 'DM',
+                'per_component': [np.ndarray, ...],       # eigenvalues for each component
+                'component_sizes': [int, ...]             # n_i for each component
+                }
         """
+        if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list is not None:
+            mode = getattr(self, "_uom_active_mode", "msDM")
+            per_comp = self.uom_eigenvalues_ms_list if mode == "msDM" else self.uom_eigenvalues_dm_list
+            sizes = [int(ix.size) for ix in (self.uom_components_ or [])]
+            return {
+                "mode": mode,
+                "per_component": per_comp,
+                "component_sizes": sizes,
+            }
+
+        # Non-UoM (legacy/global)
         if self.current_eigenbasis is None:
             raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
@@ -683,7 +1283,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def knn_msZ(self):
         """
-        kNN graph in the multiscale Diffusion Map (msDM) scaffold space.
+        kNN graph in the multiscale Diffusion Map (msDM) scaffold space. (UoM-aggregated if enabled).
 
         Returns
         -------
@@ -695,6 +1295,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the msDM kNN graph is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled:
+            if self.knn_msZ_uom is None:
+                raise AttributeError("UoM knn_msZ not available. Call .fit(X) with uom=True.")
+            return self.knn_msZ_uom
         if self._knn_msZ is None:
             raise AttributeError("knn_msZ is not available. Call .fit(X) first.")
         return self._knn_msZ
@@ -702,7 +1306,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def knn_Z(self):
         """
-        kNN graph in the standard Diffusion Map (DM) scaffold space.
+        kNN graph in the standard Diffusion Map (DM) scaffold space (UoM-aggregated if enabled)..
 
         Returns
         -------
@@ -714,6 +1318,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the DM kNN graph is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled:
+            if self.knn_Z_uom is None:
+                raise AttributeError("UoM knn_Z not available. Call .fit(X) with uom=True.")
+            return self.knn_Z_uom
         if self._knn_Z is None:
             raise AttributeError("knn_Z is not available. Call .fit(X) first.")
         return self._knn_Z
@@ -721,7 +1329,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def P_of_msZ(self):
         """
-        Diffusion operator on the msDM scaffold.
+        Diffusion operator on the msDM scaffold (UoM block-diagonal if enabled).
 
         Returns
         -------
@@ -733,6 +1341,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the msDM diffusion operator is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled:
+            if self.P_of_msZ_uom is None:
+                raise AttributeError("UoM P_of_msZ not available. Call .fit(X) with uom=True.")
+            return self.P_of_msZ_uom
         if self._kernel_msZ is None:
             raise AttributeError("P_of_msZ is not available. Call .fit(X) first.")
         return self._kernel_msZ.P
@@ -740,7 +1352,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def P_of_Z(self):
         """
-        Diffusion operator on the DM scaffold.
+        Diffusion operator on the DM scaffold (UoM block-diagonal if enabled).
 
         Returns
         -------
@@ -752,14 +1364,19 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the DM diffusion operator is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled:
+            if self.P_of_Z_uom is None:
+                raise AttributeError("UoM P_of_Z not available. Call .fit(X) with uom=True.")
+            return self.P_of_Z_uom
         if self._kernel_Z is None:
             raise AttributeError("P_of_Z is not available. Call .fit(X) first.")
         return self._kernel_Z.P
 
+
     @property
     def knn_X(self):
         """
-        Initial kNN graph in the input (X) space.
+        Initial kNN graph in the input (X) space (UoM block-diagonal if enabled).
 
         Returns
         -------
@@ -771,6 +1388,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the base kNN graph is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled and (self.knn_X_uom is not None):
+            return self.knn_X_uom
         if self.base_knn_graph is None:
             raise AttributeError("knn_X is not available. Call .fit(X) first.")
         return self.base_knn_graph
@@ -778,7 +1397,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def P_of_X(self):
         """
-        Diffusion operator on the input (X) space.
+        Diffusion operator on the input (X) space (UoM block-diagonal if enabled).
 
         Returns
         -------
@@ -790,10 +1409,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         AttributeError
             If the diffusion operator on X is not available (e.g., `.fit(X)` has not been called).
         """
+        if self.uom_enabled and (self.P_of_X_uom is not None):
+            return self.P_of_X_uom
         if self.base_kernel is None:
             raise AttributeError("P_of_X is not available. Call .fit(X) first.")
         return self.base_kernel.P
-
 
     @property
     def global_id(self):
@@ -843,34 +1463,46 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def TopoMAP(self):
         """2D MAP layout computed on the DM refined graph (P_of_Z)."""
-        key = 'MAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
-        if key not in self.ProjectionDict:
-            raise AttributeError("MAP embedding not available. Call .fit(X) first.")
-        return self.ProjectionDict[key]
+        key_std = 'MAP of ' + (self.graph_kernel_version + ' from DM with ' + str(self.base_kernel_version))
+        key_uom = 'MAP of UoM DM with ' + str(self.base_kernel_version)
+        if key_std in self.ProjectionDict:
+            return self.ProjectionDict[key_std]
+        if key_uom in self.ProjectionDict:  # back-compat (older runs)
+            return self.ProjectionDict[key_uom]
+        raise AttributeError("MAP embedding not available. Call .fit(X) first.")
 
     @property
     def msTopoMAP(self):
         """2D MAP layout computed on the msDM refined graph (P_of_msZ)."""
-        key = 'MAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
-        if key not in self.ProjectionDict:
-            raise AttributeError("msMAP embedding not available. Call .fit(X) first.")
-        return self.ProjectionDict[key]
+        key_std = 'MAP of ' + (self.graph_kernel_version + ' from msDM with ' + str(self.base_kernel_version))
+        key_uom = 'MAP of UoM msDM with ' + str(self.base_kernel_version)
+        if key_std in self.ProjectionDict:
+            return self.ProjectionDict[key_std]
+        if key_uom in self.ProjectionDict:
+            return self.ProjectionDict[key_uom]
+        raise AttributeError("msMAP embedding not available. Call .fit(X) first.")
 
     @property
     def TopoPaCMAP(self):
         """2D PaCMAP layout computed on the DM refined graph (P_of_Z)."""
-        key = 'PaCMAP of ' + 'DM with ' + str(self.base_kernel_version)
-        if key not in self.ProjectionDict:
-            raise AttributeError("PaCMAP embedding not available. It may require `pacmap`. Call .fit(X) first.")
-        return self.ProjectionDict[key]
+        key_std = 'PaCMAP of ' + 'DM with ' + str(self.base_kernel_version)
+        key_uom = 'PaCMAP of UoM DM with ' + str(self.base_kernel_version)
+        if key_std in self.ProjectionDict:
+            return self.ProjectionDict[key_std]
+        if key_uom in self.ProjectionDict:
+            return self.ProjectionDict[key_uom]
+        raise AttributeError("PaCMAP embedding not available. Call .fit(X) first.")
 
     @property
     def msTopoPaCMAP(self):
         """2D PaCMAP layout computed on the msDM refined graph (P_of_msZ)."""
-        key = 'PaCMAP of ' + 'msDM with ' + str(self.base_kernel_version)
-        if key not in self.ProjectionDict:
-            raise AttributeError("msPaCMAP embedding not available. It may require `pacmap`. Call .fit(X) first.")
-        return self.ProjectionDict[key]
+        key_std = 'PaCMAP of ' + 'msDM with ' + str(self.base_kernel_version)
+        key_uom = 'PaCMAP of UoM msDM with ' + str(self.base_kernel_version)
+        if key_std in self.ProjectionDict:
+            return self.ProjectionDict[key_std]
+        if key_uom in self.ProjectionDict:
+            return self.ProjectionDict[key_uom]
+        raise AttributeError("msPaCMAP embedding not available. Call .fit(X) first.")
 
     # Keep Y() for backwards compatibility with string aliases
     def Y(self, key: str = 'msTopoMAP'):
@@ -906,7 +1538,34 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     # Plot helpers, legacy APIs, benchmarking
     # ---------------------------------------------------------------------
     def eigenspectrum(self, eigenbasis_key=None, **kwargs):
-        """Scree plot helper (calls topo.plot.decay_plot)."""
+        """
+        Scree plot helper (calls topo.plot.decay_plot).
+
+        Behavior
+        --------
+        - UoM enabled: plots one scree per disconnected component using the active mode
+        (self._uom_active_mode, default 'msDM'). Titles include component index and size.
+        - Non-UoM: behaves as before, plotting the selected/global eigenbasis.
+        """
+        try:
+            import matplotlib.pyplot as plt  # noqa: F401
+        except ImportError:
+            return print('Error: Matplotlib not found!')
+        from topo.plot import decay_plot
+
+        # UoM path: per-component plots
+        if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list is not None:
+            mode = getattr(self, "_uom_active_mode", "msDM")
+            ev_lists = self.uom_eigenvalues_ms_list if mode == "msDM" else self.uom_eigenvalues_dm_list
+            sizes = [int(ix.size) for ix in (self.uom_components_ or [])]
+
+            figs = []
+            for j, ev in enumerate(ev_lists):
+                title = f"Component {j} (n={sizes[j]}) · {mode}"
+                figs.append(decay_plot(evals=ev, title=title, **kwargs))
+            return figs  # list of figure handles (or None if decay_plot handles display)
+
+        # Non-UoM: keep original behavior
         if eigenbasis_key is not None:
             if isinstance(eigenbasis_key, str):
                 if eigenbasis_key in self.EigenbasisDict.keys():
@@ -915,11 +1574,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     raise ValueError('Eigenbasis key not in TopOGraph.EigenbasisDict.')
         else:
             eigenbasis = self.eigenbasis
-        try:
-            import matplotlib.pyplot as plt  # noqa: F401
-        except ImportError:
-            return print('Error: Matplotlib not found!')
-        from topo.plot import decay_plot
         return decay_plot(evals=eigenbasis.eigenvalues, title=eigenbasis_key, **kwargs)
 
     def plot_eigenspectrum(self, eigenbasis_key=None, **kwargs):
@@ -947,11 +1601,17 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         """
         Multicomponent spectral layout of a (precomputed) graph kernel.
         Stores result in `SpecLayout` and returns it (used for layout init).
+        In UoM mode, defaults to the UoM msZ operator if no graph is provided.
         """
         if graph is None:
-            if self._kernel_msZ is None:
-                raise ValueError('No graph kernel computed. Call .fit() first.')
-            graph = self._kernel_msZ.K
+            if self.uom_enabled:
+                if self._kernel_msZ is None:
+                    raise ValueError('No UoM msZ kernel computed. Call .fit() first.')
+                graph = self._kernel_msZ.K
+            else:
+                if self._kernel_msZ is None:
+                    raise ValueError('No graph kernel computed. Call .fit() first.')
+                graph = self._kernel_msZ.K
         t0 = time.time()
         try:
             spt_layout = spectral_layout(
@@ -966,7 +1626,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             spt_layout = EigenDecomposition(n_components=n_components).fit_transform(graph)
         self.runtimes['Spectral'] = time.time() - t0
         self.SpecLayout = spt_layout
-        gc.collect
+        gc.collect()
         return spt_layout
 
     def project(
@@ -979,7 +1639,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         n_neighbors=None,
         num_iters=300,
         multiscale=True,
-        # ---- NEW: checkpointing passthrough (MAP) ----
         save_every=None,                 # int or None. If int>0, store Y every `save_every` epochs
         save_limit=None,                 # optional cap on number of snapshots kept in-memory
         save_callback=None,              # optional callable(epoch:int, Y:np.ndarray) -> None
@@ -988,9 +1647,41 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     ):
         """
         Compute a 2D projection and store it in `ProjectionDict`.
+        In UoM mode, graph-based methods use UoM block-diagonal affinities; coordinate-based
+        methods use UoM concatenated scaffolds. This guarantees zero cross-component edges.
 
         Parameters
         ----------
+        n_components : int (default 2)
+            Number of output dimensions.
+        init : np.ndarray or str (optional)
+            Initial coordinates for layout optimization.
+            If a string, must be a key in `ProjectionDict`.
+            If None, spectral layout is used.
+        projection_method : str (optional, default 'Isomap').
+            Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses and 'MAP' relies
+            on code that is adapted from UMAP. Current options are:
+                * 'Isomap' - one of the first manifold learning methods
+                * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
+                * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
+                * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
+                * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations
+                * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets
+                * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors
+                * 'IsometricMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of pairwise distances
+                * 'NCVis' - [Noise Contrastive Visualization](https://github.com/stat-ml/ncvis) - a UMAP-like method with blazing fast performance
+            These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
+        landmarks : int or np.ndarray (optional)
+            Number of landmarks or indices of landmark samples.
+            If None, no landmarks are used.
+        landmark_method : str (default 'kmeans')
+            Landmark selection method (if `landmarks` is an int).
+            One of {'random', 'kmeans').
+        n_neighbors : int (optional)
+            Number of neighbors for graph-based methods.
+            If None, uses `self.graph_knn`.
+        num_iters : int (default 300)
+            Number of optimization epochs for layout optimization.
         multiscale : bool (internal, default True)
             If True, use msDM refined graph; else use DM refined graph.
 
@@ -1010,25 +1701,23 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         if projection_method is None:
             projection_method = self.projection_methods[0]
 
-        # choose which refined graph to use
-        if multiscale:
-            input_mat = self.P_of_msZ
-        else:
-            input_mat = self.P_of_Z
-
-        # Precomputed affinity path for graph-based DR methods
-        if projection_method in ['MAP',  'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
+        # choose which refined graph / scaffold to use
+        if projection_method in ['MAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
             metric = 'precomputed'
             input_mat = self.P_of_msZ if multiscale else self.P_of_Z
             tag = 'msDM' if multiscale else 'DM'
-            key = self.graph_kernel_version + ' from ' + tag + ' with ' + str(self.base_kernel_version)
+            # Standardize keys even in UoM mode (no "UoM" prefix)
+            key = f"{self.graph_kernel_version} from {tag} with {self.base_kernel_version}"
         else:
             metric = self.graph_metric
-            # use corresponding scaffold coordinates
             tag = 'msDM' if multiscale else 'DM'
-            eig_key = tag + ' with ' + str(self.base_kernel_version)
-            input_mat = self.EigenbasisDict[eig_key].transform(X=None)
-            key = eig_key
+            if self.uom_enabled:
+                input_mat = self.msZ_uom if multiscale else self.Z_uom
+            else:
+                eig_key = f"{tag} with {self.base_kernel_version}"
+                input_mat = self.EigenbasisDict[eig_key].transform(X=None)
+            # Standardized key (no "UoM" prefix)
+            key = f"{tag} with {self.base_kernel_version}"
 
         # init
         if init is not None:
@@ -1052,7 +1741,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         projection_key = projection_method + ' of ' + key
         t0 = time.time()
 
-        # 1) Build the estimator WITHOUT save_* kwargs in the constructor
         proj = Projector(
             n_components=n_components,
             projection_method=projection_method,
@@ -1073,13 +1761,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             include_init_snapshot=include_init_snapshot,
         )
 
-        # 2) Pass checkpointing kwargs to fit_transform (this is what MAP/fuzzy_embedding reads)
-        result = proj.fit_transform(
-            input_mat,
-            **kwargs
-        )
-
-        # Unpack (Y, aux) if available
+        result = proj.fit_transform(input_mat, **kwargs)
         if isinstance(result, tuple) and len(result) == 2:
             Y, Y_aux = result
         else:
@@ -1087,11 +1769,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         self.runtimes[projection_key] = time.time() - t0
         if self.verbosity >= 1:
-            print(f' Computed {projection_method} ({ "msZ" if multiscale else "Z/DM" }) in {self.runtimes[projection_key]:.3f} sec')
+            print(f' Computed {projection_method} ({ "msZ" if multiscale else "Z/DM" }{" [UoM]" if self.uom_enabled else ""}) in {self.runtimes[projection_key]:.3f} sec')
 
         self.ProjectionDict[projection_key] = Y
 
-        # Record snapshots if present
         if projection_method == "MAP" and Y_aux and isinstance(Y_aux, dict):
             checkpoints = Y_aux.get("checkpoints", None)
             if checkpoints:
@@ -1923,12 +2604,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         scipy.sparse.csr_matrix or np.ndarray
             Imputed matrix.
         """
-        import numpy as _np
-        import scipy.sparse as _sp
-
         P = self._select_P_operator(which)
         # make CSR view
-        if _sp.issparse(X):
+        if sp.issparse(X):
             Xc = X.tocsr(copy=True).astype(dtype)
             for _ in range(int(t)):
                 Xc = P @ Xc
@@ -1942,7 +2620,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if output in ('auto', 'dense'):
                 return Xd
             # convert to sparse CSR
-            return _sp.csr_matrix(Xd)
+            return sp.csr_matrix(Xd)
 
     # ---- Riemannian diagnostics (metric + scalars) ----
     def riemann_diagnostics(
