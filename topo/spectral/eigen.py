@@ -1,8 +1,5 @@
 #####################################
-# Author: Davi Sidarta-Oliveira
-# School of Medical Sciences,University of Campinas,Brazil
-# contact: davisidarta[at]fcm[dot]unicamp[dot]com
-# License: MIT
+# Author: David S Oliveira
 ######################################
 # Defining eigendecomposition routines for kernels in a scikit-learn fashion
 

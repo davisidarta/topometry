@@ -245,21 +245,38 @@ if _HAVE_SCANPY:
         else:
             ax_diff.vlines(max_eigs, ax_diff.get_ylim()[0], ax_diff.get_ylim()[1], linestyles="--", label='Eigengap')
 
-    def plot_id_histograms(ax_fsa, ax_mle, id_est: IntrinsicDim | None):
+    def plot_id_histograms(ax_fsa, ax_mle, id_est):
+        # accept either an IntrinsicDim object or a {'local_id':..., 'global_id':...} dict
+        if id_est is None:
+            local = {}; global_ = {}
+        elif isinstance(id_est, dict):
+            local  = id_est.get("local_id", {}) or {}
+            global_ = id_est.get("global_id", {}) or {}
+        else:
+            local  = getattr(id_est, "local_id", {}) or {}
+            global_ = getattr(id_est, "global_id", {}) or {}
+
         def _one(ax, method_name: str):
-            if (id_est is None) or (method_name not in id_est.local_id) or (len(id_est.local_id[method_name]) == 0):
+            if (method_name not in local) or (len(local[method_name]) == 0):
                 ax.axis('off'); ax.text(0.5,0.5,"N/A", ha='center', va='center'); return
-            for key in id_est.local_id[method_name].keys():
-                x = id_est.local_id[method_name][key]
-                label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(id_est.global_id[method_name][key])) + ' )'
+            for key in local[method_name].keys():
+                x = local[method_name][key]
+                gi = None
+                try:
+                    gi = int((global_.get(method_name, {}) or {}).get(key))
+                except Exception:
+                    pass
+                label = f'k = {key}    ( estim.i.d. = {gi if gi is not None else "n/a"} )'
                 ax.hist(x, bins=30, histtype='step', stacked=True, density=True, log=False, label=label)
             ax.set_title(method_name.upper(), fontsize=14, pad=8)
             ax.legend(prop={'size': 9}, fontsize=9)
             ax.set_xlabel('Estimated intrinsic dimension', fontsize=11)
             ax.set_ylabel('Frequency', fontsize=11)
             ax.tick_params(axis='y', labelleft=False)
+
         _one(ax_fsa, 'fsa')
         _one(ax_mle, 'mle')
+
 
     def _heatmap(data, row_labels, col_labels, ax=None, cbar_kw=None, cbarlabel="", **kwargs):
         if ax is None: ax = plt.gca()
@@ -277,6 +294,26 @@ if _HAVE_SCANPY:
         ax.grid(which="minor", color="w", linestyle='-', linewidth=2)
         ax.tick_params(which="minor", bottom=False, left=False)
         return im, cbar
+
+    def _h5ad_safe(x):
+        """Recursively convert Python containers to AnnData/HDF5-writable types."""
+        import numpy as np, pandas as pd
+        from collections.abc import Mapping
+
+        # pass through common encodable types
+        if isinstance(x, (pd.DataFrame, np.ndarray, str, float, int, bool)) or x is None:
+            return x
+        # numpy scalars -> python
+        if isinstance(x, (np.floating, np.integer, np.bool_)):
+            return x.item()
+        # dict-like: sanitize values and keys
+        if isinstance(x, Mapping):
+            return {str(k): _h5ad_safe(v) for k, v in x.items()}
+        # lists/tuples/sets -> lists
+        if isinstance(x, (list, tuple, set)):
+            return [_h5ad_safe(v) for v in x]
+        # last resort: string representation (avoids crashing the writer)
+        return str(x)
 
 
     def plot_evaluation_heatmap(df_eval, out_png=None, title="Geometry Preservation Scores"):
@@ -960,7 +997,7 @@ if _HAVE_SCANPY:
         lut = dict(zip(cats, palette))
         _colors = labels.map(lut)
 
-        L = tg.base_kernel.L
+        L = tg.graph_kernel.L
 
         def _make_plot(Y, L, proj_key, proj_nick, show=show):            
             fig, axs = plt.subplots(1, 3, figsize=figsize, dpi=dpi)
@@ -971,7 +1008,7 @@ if _HAVE_SCANPY:
                 n_plot=adata.shape[0]//10,
                 scale_mode="logdet",
                 scale_gain=scale_gain,
-                alpha=None,
+                alpha=ellipse_alpha,
                 ax=axs[0],
                 seed=7,
                 show_points=True,
@@ -1290,8 +1327,10 @@ if _HAVE_SCANPY:
         """
 
         if tg is not None:
-            adata.uns['topometry_id_details'] = getattr(tg, "_id_details", None)
-            adata.uns[f'topometry_id_global_{tg.id_method}'] = tg.global_id
+            id_details = getattr(tg, "_id_details", None)
+            if id_details is not None:
+                adata.uns['topometry_id_details'] = _h5ad_safe(id_details)
+            adata.uns[f'topometry_id_global_{tg.id_method}'] = float(tg.global_id) if tg.global_id is not None else None
             _loc = tg.local_ids()
             if _loc is not None:
                 if isinstance(_loc, dict):
@@ -1314,7 +1353,6 @@ if _HAVE_SCANPY:
                 plot=False
             )
             id_est.fit(adata.X)
-            adata.uns['intrinsic_dim_estimator'] = id_est
             k_low  = str(min(id_k_values))
             k_high = str(max(id_k_values))
             if 'fsa' in id_est.local_id and k_low in id_est.local_id['fsa']:
@@ -1325,6 +1363,12 @@ if _HAVE_SCANPY:
                 adata.obs['id_mle_k'+k_low] = id_est.local_id['mle'][k_low]
             if 'mle' in id_est.local_id and k_high in id_est.local_id['mle']:
                 adata.obs['id_mle_k'+k_high] = id_est.local_id['mle'][k_high]
+            if 'id_est' in locals() and id_est is not None:
+                id_summary = {
+                    "local_id": getattr(id_est, "local_id", None),
+                    "global_id": getattr(id_est, "global_id", None),
+                }
+                adata.uns['intrinsic_dim_estimator'] = _h5ad_safe(id_summary)
         except Exception as e:
             print(f"[TopOMetry] IntrinsicDim estimation skipped: {e}")
 
@@ -1621,7 +1665,15 @@ if _HAVE_SCANPY:
                 )
                 col = f"metric_deformation__{key}"
                 adata.obs[col] = riem['deformation']
-                adata.uns['metric_limits'][key] = riem.get('limits', None)
+                lims = riem.get('limits', None)
+                if lims is not None:
+                    try:
+                        lo, hi = float(lims[0]), float(lims[1])
+                        adata.uns['metric_limits'][key] = np.array([lo, hi], dtype=float)
+                    except Exception:
+                        adata.uns['metric_limits'][key] = None
+                else:
+                    adata.uns['metric_limits'][key] = None
             except Exception as e:
                 print(f"[TopoMetry] Riemann diagnostics skipped for {key}: {e}")
 
