@@ -1067,7 +1067,7 @@ if _HAVE_SCANPY:
                 ax=axs[1],
                 show_points=False,
                 zorder=3,
-                cmap="coolwarm",
+                cmap="seismic",
                 vmin=dmin, vmax=dmax,               # keep color scale consistent with panel (d)
                 min_sep_factor=1.1,                 # reduce ellipse overlap
                 choose_strong_first=True,
@@ -1090,7 +1090,7 @@ if _HAVE_SCANPY:
                     adata,
                     basis=proj_key,
                     color=[f'metric_contract_expand_{proj_nick}'],
-                    cmap='bwr',
+                    cmap='seismic',
                     wspace=0.25,
                     show=False,
                     ax=axs[2],
@@ -1104,7 +1104,7 @@ if _HAVE_SCANPY:
                     adata,
                     basis=proj_key,
                     color=[f'metric_contract_expand_{proj_nick}'],
-                    cmap='bwr',
+                    cmap='seismic',
                     wspace=0.25,
                     show=False,
                     ax=axs[2],
@@ -2555,7 +2555,7 @@ if _HAVE_SCANPY:
 
             # --- Geometry-preservation explanatory legend ABOVE the table ---
             # Reserve a thin band near the top; keep it inside page margins.
-            ax_top = fig.add_axes([0.04, 0.84, 0.92, 0.20])  # [left, bottom, width, height]
+            ax_top = fig.add_axes([0.04, 0.7, 0.92, 0.20])  # [left, bottom, width, height]
             ax_top.axis('off')
             legend_top = (
                 "Geometry preservation compares the diffusion operator on the reference space, Pₓ (built on adata.X), "
