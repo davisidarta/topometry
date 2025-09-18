@@ -155,7 +155,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 graph_kernel_version='bw_adaptive',
                 base_metric='cosine',
                 graph_metric='euclidean',
-                diff_t=1,
+                diff_t=0,
                 delta=1.0,
                 sigma=0.1,
                 low_memory=False,
@@ -2614,7 +2614,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 return Xc
             return Xc.toarray()
         else:
-            Xd = _np.asarray(X, dtype=dtype)
+            Xd = np.asarray(X, dtype=dtype)
             for _ in range(int(t)):
                 Xd = P @ Xd
             if output in ('auto', 'dense'):

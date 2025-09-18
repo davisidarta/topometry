@@ -13,6 +13,7 @@ from topo.utils._utils import get_landmark_indices
 from topo.spectral.eigen import spectral_layout
 from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
+import logging
 
 # dumb warning, suggests lilmatrix but it doesnt work
 from scipy.sparse import SparseEfficiencyWarning
@@ -360,7 +361,8 @@ class Projector(BaseEstimator, TransformerMixin):
                 raise ImportError(
                     'PaCMAP is not installed. Please install PaCMAP with \'pip install pacmap\' before using this method.')
             import warnings
-            warnings.filterwarnings("ignore")  # PaCMAP is way too verbose...
+            logging.getLogger("pacmap").setLevel(logging.ERROR)
+            warnings.filterwarnings("ignore", category=UserWarning, module="pacmap")  # PaCMAP is way too verbose...
             if self.metric == 'cosine':
                 metric = 'angular'
             else:

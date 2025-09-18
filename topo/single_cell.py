@@ -636,7 +636,7 @@ if _HAVE_SCANPY:
             adata.uns[neighbors_key]["distances"] = P
             for res in leiden_resolutions:
                 key = f"{leiden_key_base}_res{res:g}"
-                sc.tl.leiden(adata, resolution=res, neighbors_key=neighbors_key, key_added=key)
+                sc.tl.leiden(adata, resolution=res, adjacency=P, key_added=key)
             primary = f"{leiden_key_base}_res{leiden_resolutions[leiden_primary_index]:g}"
             adata.obs[leiden_key_base] = adata.obs[primary].astype("category")
 
@@ -871,7 +871,7 @@ if _HAVE_SCANPY:
         scale_gain=1.0,
         ellipse_alpha=0.15,
         point_size=6,
-        do_all=True,
+        do_all=False,
         verbose=True,
         title_fontsize=18,
         figsize=(18, 6),
@@ -1092,14 +1092,19 @@ if _HAVE_SCANPY:
                 return fig      # caller will save & close
 
         if do_all:
-            for proj_name in adata.obsm_keys():
+            proj_names = []
+            for name in adata.obsm_keys():
+                Yc = np.asarray(adata.obsm[name])
+                if Yc.ndim == 2 and Yc.shape[1] == 2:
+                    proj_names.append(name)
+            for proj_name in proj_names:
                 Y = np.asarray(adata.obsm[proj_name])
                 proj_nick = proj_name.replace("X_", "")
-                if verbose: print(f"Riemannian diagnostics for projection '{proj_nick}'")
-                # For do_all, still avoid plt.show()/close-all; just show if explicitly requested
+                if verbose:
+                    print(f"Riemannian diagnostics for projection '{proj_nick}'")
                 _fig = _make_plot(Y, L, proj_name, proj_nick, show=show)
                 if (not show) and (_fig is not None):
-                    plt.close(_fig)  # safe cleanup if used interactively outside the PDF
+                    plt.close(_fig)
             return None
         else:
             Y = np.asarray(adata.obsm[proj_key])
@@ -2110,7 +2115,7 @@ if _HAVE_SCANPY:
 
         evaluate_representations(adata, tg, return_df=False, print_results=False, plot_results=False)
 
-        return adata, tg
+        return tg
 
 
 
@@ -2498,7 +2503,7 @@ if _HAVE_SCANPY:
 
             # --- Geometry-preservation explanatory legend ABOVE the table ---
             # Reserve a thin band near the top; keep it inside page margins.
-            ax_top = fig.add_axes([0.04, 0.84, 0.92, 0.10])  # [left, bottom, width, height]
+            ax_top = fig.add_axes([0.04, 0.84, 0.92, 0.20])  # [left, bottom, width, height]
             ax_top.axis('off')
             legend_top = (
                 "Geometry preservation compares the diffusion operator on the reference space, Pₓ (built on adata.X), "
@@ -2640,16 +2645,6 @@ if _HAVE_SCANPY:
                 except Exception:
                     pass
 
-
-                # Expanded legend (wrapped)
-                ax2 = fig.add_axes([0.04, 0.05, 0.92, 0.09])  # taller band; keep inside margins
-                ax2.axis('off')
-                legend = (
-                    "• PF1 — Sparse Neighborhood F1: overlap of the top-k transition supports per row; focuses on whether the same neighbors are kept in the operator (weights ignored).\n"
-                    "\n• PJS — Row-wise Jensen–Shannon Similarity: compares the probability distributions of transitions for each cell; sensitive to how mass is redistributed.\n"
-                    "\n• SP — Spectral Procrustes (R²): aligns multiscale diffusion coordinates (Φ_t) up to a rotation; captures coordinate-level consistency of the geometry.\n"
-                )
-                ax2.text(0.0, 0.5, legend, va='center', fontsize=11, wrap=True)
 
             pdf.savefig(fig, dpi=dpi)
             plt.close(fig)
