@@ -101,7 +101,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 landmark_method='kmeans',
                 num_iters=800,
                 init='spectral',
-                nbrs_backend='nmslib',
+                nbrs_backend='hnswlib',
                 keep_estimator=False,
                 random_state=None,
                 verbose=False,

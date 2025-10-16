@@ -362,13 +362,21 @@ def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D
     # Compute diffusion operator
     if sparse.issparse(W):
         if symmetric:
-            P, D_left = _sparse_diffusion_symmetric(
+            if return_D_inv_sqrt:
+                P, D_left = _sparse_diffusion_symmetric(
+                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+            else:
+                P = _sparse_diffusion_symmetric(
                 W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
         else:
             P = _sparse_diffusion(W, alpha, semi_aniso)
     else:
         if symmetric:
-            P, D_left = _dense_diffusion_symmetric(
+            if return_D_inv_sqrt:
+                P, D_left = _dense_diffusion_symmetric(
+                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+            else:
+                P = _dense_diffusion_symmetric(
                 W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
         else:
             P = _dense_diffusion(W, alpha, semi_aniso)

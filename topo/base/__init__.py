@@ -1,4 +1,4 @@
-from .ann import kNN
+from .ann import kNN, grid_search
 
 try:
     import numba

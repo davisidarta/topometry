@@ -431,7 +431,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
             
 
-    def fit_transform(self, X):
+    def fit_transform(self, X=None):
         """
         Here for scikit-learn compability. Returns the eigenvectors learned during fitting.
         Parameters

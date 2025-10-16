@@ -78,7 +78,7 @@ def _adap_bw(K, n_neighbors):
 def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
                    expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
-                   backend='nmslib', n_jobs=-1, verbose=False,
+                   backend='hnswlib', n_jobs=-1, verbose=False,
                    use_angular=True, square_distances=True, **kwargs):
     """
     Compute a kernel matrix from a set of points.
@@ -133,9 +133,9 @@ def compute_kernel(X, metric='cosine',
     symmetrize : bool (optional, default True).
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : str (optional, default 'nmslib').
-        Which backend to use for neighborhood computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'. 
+    backend : str (optional, default 'hnswlib').
+        Which backend to use for neighborhood computations. Defaults to 'hnswlib'.
+        Options are 'nmslib', 'hnswlib' and 'sklearn'.
 
     n_jobs : int (optional, default 1).
         The number of jobs to use for parallel computations. If set to -1, all available cores are used.
@@ -756,7 +756,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             return self.laplacian()
         return self._L
 
-    def diff_op(self, anisotropy=1.0, symmetric=False):
+    def diff_op(self, anisotropy=1.0, symmetric=True):
         """
         Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
@@ -767,7 +767,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         symmetric : bool (optional, default False).
             Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
-            when using anisotropy (alpha > 1), as the diffusion operator P would be assymetric otherwise, which can be problematic
+            when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
             during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
             operator can be obtained by left multiplying by Kernel.D_inv_sqrt_.
 
@@ -791,7 +791,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                 anisotropy = 1.0
             if symmetric:
                 self._P, self.D_inv_sqrt_ = diffusion_operator(
-                    self.K, alpha=anisotropy, semi_aniso=self.semi_aniso, symmetric=symmetric)
+                    self.K, alpha=anisotropy, semi_aniso=self.semi_aniso, symmetric=symmetric, return_D_inv_sqrt=True)
             else:
                 self._P = diffusion_operator(
                     self.K, alpha=anisotropy, semi_aniso=self.semi_aniso, symmetric=symmetric)

@@ -146,7 +146,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 base_knn=30,
                 graph_knn=30,
                 min_eigs=128,
-                n_jobs=-1,
+                n_jobs=1,
                 projection_methods=['MAP','PaCMAP'],
                 base_kernel=None,
                 base_kernel_version='bw_adaptive',
@@ -664,7 +664,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             return np.zeros(n, dtype=int)
 
         n_cc, cc_labels = connected_components(S, directed=False, return_labels=True)
-        if n_cc > 2:
+        if n_cc > 3:
             return n_cc, cc_labels
 
         # (3) micro via Louvain with resolution γ < 1
@@ -1065,15 +1065,16 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
 
             # Projections for both scaffolds (UoM-backed)
-            for proj in self.projection_methods:
-                try:
-                    self.project(projection_method=proj, multiscale=True)
-                except Exception as e:
-                    warnings.warn(f"Projection '{proj}' on msZ (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
-                try:
-                    self.project(projection_method=proj, multiscale=False)
-                except Exception as e:
-                    warnings.warn(f"Projection '{proj}' on Z/DM (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
+            if self.projection_methods is not None:
+                for proj in self.projection_methods:
+                    try:
+                        self.project(projection_method=proj, multiscale=True)
+                    except Exception as e:
+                        warnings.warn(f"Projection '{proj}' on msZ (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
+                    try:
+                        self.project(projection_method=proj, multiscale=False)
+                    except Exception as e:
+                        warnings.warn(f"Projection '{proj}' on Z/DM (UoM) failed or requires extra dependency: {e}", RuntimeWarning)
 
             # Optionally free per-component heavy objects if low_memory
             if self.low_memory:
@@ -1127,7 +1128,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print('Computing neighborhood graph (msZ space)...')
             t0 = time.time()
-            ms_target = ms_eig.transform()[:, :self._scaffold_components_ms]
+            ms_target = ms_eig.transform(X)[:, :self._scaffold_components_ms]
             self._knn_msZ = kNN(
                 ms_target,
                 n_neighbors=self.graph_knn,
@@ -1146,7 +1147,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print('Computing neighborhood graph (Z [DM] space)...')
             t0 = time.time()
-            dm_target = dm_eig.transform()[:, :self._scaffold_components_dm]
+            dm_target = dm_eig.transform(X)[:, :self._scaffold_components_dm]
             self._knn_Z = kNN(
                 dm_target,
                 n_neighbors=self.graph_knn,
@@ -1170,7 +1171,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 self.GraphKernelDict,
                 suffix=' from ' + ms_key,
                 low_memory=self.low_memory,
-                data_for_expansion=ms_eig.transform(),
+                data_for_expansion=ms_eig.transform(X),
                 base=False
             )
             self.runtimes['Kernel_msZ'] = time.time() - t0
@@ -1185,7 +1186,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 self.GraphKernelDict,
                 suffix=' from ' + dm_key,
                 low_memory=self.low_memory,
-                data_for_expansion=dm_eig.transform(),
+                data_for_expansion=dm_eig.transform(X),
                 base=False
             )
             self.runtimes['Kernel_Z'] = time.time() - t0
@@ -1198,15 +1199,16 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
             # Spectral layout and projections (global)
             _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
-            for proj in self.projection_methods:
-                try:
-                    self.project(projection_method=proj, multiscale=True)
-                except Exception as e:
-                    warnings.warn(f"Projection '{proj}' on msZ failed or requires extra dependency: {e}", RuntimeWarning)
-                try:
-                    self.project(projection_method=proj, multiscale=False)
-                except Exception as e:
-                    warnings.warn(f"Projection '{proj}' on Z (DM) failed or requires extra dependency: {e}", RuntimeWarning)
+            if self.projection_methods is not None:
+                for proj in self.projection_methods:
+                    try:
+                        self.project(projection_method=proj, multiscale=True)
+                    except Exception as e:
+                        warnings.warn(f"Projection '{proj}' on msZ failed or requires extra dependency: {e}", RuntimeWarning)
+                    try:
+                        self.project(projection_method=proj, multiscale=False)
+                    except Exception as e:
+                        warnings.warn(f"Projection '{proj}' on Z (DM) failed or requires extra dependency: {e}", RuntimeWarning)
 
         return self
 
@@ -1534,6 +1536,37 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             return self.ProjectionDict[key]
         raise KeyError(f"Unknown or unavailable embedding alias '{key}'.")
 
+
+    def set_refined_from_precomputed(self, knn, *, multiscale: bool = True, coords=None):
+        """
+        Install a precomputed refined neighbor graph (CSR) and rebuild the corresponding kernel.
+
+        Parameters
+        ----------
+        knn : csr_matrix
+            Precomputed neighbor graph for the scaffold coordinates.
+        multiscale : bool, default True
+            If True, sets msZ kernel; else Z (DM) kernel.
+        coords : np.ndarray or None
+            The scaffold coordinates used to build `knn` (for neighborhood expansion kernels).
+        """
+        import scipy.sparse as sp
+        if not sp.isspmatrix_csr(knn):
+            knn = knn.tocsr()
+        if multiscale:
+            self._knn_msZ = knn
+            self._kernel_msZ, _ = self._compute_kernel_from_version_knn(
+                self._knn_msZ, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                suffix=" (precomputed msZ)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+            )
+        else:
+            self._knn_Z = knn
+            self._kernel_Z, _ = self._compute_kernel_from_version_knn(
+                self._knn_Z, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                suffix=" (precomputed Z)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+            )
+
+
     # ---------------------------------------------------------------------
     # Plot helpers, legacy APIs, benchmarking
     # ---------------------------------------------------------------------
@@ -1638,7 +1671,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         landmark_method='kmeans',
         n_neighbors=None,
         num_iters=300,
-        multiscale=True,
+        multiscale=False,
         save_every=None,                 # int or None. If int>0, store Y every `save_every` epochs
         save_limit=None,                 # optional cap on number of snapshots kept in-memory
         save_callback=None,              # optional callable(epoch:int, Y:np.ndarray) -> None
@@ -1682,7 +1715,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             If None, uses `self.graph_knn`.
         num_iters : int (default 300)
             Number of optimization epochs for layout optimization.
-        multiscale : bool (internal, default True)
+        multiscale : bool (internal, default False)
             If True, use msDM refined graph; else use DM refined graph.
 
         save_every, save_limit, save_callback, include_init_snapshot :
@@ -1783,7 +1816,373 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         return Y
 
+    def find_ideal_projection(
+        self,
+        min_dist_grid=[0.2, 0.6, 1.0],
+        spread_grid=[0.8, 1.2, 1.6],
+        initial_alpha_grid=[0.4, 1.0, 1.6],
+        *,
+        multiscale: bool = True,
+        num_iters: int = 600,
+        save_every: int = 10,
+        # evaluation knobs
+        metric: str = "euclidean",
+        n_neighbors: int = 30,
+        backend: str = "hnswlib",
+        n_jobs: int = -1,
+        times=(1, 2, 4),
+        r: int = 32,
+        k_for_pf1: int = None,
+        symmetric_hint: bool = True,
+        verbosity: int = 1,
+    ):
+        """
+        Grid-search MAP hyperparameters (min_dist, spread, initial_alpha),
+        evaluate each run against the reference operator P, and select the best final 2-D projection.
 
+        Returns
+        -------
+        dict with keys:
+            'best_params' : dict
+            'best_score'  : float (TopoPreserve composite)
+            'scores'      : list of dicts per combo
+            'best_snapshots' : list of snapshot dicts (each has 'metrics' + 'hyperparams')
+        """
+        from topo.eval.topo_metrics import topo_preserve_score, get_P
+
+        # reference operator
+        PX_ref = self.base_kernel.P
+        if not issparse(PX_ref):
+            PX_ref = csr_matrix(PX_ref)
+
+        combos = [
+            (md, sp, ia)
+            for md in list(min_dist_grid)
+            for sp in list(spread_grid)
+            for ia in list(initial_alpha_grid)
+        ]
+
+        best = {"score": -np.inf, "params": None, "snapshots": None, "Y": None}
+        all_scores = []
+
+        snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
+
+        for (md, sp, ia) in combos:
+            if verbosity >= 1:
+                print(f"[Grid] MAP: min_dist={md}, spread={sp}, initial_alpha={ia}")
+
+            # Run MAP and checkpoint snapshots for this combo
+            Y = self.project(
+                projection_method="MAP",
+                multiscale=bool(multiscale),
+                num_iters=int(num_iters),
+                save_every=int(save_every),
+                include_init_snapshot=True,
+                min_dist=float(md),
+                spread=float(sp),
+                initial_alpha=float(ia),
+            )
+
+            snapshots = getattr(self, snap_attr, None) or []
+
+            # Score each snapshot; attach metrics + hyperparams into the snapshot dicts
+            scores_this = []
+            for snap in snapshots:
+                Ysnap = snap["embedding"]
+                PY = get_P(
+                    Ysnap,
+                    metric=metric,
+                    n_neighbors=n_neighbors,
+                    backend=backend,
+                    n_jobs=n_jobs,
+                )
+                if not issparse(PY):
+                    PY = csr_matrix(PY)
+
+                score, parts = topo_preserve_score(
+                    PX_ref,
+                    PY,
+                    times=times,
+                    r=r,
+                    symmetric_hint=symmetric_hint,
+                    k_for_pf1=k_for_pf1,
+                )
+                snap["metrics"] = {
+                    "TP": float(score),
+                    "PF1": float(parts.get("PF1", np.nan)),
+                    "PJS": float(parts.get("PJS", np.nan)),
+                    "SP": float(parts.get("SP", np.nan)),
+                }
+                snap["hyperparams"] = {
+                    "min_dist": float(md),
+                    "spread": float(sp),
+                    "initial_alpha": float(ia),
+                }
+                scores_this.append(float(score))
+
+            final_score = scores_this[-1] if scores_this else float("-inf")
+            all_scores.append(
+                {
+                    "min_dist": float(md),
+                    "spread": float(sp),
+                    "initial_alpha": float(ia),
+                    "final_score": float(final_score),
+                }
+            )
+
+            if final_score > best["score"]:
+                best = {
+                    "score": float(final_score),
+                    "params": {"min_dist": float(md), "spread": float(sp), "initial_alpha": float(ia)},
+                    "snapshots": [dict(s) for s in snapshots],  # shallow copy
+                    "Y": np.array(Y, copy=True),
+                }
+
+        # Persist best snapshots back into the object
+        if best["snapshots"] is not None:
+            if multiscale:
+                self.msTopoMAP_snapshots = best["snapshots"]
+            else:
+                self.TopoMAP_snapshots = best["snapshots"]
+
+        # Re-run once with best params to standardize ProjectionDict entry
+        if best["params"] is not None:
+            bp = best["params"]
+            _ = self.project(
+                projection_method="MAP",
+                multiscale=bool(multiscale),
+                num_iters=int(num_iters),
+                save_every=int(save_every),
+                include_init_snapshot=True,
+                min_dist=bp["min_dist"],
+                spread=bp["spread"],
+                initial_alpha=bp["initial_alpha"],
+            )
+            # Re-attach evaluated metrics to the refreshed snapshots so downstream rendering can overlay them
+            setattr(self, snap_attr, best["snapshots"])
+
+        return {
+            "best_params": best["params"],
+            "best_score": best["score"],
+            "scores": all_scores,
+            "best_snapshots": best["snapshots"],
+        }
+
+
+
+    # def visualize_optimization(
+    #     self,
+    #     num_iters: int = 600,
+    #     save_every: int = 10,
+    #     dpi: int = 120,
+    #     color=None,
+    #     *,
+    #     multiscale: bool = True,
+    #     filename: str = None,
+    #     point_size: float = 3.0,
+    #     fps: int = 20,
+    #     include_init_snapshot: bool = True,
+    # ):
+    #     """
+    #     Produce an animated GIF of MAP training snapshots. If snapshots do not
+    #     exist yet, they are generated via a MAP projection call with checkpointing.
+
+    #     Parameters
+    #     ----------
+    #     num_iters : int, default 600
+    #         Number of optimization epochs for MAP when generating snapshots.
+    #     save_every : int, default 10
+    #         Snapshot cadence in epochs. If <= 0, no snapshots will be made.
+    #     dpi : int, default 120
+    #         Figure DPI for frame rendering.
+    #     color : None, array-like, or single color
+    #         Per-point coloring. Options:
+    #         * None -> uniform semi-dark gray.
+    #         * (n,) numeric -> mapped through a colormap (viridis).
+    #         * (n,3|4) array or list of color strings -> used directly per point.
+    #         * single color string/tuple -> uniform.
+    #     multiscale : bool or None
+    #         If True, use msDM scaffold (snapshots in `msTopoMAP_snapshots`).
+    #         If False, use DM scaffold (snapshots in `TopoMAP_snapshots`).
+    #         If None, prefer msDM if available; else fallback to DM.
+    #     filename : str or None
+    #         Path for the GIF. If None, an automatic name is chosen.
+    #     point_size : float, default 3.0
+    #         Marker size in the scatter plot.
+    #     fps : int, default 20
+    #         Frames-per-second for the GIF.
+    #     include_init_snapshot : bool, default True
+    #         If we need to run MAP to produce snapshots, include epoch=0.
+
+    #     Returns
+    #     -------
+    #     str
+    #         The path to the generated GIF.
+    #     """
+    #     import time
+    #     import numpy as np
+    #     import matplotlib.pyplot as plt
+    #     import matplotlib.colors as mcolors
+    #     try:
+    #         import imageio.v2 as imageio
+    #     except ImportError:
+    #         raise ImportError("imageio is required to write GIFs. Please install it via `pip install imageio`.")
+
+    #     # 0) Select scaffold
+    #     if multiscale is None:
+    #         if hasattr(self, "msTopoMAP_snapshots") and self.msTopoMAP_snapshots:
+    #             multiscale = True
+    #         elif hasattr(self, "TopoMAP_snapshots") and self.TopoMAP_snapshots:
+    #             multiscale = False
+    #         else:
+    #             multiscale = True
+
+    #     snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
+    #     snapshots = getattr(self, snap_attr, None)
+
+    #     # 1) Ensure ≥2 snapshots; otherwise generate with checkpointing
+    #     if not snapshots or len(snapshots) < 2:
+    #         _num_iters = max(int(num_iters), int(save_every))  # guarantee at least epochs 0 and save_every
+    #         _ = self.project(
+    #             projection_method="MAP",
+    #             num_iters=_num_iters,
+    #             save_every=int(save_every),
+    #             include_init_snapshot=bool(include_init_snapshot),
+    #             multiscale=bool(multiscale),
+    #         )
+    #         snapshots = getattr(self, snap_attr, None)
+
+    #     if not snapshots or len(snapshots) < 1:
+    #         raise RuntimeError("No snapshots available. Ensure `save_every>0` and that MAP ran.")
+
+    #     # 2) Colors
+    #     n = snapshots[-1]["embedding"].shape[0]
+
+    #     def _to_rgba_array(c, n):
+    #         if c is None:
+    #             return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+    #         if isinstance(c, (str, tuple)):
+    #             rgba = np.array(mcolors.to_rgba(c), float)
+    #             return np.tile(rgba[None, :], (n, 1))
+    #         c = np.asarray(c)
+    #         if c.ndim == 1:
+    #             if c.shape[0] == n and np.issubdtype(c.dtype, np.number):
+    #                 cmap = plt.get_cmap("viridis")
+    #                 vmin, vmax = np.nanmin(c), np.nanmax(c)
+    #                 if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+    #                     vmin, vmax = 0.0, 1.0
+    #                 t = (c - vmin) / (vmax - vmin + 1e-12)
+    #                 return cmap(np.clip(t, 0, 1))
+    #             elif c.shape[0] == n:
+    #                 return np.array([mcolors.to_rgba(ci) for ci in c], float)
+    #             return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+    #         if c.ndim == 2 and c.shape[0] == n and c.shape[1] in (3, 4):
+    #             if c.shape[1] == 3:
+    #                 return np.concatenate([c, np.ones((n, 1))], axis=1)
+    #             return c.astype(float)
+    #         return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+
+    #     point_colors = _to_rgba_array(color, n)
+
+    #     # 3) Fixed axes from the final snapshot
+    #     Y_final = snapshots[-1]["embedding"]
+    #     x_min, x_max = np.min(Y_final[:, 0]), np.max(Y_final[:, 0])
+    #     y_min, y_max = np.min(Y_final[:, 1]), np.max(Y_final[:, 1])
+    #     pad_x = 0.05 * (x_max - x_min + 1e-9)
+    #     pad_y = 0.05 * (y_max - y_min + 1e-9)
+    #     xlim = (x_min - pad_x, x_max + pad_x)
+    #     ylim = (y_min - pad_y, y_max + pad_y)
+    #     scale = max(x_max - x_min, y_max - y_min) + 1e-12
+    #     eps = 1e-4 * scale  # movement threshold to consider "updated"
+
+    #     # 4) Draw frames, only plotting updated/active points per snapshot
+    #     frames = []
+    #     fig_w, fig_h = (6, 5)
+
+    #     # ensure chronological order
+    #     snapshots_sorted = sorted(snapshots, key=lambda s: int(s.get("epoch", 0)))
+
+    #     # track last known coordinates
+    #     last_Y = snapshots_sorted[0]["embedding"].copy()
+
+    #     for snap in snapshots_sorted:
+    #         Y = snap["embedding"]
+    #         epoch = int(snap.get("epoch", 0))
+
+    #         # detect active/updated points
+    #         active_idx = (
+    #             snap.get("active_idx")
+    #             or snap.get("optimized_idx")
+    #             or snap.get("indices")
+    #             or snap.get("batch_idx")
+    #             or None
+    #         )
+    #         if active_idx is not None:
+    #             mask = np.zeros(Y.shape[0], dtype=bool)
+    #             mask[np.asarray(active_idx, dtype=int)] = True
+    #         else:
+    #             # fallback: mark points that actually moved since previous snapshot
+    #             move = np.linalg.norm(Y - last_Y, axis=1)
+    #             mask = move > eps
+
+    #         # update last known coords for active points
+    #         if mask.any():
+    #             last_Y[mask] = Y[mask]
+
+    #         # render only active/updated points for this frame
+    #         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=int(dpi), facecolor="white")
+    #         if mask.any():
+    #             ax.scatter(
+    #                 Y[mask, 0],
+    #                 Y[mask, 1],
+    #                 s=float(point_size),
+    #                 c=point_colors[mask],
+    #                 linewidths=0,
+    #                 antialiased=False,
+    #             )
+    #         # axes and labels
+    #         ax.set_xlim(*xlim); ax.set_ylim(*ylim)
+    #         ax.set_aspect("equal", adjustable="box")
+    #         ax.set_xlabel("TopoMAP_1"); ax.set_ylabel("TopoMAP_2")
+    #         ax.set_xticks([]); ax.set_yticks([])
+    #         tag = "msTopoMAP" if multiscale else "TopoMAP"
+    #         ax.set_title(f"{tag} training — epoch {epoch}")
+    #         fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
+
+    #         fig.canvas.draw()
+    #         w, h = fig.canvas.get_width_height()
+    #         frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3).copy()
+    #         frames.append(frame)
+    #         plt.close(fig)
+
+    #     # Append a final frame with all points at their final positions
+    #     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=int(dpi), facecolor="white")
+    #     ax.scatter(Y_final[:, 0], Y_final[:, 1], s=float(point_size), c=point_colors, linewidths=0, antialiased=False)
+    #     ax.set_xlim(*xlim); ax.set_ylim(*ylim)
+    #     ax.set_aspect("equal", adjustable="box")
+    #     ax.set_xlabel("TopoMAP_1"); ax.set_ylabel("TopoMAP_2")
+    #     ax.set_xticks([]); ax.set_yticks([])
+    #     tag = "msTopoMAP" if multiscale else "TopoMAP"
+    #     ax.set_title(f"{tag} — final")
+    #     fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
+    #     fig.canvas.draw()
+    #     w, h = fig.canvas.get_width_height()
+    #     frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3).copy()
+    #     frames.append(frame)
+    #     plt.close(fig)
+
+    #     # 5) Write GIF (any of your previous writers is fine now; full frames are already baked)
+    #     from PIL import Image
+    #     pil_frames = [Image.fromarray(f, mode="RGB") for f in frames]
+    #     pil_frames[0].save(
+    #         filename if filename is not None else f"{tag}_training_{int(time.time())}.gif",
+    #         save_all=True,
+    #         append_images=pil_frames[1:],
+    #         loop=0,
+    #         duration=int(1000 / max(1, int(fps))),
+    #         disposal=2,
+    #         optimize=False,
+    #     )
 
     def visualize_optimization(
         self,
@@ -1797,43 +2196,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         point_size: float = 3.0,
         fps: int = 20,
         include_init_snapshot: bool = True,
+        overlay_metrics: bool = False,   # NEW: draw PF1/PJS/SP/TP if present in snapshot["metrics"]
     ):
-        """
-        Produce an animated GIF of MAP training snapshots. If snapshots do not
-        exist yet, they are generated via a MAP projection call with checkpointing.
-
-        Parameters
-        ----------
-        num_iters : int, default 600
-            Number of optimization epochs for MAP when generating snapshots.
-        save_every : int, default 10
-            Snapshot cadence in epochs. If <= 0, no snapshots will be made.
-        dpi : int, default 120
-            Figure DPI for frame rendering.
-        color : None, array-like, or single color
-            Per-point coloring. Options:
-            * None -> uniform semi-dark gray.
-            * (n,) numeric -> mapped through a colormap (viridis).
-            * (n,3|4) array or list of color strings -> used directly per point.
-            * single color string/tuple -> uniform.
-        multiscale : bool or None
-            If True, use msDM scaffold (snapshots in `msTopoMAP_snapshots`).
-            If False, use DM scaffold (snapshots in `TopoMAP_snapshots`).
-            If None, prefer msDM if available; else fallback to DM.
-        filename : str or None
-            Path for the GIF. If None, an automatic name is chosen.
-        point_size : float, default 3.0
-            Marker size in the scatter plot.
-        fps : int, default 20
-            Frames-per-second for the GIF.
-        include_init_snapshot : bool, default True
-            If we need to run MAP to produce snapshots, include epoch=0.
-
-        Returns
-        -------
-        str
-            The path to the generated GIF.
-        """
         import time
         import numpy as np
         import matplotlib.pyplot as plt
@@ -1843,41 +2207,34 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         except ImportError:
             raise ImportError("imageio is required to write GIFs. Please install it via `pip install imageio`.")
 
-        # 0) Decide scaffold/snapshots source
         if multiscale is None:
-            # Prefer msDM if present
             if hasattr(self, "msTopoMAP_snapshots") and self.msTopoMAP_snapshots:
                 multiscale = True
             elif hasattr(self, "TopoMAP_snapshots") and self.TopoMAP_snapshots:
                 multiscale = False
             else:
-                multiscale = True  # default preference
+                multiscale = True
 
         snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
         snapshots = getattr(self, snap_attr, None)
 
-        # 1) Ensure snapshots exist; otherwise, generate via MAP checkpointing
-        if not snapshots:
+        if not snapshots or len(snapshots) < 2:
+            _num_iters = max(int(num_iters), int(save_every))
             _ = self.project(
                 projection_method="MAP",
-                num_iters=int(num_iters),
+                num_iters=_num_iters,
                 save_every=int(save_every),
                 include_init_snapshot=bool(include_init_snapshot),
-                multiscale=bool(multiscale),   # <<< FIX: use the correct kw for scaffold choice
+                multiscale=bool(multiscale),
             )
             snapshots = getattr(self, snap_attr, None)
 
         if not snapshots:
-            raise RuntimeError(
-                "No snapshots available. Ensure `save_every>0` and that MAP "
-                "projection ran successfully."
-            )
+            raise RuntimeError("No snapshots available. Ensure `save_every>0` and that MAP ran.")
 
-        # 2) Colors
         n = snapshots[-1]["embedding"].shape[0]
 
         def _to_rgba_array(c, n):
-            # Accepts: None, scalar color, (n,) numeric, (n,3/4), list of color strings
             if c is None:
                 return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
             if isinstance(c, (str, tuple)):
@@ -1886,32 +2243,23 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             c = np.asarray(c)
             if c.ndim == 1:
                 if c.shape[0] == n and np.issubdtype(c.dtype, np.number):
-                    # numeric vector -> colormap
                     cmap = plt.get_cmap("viridis")
-                    # normalize robustly
                     vmin, vmax = np.nanmin(c), np.nanmax(c)
                     if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
                         vmin, vmax = 0.0, 1.0
                     t = (c - vmin) / (vmax - vmin + 1e-12)
                     return cmap(np.clip(t, 0, 1))
                 elif c.shape[0] == n:
-                    # list of color strings -> map to rgba
                     return np.array([mcolors.to_rgba(ci) for ci in c], float)
-                else:
-                    # Single channel? Fallback to uniform gray
-                    return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
-            elif c.ndim == 2 and c.shape[0] == n and c.shape[1] in (3, 4):
+                return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+            if c.ndim == 2 and c.shape[0] == n and c.shape[1] in (3, 4):
                 if c.shape[1] == 3:
-                    # add alpha=1
                     return np.concatenate([c, np.ones((n, 1))], axis=1)
                 return c.astype(float)
-            else:
-                # Unknown -> uniform gray
-                return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+            return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
 
         point_colors = _to_rgba_array(color, n)
 
-        # 3) Axis limits from the final snapshot
         Y_final = snapshots[-1]["embedding"]
         x_min, x_max = np.min(Y_final[:, 0]), np.max(Y_final[:, 0])
         y_min, y_max = np.min(Y_final[:, 1]), np.max(Y_final[:, 1])
@@ -1920,51 +2268,64 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         xlim = (x_min - pad_x, x_max + pad_x)
         ylim = (y_min - pad_y, y_max + pad_y)
 
-        # 4) Render frames
         frames = []
         fig_w, fig_h = (6, 5)
         for snap in snapshots:
             Y = snap["embedding"]
-            epoch = snap["epoch"]
+            epoch = int(snap.get("epoch", 0))
 
-            fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-
-            # scatter
-            ax.scatter(Y[:, 0], Y[:, 1], s=point_size, c=point_colors, linewidths=0)
-
-            # axis limits + labels
+            fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=int(dpi))
+            ax.scatter(Y[:, 0], Y[:, 1], s=float(point_size), c=point_colors, linewidths=0)
             ax.set_xlim(*xlim); ax.set_ylim(*ylim)
             ax.set_aspect("equal", adjustable="box")
-            ax.set_xlabel("TopoMAP_1")
-            ax.set_ylabel("TopoMAP_2")
-
-            # remove tick labels (optional aesthetic)
+            ax.set_xlabel("TopoMAP_1"); ax.set_ylabel("TopoMAP_2")
             ax.set_xticks([]); ax.set_yticks([])
-
-            # title
             tag = "msTopoMAP" if multiscale else "TopoMAP"
             ax.set_title(f"{tag} training — epoch {epoch}")
 
-            # adjust layout so scatter fills most of the figure
-            fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
+            # NEW: overlay per-snapshot metrics if present
+            if overlay_metrics:
+                m = snap.get("metrics", None)
+                if isinstance(m, dict) and ("PF1" in m or "TP" in m):
+                    txt = []
+                    if "PF1" in m: txt.append(f"PF1 {m['PF1']:.3f}")
+                    if "PJS" in m: txt.append(f"PJS {m['PJS']:.3f}")
+                    if "SP"  in m: txt.append(f"SP  {m['SP']:.3f}")
+                    if "TP"  in m: txt.append(f"TP  {m['TP']:.3f}")
+                    ax.text(
+                        0.98, 0.02, "\n".join(txt),
+                        transform=ax.transAxes,
+                        ha="right", va="bottom",
+                        fontsize=9,
+                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.75, boxstyle="round,pad=0.25"),
+                    )
 
-            # render to numpy frame
+            fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
             fig.canvas.draw()
             w, h = fig.canvas.get_width_height()
-            frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3)
+            frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3).copy()
             frames.append(frame)
             plt.close(fig)
 
-
-        # 5) Write GIF
         if filename is None:
             tag = "msTopoMAP" if multiscale else "TopoMAP"
             filename = f"{tag}_training_{int(time.time())}.gif"
-        imageio.mimsave(filename, frames, duration=1.0 / max(1, int(fps)))
 
-        if self.verbosity >= 1:
+        # Full-frame GIF write
+        from PIL import Image
+        pil_frames = [Image.fromarray(f, mode="RGB") for f in frames]
+        pil_frames[0].save(
+            filename,
+            save_all=True,
+            append_images=pil_frames[1:],
+            loop=0,
+            duration=int(1000 / max(1, int(fps))),
+            disposal=2,
+            optimize=False,
+        )
+
+        if getattr(self, "verbosity", 0) >= 1:
             print(f"Wrote {filename} with {len(frames)} frames.")
-
         return filename
 
 

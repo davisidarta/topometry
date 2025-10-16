@@ -4,9 +4,11 @@
 # However, I opted not to include it as a hard-dependency as not all users are interested in single-cell analysis
 #
 from __future__ import annotations
+from typing import Any, Dict, Optional
 import os
 import numpy as np
 import pandas as pd
+import time
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
 from scipy.sparse import issparse, csr_matrix
@@ -511,7 +513,7 @@ if _HAVE_SCANPY:
         projections: tuple[str, ...] = ("MAP", "PaCMAP"),
         do_leiden: bool = True,
         leiden_key_base: str = "topo_clusters",
-        leiden_resolutions: list[float] | tuple[float, ...] = (0.2, 0.8, 1.2),
+        leiden_resolutions: list[float] | tuple[float, ...] = (0.2,0.8),
         leiden_primary_index: int = 1,
         **topograph_kwargs,
     ):
@@ -673,7 +675,7 @@ if _HAVE_SCANPY:
             adata.uns[neighbors_key]["distances"] = P
             for res in leiden_resolutions:
                 key = f"{leiden_key_base}_res{res:g}"
-                sc.tl.leiden(adata, resolution=res, adjacency=P, key_added=key)
+                sc.tl.leiden(adata, resolution=res, adjacency=P, key_added=key, flavor='igraph', n_iterations=2)
             primary = f"{leiden_key_base}_res{leiden_resolutions[leiden_primary_index]:g}"
             adata.obs[leiden_key_base] = adata.obs[primary].astype("category")
 
@@ -1162,21 +1164,40 @@ if _HAVE_SCANPY:
         point_size: float = 3.0,
         filename: str = None,
         cmap: str = "inferno",
+        # NEW:
+        evaluate_snapshots: bool = False,
+        grid_search: bool = False,
+        min_dist_grid = (0.2, 0.6, 1.0),
+        spread_grid = (0.8, 1.2, 1.6),
+        initial_alpha_grid = (0.4, 1.0, 1.6),
+        # evaluation knobs (used when evaluate_snapshots=True or grid_search=True)
+        eval_metric: str = "euclidean",
+        eval_n_neighbors: int = 30,
+        eval_backend: str = "hnswlib",
+        eval_jobs: int = -1,
+        eval_times = (1, 2, 4),
+        eval_r: int = 32,
+        eval_k_for_pf1: int = None,
+        eval_symmetric_hint: bool = True,
     ):
         """
-        Create an animated GIF showing the evolution of MAP optimization.
+        Creates an animated GIF showing the evolution of MAP optimization, with optional
+        on-the-fly evaluation of geometry-preservation metrics and/or a lightweight
+        grid search for MAP hyperparameters.
 
         At regular checkpoints collected during `TopOGraph.project(..., save_every=...)`,
-        draw the current 2-D embedding colored by a categorical/numeric label, or by
-        a gene if `groupby` matches a variable name. Combines the snapshots into an
-        animation.
+        the current 2-D embedding is drawn and colored by a categorical/numeric label
+        from `adata.obs` or by a gene if `groupby` matches a variable name. Snapshots are
+        then stitched into an animation. If requested, each snapshot is scored against
+        the reference Markov operator from the base kernel and the resulting metrics are
+        overlaid on the frame.
 
         Parameters
         ----------
         adata : AnnData
             Source of colors/labels; also used for gene coloring when `groupby` is a gene.
         tg : TopOGraph
-            Fitted model containing MAP snapshots (ms or DM).
+            Fitted model containing MAP snapshots (multiscale or single-scale).
         groupby : str, default "topo_clusters"
             Column in `adata.obs` (categorical or numeric) or a gene in `adata.var_names`.
         num_iters : int, default 600
@@ -1186,7 +1207,7 @@ if _HAVE_SCANPY:
         dpi : int, default 120
             DPI for frames in the resulting GIF.
         multiscale : bool, default True
-            If True, visualize msMAP snapshots; otherwise DM MAP snapshots.
+            If True, visualize multiscale MAP (msMAP) snapshots; otherwise single-scale MAP.
         fps : int, default 20
             Frames per second for the GIF.
         point_size : float, default 3.0
@@ -1194,47 +1215,77 @@ if _HAVE_SCANPY:
         filename : str or None, default None
             Output path (e.g., "map_optimization.gif"). If None, a name is auto-chosen.
         cmap : str, default "inferno"
-            Colormap for numeric coloring.
+            Colormap for numeric coloring in case `groupby` is continuous or a gene.
+
+        evaluate_snapshots : bool, default False
+            If True, compute geometry-preservation scores (PF1, PJS, SP and composite TP)
+            for each snapshot and overlay them on frames. Uses the evaluation knobs below.
+        grid_search : bool, default False
+            If True, run a small grid search over MAP hyperparameters (min_dist, spread,
+            initial_alpha) via `tg.find_ideal_projection(...)` prior to rendering. When
+            enabled, snapshots are also evaluated and annotated.
+        min_dist_grid : tuple of float, default (0.2, 0.6, 1.0)
+            Candidate `min_dist` values for the grid search.
+        spread_grid : tuple of float, default (0.8, 1.2, 1.6)
+            Candidate `spread` values for the grid search.
+        initial_alpha_grid : tuple of float, default (0.4, 1.0, 1.6)
+            Candidate initial learning rates for the grid search.
+
+        eval_metric : {"euclidean", ...}, default "euclidean"
+            Distance metric used to build snapshot neighborhoods for scoring.
+        eval_n_neighbors : int, default 30
+            Local neighborhood size for evaluation graphs.
+        eval_backend : {"hnswlib","pynndescent","bruteforce"}, default "hnswlib"
+            Nearest-neighbor backend for evaluation graphs.
+        eval_jobs : int, default -1
+            Parallelism for neighbor search during evaluation.
+        eval_times : tuple of int, default (1, 2, 4)
+            Diffusion times used in composite TopoScore (TP) computation.
+        eval_r : int, default 32
+            Spectral rank used when approximating diffusion operators for scoring.
+        eval_k_for_pf1 : int or None, default None
+            Optional top-k used in PF1 computation; if None, uses `eval_n_neighbors`.
+        eval_symmetric_hint : bool, default True
+            Whether to treat operators as (near) symmetric to speed up evaluation.
 
         Returns
         -------
-        filename : str
+        str
             Path to the saved GIF.
 
         Notes
         -----
-        - Requires that snapshots were collected during optimization (see `TopOGraph.project`).
-        - Preserves Scanpy categorical palettes when present in `adata.uns[f"{groupby}_colors"]`.
+        - Requires snapshots to have been collected during optimization
+          (see `TopOGraph.project(..., save_every=...)`). If missing, this function
+          will run a projection pass with `include_init_snapshot=True`.
+        - When `groupby` is categorical, Scanpy palettes in
+          `adata.uns[f"{groupby}_colors"]` are honored if present.
+        - Snapshot evaluation uses the base operator from `tg.base_kernel.P` as the
+          reference graph unless otherwise overridden inside the model.
         """
 
         import numpy as np
+        import pandas as pd
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
 
         n = adata.n_obs
 
-        # --- 1) Build per-cell colors based on `groupby`
+        # 1) Colors
         if groupby in adata.var_names:
-            # Gene expression coloring
-            gidx = list(adata.var_names).index(groupby)
+            gidx = adata.var_names.get_loc(groupby)
             x = adata.X[:, gidx]
-            if hasattr(x, "toarray"):
-                x = x.toarray().ravel()
-            else:
-                x = np.asarray(x).ravel()
-
+            x = x.toarray().ravel() if hasattr(x, "toarray") else np.asarray(x).ravel()
             vmin, vmax = np.nanpercentile(x, [1, 99])
             if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
-                vmin, vmax = np.nanmin(x), np.nanmax(x)
+                vmin, vmax = float(np.nanmin(x)), float(np.nanmax(x))
             t = (x - vmin) / (vmax - vmin + 1e-12)
-            colors = plt.get_cmap(cmap)(np.clip(t, 0, 1))  # (n,4)
-
+            colors = plt.get_cmap(cmap)(np.clip(t, 0, 1))
         elif groupby in adata.obs.columns:
             series = adata.obs[groupby]
-            if series.dtype.name == "category" or str(series.dtype).startswith("category"):
-                # Categorical — use scanpy palette if available, else make a stable one
+            if pd.api.types.is_categorical_dtype(series):
                 cats = series.cat.categories
-                codes = series.cat.codes.to_numpy()  # -1 for missing
+                codes = series.cat.codes.to_numpy()
                 palette_key = f"{groupby}_colors"
                 if palette_key in adata.uns and len(adata.uns[palette_key]) >= len(cats):
                     palette = list(adata.uns[palette_key])
@@ -1242,48 +1293,275 @@ if _HAVE_SCANPY:
                     _cmap = plt.get_cmap("tab20")
                     palette = [mcolors.to_hex(_cmap(i % 20)) for i in range(len(cats))]
                     adata.uns[palette_key] = palette
-
-                # Directly map codes -> palette (handle -1 as a neutral gray)
                 neutral = (0.7, 0.7, 0.7, 0.6)
                 colors = np.empty((n, 4), dtype=float)
                 for i, c in enumerate(codes):
-                    if c >= 0 and c < len(palette):
-                        colors[i] = mcolors.to_rgba(palette[c])
-                    else:
-                        colors[i] = neutral  # missing/unassigned category
+                    colors[i] = mcolors.to_rgba(palette[c]) if (c >= 0 and c < len(palette)) else neutral
             else:
-                # Numeric obs: viridis
                 vals = np.asarray(series.values, float).ravel()
                 vmin, vmax = np.nanpercentile(vals, [1, 99])
                 if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
-                    vmin, vmax = np.nanmin(vals), np.nanmax(vals)
+                    vmin, vmax = float(np.nanmin(vals)), float(np.nanmax(vals))
                 t = (vals - vmin) / (vmax - vmin + 1e-12)
-                colors = plt.get_cmap("viridis")(np.clip(t, 0, 1))  # (n,4)
+                colors = plt.get_cmap("viridis")(np.clip(t, 0, 1))
         else:
-            # Fallback uniform semi-dark gray
-            colors = np.tile(np.array([0.15, 0.15, 0.15, 0.85], dtype=float)[None, :], (n, 1))
+            colors = np.tile(np.array([0.15, 0.15, 0.15, 0.85], dtype=float), (n, 1))
 
-        # --- 2) Ensure snapshots exist for the requested scaffold (crucial) ---
-        tg.project(
-            projection_method="MAP",
-            multiscale=bool(multiscale),
-            num_iters=int(num_iters),
-            save_every=int(save_every),
-            include_init_snapshot=True,
-        )
+        # 2) Align color order to tg snapshot order when possible
+        tg_names = None
+        for attr in ("obs_names_", "_obs_names", "obs_index_", "_obs_index", "cell_names_", "_cell_names"):
+            if hasattr(tg, attr) and getattr(tg, attr) is not None:
+                tg_names = pd.Index(getattr(tg, attr))
+                break
+        if tg_names is None:
+            for attr in ("indices_", "_indices", "_order", "order_", "_fit_indices"):
+                if hasattr(tg, attr) and getattr(tg, attr) is not None:
+                    idx = np.asarray(getattr(tg, attr))
+                    if np.issubdtype(idx.dtype, np.integer) and idx.ndim == 1 and idx.size == n:
+                        colors = colors[idx]
+                        break
+        if tg_names is not None:
+            inv = pd.Index(adata.obs_names).get_indexer(pd.Index(tg_names))
+            if (inv >= 0).all():
+                colors = colors[inv]
 
-        # --- 3) Render the GIF using TopOGraph’s helper (uses precomputed snaps) ---
+        # 3) Grid-search if requested (will also annotate snapshots with metrics)
+        if bool(grid_search):
+            _ = tg.find_ideal_projection(
+                min_dist_grid=list(min_dist_grid),
+                spread_grid=list(spread_grid),
+                initial_alpha_grid=list(initial_alpha_grid),
+                multiscale=bool(multiscale),
+                num_iters=int(num_iters),
+                save_every=int(save_every),
+                metric=eval_metric,
+                n_neighbors=int(eval_n_neighbors),
+                backend=eval_backend,
+                n_jobs=int(eval_jobs),
+                times=tuple(eval_times),
+                r=int(eval_r),
+                k_for_pf1=eval_k_for_pf1,
+                symmetric_hint=bool(eval_symmetric_hint),
+                verbosity=1,
+            )
+
+        # 4) Otherwise, ensure snapshots exist
+        primary_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
+        legacy_attr = "msmap_snapshots" if multiscale else "map_snapshots"
+        snapshots = getattr(tg, primary_attr, None) or getattr(tg, legacy_attr, None)
+
+        if not snapshots or len(snapshots) < 2:
+            tg.project(
+                projection_method="MAP",
+                multiscale=bool(multiscale),
+                num_iters=int(num_iters),
+                save_every=int(save_every),
+                include_init_snapshot=True,
+            )
+            snapshots = getattr(tg, primary_attr, None) or getattr(tg, legacy_attr, None)
+
+        if not snapshots:
+            raise RuntimeError("No MAP snapshots available to render.")
+
+        # 5) If evaluation requested and we did not run grid_search, annotate snapshots now
+        if bool(evaluate_snapshots) and not bool(grid_search):
+            # Attach metrics per snapshot so TopOGraph.visualize_optimization can overlay them
+            from scipy.sparse import csr_matrix, issparse
+            from topo.eval.topo_metrics import topo_preserve_score, get_P
+
+            PX_ref = tg.base_kernel.P
+            if not issparse(PX_ref):
+                PX_ref = csr_matrix(PX_ref)
+
+            for snap in snapshots:
+                Ysnap = snap["embedding"]
+                PY = get_P(
+                    Ysnap,
+                    metric=eval_metric,
+                    n_neighbors=int(eval_n_neighbors),
+                    backend=eval_backend,
+                    n_jobs=int(eval_jobs),
+                )
+                if not issparse(PY):
+                    PY = csr_matrix(PY)
+                score, parts = topo_preserve_score(
+                    PX_ref,
+                    PY,
+                    times=tuple(eval_times),
+                    r=int(eval_r),
+                    symmetric_hint=bool(eval_symmetric_hint),
+                    k_for_pf1=eval_k_for_pf1,
+                )
+                snap["metrics"] = {
+                    "TP": float(score),
+                    "PF1": float(parts.get("PF1", np.nan)),
+                    "PJS": float(parts.get("PJS", np.nan)),
+                    "SP": float(parts.get("SP", np.nan)),
+                }
+
+        # 6) Render via model method; overlay_metrics if we evaluated
         out_path = tg.visualize_optimization(
-            num_iters=num_iters,    # harmless if snapshots already exist
-            save_every=save_every,
-            dpi=dpi,
-            color=colors,           # (n,4) RGBA float array
+            num_iters=len(snapshots) * int(save_every),
+            save_every=int(save_every),
+            dpi=int(dpi),
+            color=colors,
             multiscale=multiscale,
-            fps=fps,
-            point_size=point_size,
+            fps=int(fps),
+            point_size=float(point_size),
             filename=filename,
+            overlay_metrics=bool(evaluate_snapshots),
         )
         return out_path
+
+    # def visualize_optimization(
+    #     adata,
+    #     tg,
+    #     groupby: str = "topo_clusters",
+    #     num_iters: int = 600,
+    #     save_every: int = 10,
+    #     dpi: int = 120,
+    #     *,
+    #     multiscale: bool = True,
+    #     fps: int = 20,
+    #     point_size: float = 3.0,
+    #     filename: str = None,
+    #     cmap: str = "inferno",
+    # ):
+    #     """
+    #     Create an animated GIF showing the evolution of MAP optimization.
+
+    #     At regular checkpoints collected during `TopOGraph.project(..., save_every=...)`,
+    #     draw the current 2-D embedding colored by a categorical/numeric label, or by
+    #     a gene if `groupby` matches a variable name. Combines the snapshots into an
+    #     animation.
+
+    #     Parameters
+    #     ----------
+    #     adata : AnnData
+    #         Source of colors/labels; also used for gene coloring when `groupby` is a gene.
+    #     tg : TopOGraph
+    #         Fitted model containing MAP snapshots (ms or DM).
+    #     groupby : str, default "topo_clusters"
+    #         Column in `adata.obs` (categorical or numeric) or a gene in `adata.var_names`.
+    #     num_iters : int, default 600
+    #         Total iterations to visualize (clips to available snapshots).
+    #     save_every : int, default 10
+    #         Snapshot frequency used during optimization; used to index frames.
+    #     dpi : int, default 120
+    #         DPI for frames in the resulting GIF.
+    #     multiscale : bool, default True
+    #         If True, visualize msMAP snapshots; otherwise DM MAP snapshots.
+    #     fps : int, default 20
+    #         Frames per second for the GIF.
+    #     point_size : float, default 3.0
+    #         Scatter marker size.
+    #     filename : str or None, default None
+    #         Output path (e.g., "map_optimization.gif"). If None, a name is auto-chosen.
+    #     cmap : str, default "inferno"
+    #         Colormap for numeric coloring.
+
+    #     Returns
+    #     -------
+    #     filename : str
+    #         Path to the saved GIF.
+
+    #     Notes
+    #     -----
+    #     - Requires that snapshots were collected during optimization (see `TopOGraph.project`).
+    #     - Preserves Scanpy categorical palettes when present in `adata.uns[f"{groupby}_colors"]`.
+    #     """
+    #     import numpy as np
+    #     import pandas as pd
+    #     import matplotlib.pyplot as plt
+    #     import matplotlib.colors as mcolors
+
+    #     n = adata.n_obs
+
+    #     # 1) Colors
+    #     if groupby in adata.var_names:
+    #         gidx = adata.var_names.get_loc(groupby)
+    #         x = adata.X[:, gidx]
+    #         x = x.toarray().ravel() if hasattr(x, "toarray") else np.asarray(x).ravel()
+    #         vmin, vmax = np.nanpercentile(x, [1, 99])
+    #         if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+    #             vmin, vmax = float(np.nanmin(x)), float(np.nanmax(x))
+    #         t = (x - vmin) / (vmax - vmin + 1e-12)
+    #         colors = plt.get_cmap(cmap)(np.clip(t, 0, 1))
+    #     elif groupby in adata.obs.columns:
+    #         series = adata.obs[groupby]
+    #         if pd.api.types.is_categorical_dtype(series):
+    #             cats = series.cat.categories
+    #             codes = series.cat.codes.to_numpy()
+    #             palette_key = f"{groupby}_colors"
+    #             if palette_key in adata.uns and len(adata.uns[palette_key]) >= len(cats):
+    #                 palette = list(adata.uns[palette_key])
+    #             else:
+    #                 _cmap = plt.get_cmap("tab20")
+    #                 palette = [mcolors.to_hex(_cmap(i % 20)) for i in range(len(cats))]
+    #                 adata.uns[palette_key] = palette
+    #             neutral = (0.7, 0.7, 0.7, 0.6)
+    #             colors = np.empty((n, 4), dtype=float)
+    #             for i, c in enumerate(codes):
+    #                 colors[i] = mcolors.to_rgba(palette[c]) if (c >= 0 and c < len(palette)) else neutral
+    #         else:
+    #             vals = np.asarray(series.values, float).ravel()
+    #             vmin, vmax = np.nanpercentile(vals, [1, 99])
+    #             if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+    #                 vmin, vmax = float(np.nanmin(vals)), float(np.nanmax(vals))
+    #             t = (vals - vmin) / (vmax - vmin + 1e-12)
+    #             colors = plt.get_cmap("viridis")(np.clip(t, 0, 1))
+    #     else:
+    #         colors = np.tile(np.array([0.15, 0.15, 0.15, 0.85], dtype=float), (n, 1))
+
+    #     # 2) Align color order to tg snapshot order when possible
+    #     tg_names = None
+    #     for attr in ("obs_names_", "_obs_names", "obs_index_", "_obs_index", "cell_names_", "_cell_names"):
+    #         if hasattr(tg, attr) and getattr(tg, attr) is not None:
+    #             tg_names = pd.Index(getattr(tg, attr))
+    #             break
+    #     if tg_names is None:
+    #         for attr in ("indices_", "_indices", "_order", "order_", "_fit_indices"):
+    #             if hasattr(tg, attr) and getattr(tg, attr) is not None:
+    #                 idx = np.asarray(getattr(tg, attr))
+    #                 if np.issubdtype(idx.dtype, np.integer) and idx.ndim == 1 and idx.size == n:
+    #                     colors = colors[idx]
+    #                     break
+    #     if tg_names is not None:
+    #         inv = pd.Index(adata.obs_names).get_indexer(pd.Index(tg_names))
+    #         if (inv >= 0).all():
+    #             colors = colors[inv]
+
+    #     # 3) Acquire or generate snapshots; require ≥2 frames
+    #     primary_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
+    #     legacy_attr = "msmap_snapshots" if multiscale else "map_snapshots"
+    #     snapshots = getattr(tg, primary_attr, None) or getattr(tg, legacy_attr, None)
+
+    #     if not snapshots or len(snapshots) < 2:
+    #         tg.project(
+    #             projection_method="MAP",
+    #             multiscale=bool(multiscale),
+    #             num_iters=int(num_iters),
+    #             save_every=int(save_every),
+    #             include_init_snapshot=True,
+    #         )
+    #         snapshots = getattr(tg, primary_attr, None) or getattr(tg, legacy_attr, None)
+
+    #     if not snapshots or len(snapshots) < 1:
+    #         raise RuntimeError("No MAP snapshots available to render.")
+
+    #     # 4) Render via model method
+    #     out_path = tg.visualize_optimization(
+    #         num_iters=len(snapshots) * int(save_every),
+    #         save_every=int(save_every),
+    #         dpi=int(dpi),
+    #         color=colors,
+    #         multiscale=multiscale,
+    #         fps=int(fps),
+    #         point_size=float(point_size),
+    #         filename=filename,
+    #     )
+    #     return out_path
+
 
 
     def intrinsic_dim(
@@ -1653,7 +1931,7 @@ if _HAVE_SCANPY:
             try:
                 riem = tg.riemann_diagnostics(
                     Y=arr,
-                    L=tg.base_kernel.L,
+                    L=tg.graph_kernel.L,
                     center=center,
                     diffusion_t=diffusion_t,
                     diffusion_op=diffusion_op,
@@ -3339,6 +3617,744 @@ if _HAVE_SCANPY:
         
         return tg, pdf_path
 
+    # ----------------------------------------------------
+    # Integration methods
+    # ----------------------------------------------------
+
+
+
+    # -----------------------
+    # Internal helpers
+    # -----------------------
+    def _ensure_rep(adata: "AnnData", use_rep: Optional[str], *, n_pcs: int = 50) -> str:
+        """Ensure a representation exists and return its key.
+        If `use_rep` is None or 'X_pca', computes PCA when missing.
+        """
+        key = use_rep or "X_pca"
+        if key == "X_pca" and "X_pca" not in adata.obsm:
+            sc.tl.pca(adata, n_comps=int(n_pcs))
+        if key not in adata.obsm and key != "X_pca":
+            raise KeyError(f"`use_rep='{key}'` not found in adata.obsm")
+        return key
+
+    def _graph_backup(adata: "AnnData", method: str):
+        """Copy current graph slots to namespaced backups in .obsp.
+        Avoids putting large sparse matrices into .uns to keep h5ad IO safe.
+        """
+        if "connectivities" in adata.obsp:
+            adata.obsp[f"connectivities__backup_before_{method}"] = adata.obsp["connectivities"].copy()
+        if "distances" in adata.obsp:
+            adata.obsp[f"distances__backup_before_{method}"] = adata.obsp["distances"].copy()
+
+    def _persist_meta(adata: "AnnData", method: str, params: Dict[str, Any]):
+        d = adata.uns.setdefault("topometry_integration", {})
+        md = d.setdefault(method, {})
+        # store only JSON-serializable fields
+        md["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        md["params"] = {k: (v if isinstance(v, (int, float, str, bool, type(None))) else str(v))
+                         for k, v in dict(params).items()}
+
+    def _neighbors_on_rep(adata: "AnnData", rep_key: str, *, method: str, n_neighbors: int = 30, metric: str = "euclidean"):
+        key_added = f"neighbors_{method}"
+        sc.pp.neighbors(adata, use_rep=rep_key, n_neighbors=int(n_neighbors), metric=metric, key_added=key_added)
+        # method-specific graph copies for convenience
+        adata.obsp[f"connectivities_{method}"] = adata.uns[key_added]["connectivities"].copy()
+        adata.obsp[f"distances_{method}"] = adata.uns[key_added]["distances"].copy()
+        return key_added
+
+
+    # inside the _HAVE_SCANPY loop
+    # -----------------------
+    # Public API
+    # -----------------------
+
+    # local import (same package)
+    from topo.topograph import TopOGraph  # adjust relative import if needed
+
+    def _temp_obsm(adata, key: str, arr):
+        """Context manager: temporarily attach an array to adata.obsm[key]."""
+        class _Ctx:
+            def __init__(self, adata, key, arr):
+                self.adata, self.key = adata, key
+                self.had = key in adata.obsm
+                self.prev = adata.obsm[key] if self.had else None
+                self.arr = arr
+            def __enter__(self):
+                self.adata.obsm[self.key] = self.arr
+                return self.key
+            def __exit__(self, exc_type, exc, tb):
+                if self.had:
+                    self.adata.obsm[self.key] = self.prev
+                else:
+                    del self.adata.obsm[self.key]
+        return _Ctx(adata, key, arr)
+
+    def _asarray_X(adata):
+        X = adata.X
+        if sp.issparse(X):
+            return X.toarray()
+        return np.asarray(X)
+
+    def _ensure_tg(adata, tg: Optional["TopOGraph"]):
+        """Use provided TopOGraph or create a new one (no PCA ever)."""
+        if tg is not None:
+            return tg
+        # Fresh TopOGraph: we’ll pass precomputed graphs (base_metric='precomputed')
+        return TopOGraph(
+            base_metric='precomputed',
+            graph_metric='euclidean',
+            base_knn=30,
+            graph_knn=30,
+            random_state=42,
+            verbosity=0,
+        )
+
+    # --- robust unwrap for scanpy.external.pp.mnn_correct outputs ---
+    def _unwrap_anndata(obj):
+        """
+        Scanpy/mnnpy wrappers sometimes return nested (tuple/list) structures.
+        This walks down until we hit an AnnData-like object (has .obs_names).
+        """
+        cur = obj
+        while isinstance(cur, (list, tuple)):
+            if len(cur) == 0:
+                raise ValueError("Empty MNN result.")
+            cur = cur[0]
+        if not hasattr(cur, "obs_names"):
+            raise TypeError("MNN result does not contain an AnnData-like object.")
+        return cur
+
+    def _store_layouts(adata, tg: "TopOGraph", suffix: str):
+        """Save TopoMAP/TopoPaCMAP under method-specific, capitalized keys."""
+        try:
+            tg.project(projection_method="MAP", multiscale=False)
+        except Exception:
+            pass
+        try:
+            tg.project(projection_method="PaCMAP", multiscale=False)
+        except Exception:
+            pass
+        if hasattr(tg, "TopoMAP"):
+            adata.obsm[f"X_TopoMAP_{suffix}"] = np.array(tg.TopoMAP, copy=True)
+        if hasattr(tg, "TopoPaCMAP"):
+            adata.obsm[f"X_TopoPaCMAP_{suffix}"] = np.array(tg.TopoPaCMAP, copy=True)
+
+    def _persist_meta_integration(adata, method: str, extra: dict):
+        _persist_meta(adata, method, extra)
+
+    def _knn_from_topo(X: np.ndarray, k: int, metric: str, n_jobs: int = -1, backend: str = "hnswlib"):
+        """
+        Build a kNN graph using topo.base.ann.kNN and return a CSR adjacency (symmetric).
+        topo.base.ann.kNN returns a distance-weighted CSR; we keep it as-is since
+        TopOGraph kernels expect distances (TopOGraph handles symmetrization/expansion).
+        """
+        from topo.base import ann as _ann
+        knn = _ann.kNN(
+            X,
+            n_neighbors=int(k),
+            metric=metric,
+            n_jobs=n_jobs,
+            backend=backend,          # respects TopOGraph backend choice
+            return_instance=False,
+            verbose=False,
+        )
+        # Ensure CSR & float32
+        knn = knn.tocsr().astype(np.float32, copy=False)
+        return knn
+
+    def integrate_bbknn(
+        adata: "AnnData",
+        *,
+        batch_key: str,
+        neighbors_within_batch: int = 3,
+        tg: "TopOGraph" = None,
+        **kwargs,
+    ) -> "AnnData":
+        """
+        BBKNN-backed integration grounded on TopoGraph (no PCA).
+        - Build a **base** batch-balanced neighbor graph on X using BBKNN → P_of_X (tg).
+        - Compute spectral scaffold (eigs) in tg.
+        - Build **refined** batch-balanced graph on the (ms)scaffold using BBKNN.
+        - Compute TopoMAP/TopoPaCMAP, store with suffix '_BBKNN'.
+
+        Fix: match TopoGraph's n_neighbors to the **actual degree** of the BBKNN graph
+        to avoid adaptive-bandwidth median index errors.
+        """
+        try:
+            import bbknn  # noqa: F401
+        except ImportError:
+            raise ImportError("BBKNN integration requires `bbknn` (pip install bbknn).")
+
+        tg = _ensure_tg(adata, tg)
+
+        # ---------- Base graph on X via BBKNN ----------
+        X = _asarray_X(adata)
+        with _temp_obsm(adata, "_bbknn_X", X):
+            sc.external.pp.bbknn(
+                adata,
+                batch_key=batch_key,
+                use_rep="_bbknn_X",
+                neighbors_within_batch=int(neighbors_within_batch),
+                **kwargs,
+            )
+        if "connectivities" not in adata.obsp:
+            raise RuntimeError("BBKNN failed to populate `.obsp['connectivities']`.")
+
+        knn_X = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        degX = np.diff(knn_X.indptr)
+        k_base_eff = int(max(3, degX.min()))  # must be ≤ min degree to avoid index errors
+
+        # Fit TopOGraph from precomputed base graph using the effective k
+        tg.base_metric = "precomputed"
+        prev_base_knn = getattr(tg, "base_knn", None)
+        tg.base_knn = k_base_eff
+        tg.fit(X=knn_X)  # computes P_of_X, eigenbasis, initial refined graphs
+        if prev_base_knn is not None:
+            tg.base_knn = prev_base_knn  # restore if you want to keep original hyperparameter
+
+        # ---------- Refined graph on spectral scaffold via BBKNN ----------
+        msZ = tg.spectral_scaffold(multiscale=True)
+        with _temp_obsm(adata, "_bbknn_msZ", msZ):
+            sc.external.pp.bbknn(
+                adata,
+                batch_key=batch_key,
+                use_rep="_bbknn_msZ",
+                neighbors_within_batch=int(neighbors_within_batch),
+                **kwargs,
+            )
+        knn_msZ = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        deg_msZ = np.diff(knn_msZ.indptr)
+        k_msZ_eff = int(max(3, deg_msZ.min()))
+
+        tg._knn_msZ = knn_msZ
+        tg._kernel_msZ, _ = tg._compute_kernel_from_version_knn(
+            tg._knn_msZ, k_msZ_eff, tg.graph_kernel_version, tg.GraphKernelDict,
+            suffix=" from msDM (BBKNN)", low_memory=tg.low_memory, base=False, data_for_expansion=msZ
+        )
+
+        # ---------- Optional: refined graph on fixed-time DM (Z) via BBKNN ----------
+        Z = tg.spectral_scaffold(multiscale=False)
+        with _temp_obsm(adata, "_bbknn_Z", Z):
+            sc.external.pp.bbknn(
+                adata,
+                batch_key=batch_key,
+                use_rep="_bbknn_Z",
+                neighbors_within_batch=int(neighbors_within_batch),
+                **kwargs,
+            )
+        tg._knn_Z = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        deg_Z = np.diff(tg._knn_Z.indptr)
+        k_Z_eff = int(max(3, deg_Z.min()))
+
+        tg._kernel_Z, _ = tg._compute_kernel_from_version_knn(
+            tg._knn_Z, k_Z_eff, tg.graph_kernel_version, tg.GraphKernelDict,
+            suffix=" from DM (BBKNN)", low_memory=tg.low_memory, base=False, data_for_expansion=Z
+        )
+
+        # ---------- Projections & storage (TopOMAP / TopoPaCMAP) ----------
+        _store_layouts(adata, tg, "BBKNN")
+        # Also write capitalized TopoMetry-style keys expected by plotting code
+        if hasattr(tg, "TopoMAP"):
+            adata.obsm["X_TopoMAP_BBKNN"] = np.array(tg.TopoMAP, copy=True)
+        if hasattr(tg, "TopoPaCMAP"):
+            adata.obsm["X_TopoPaCMAP_BBKNN"] = np.array(tg.TopoPaCMAP, copy=True)
+
+        # Optional: keep operators for inspection
+        adata.obsp["P_of_X_BBKNN"] = tg.P_of_X
+        adata.obsp["P_of_msZ_BBKNN"] = tg.P_of_msZ
+        adata.obsp["P_of_Z_BBKNN"] = tg.P_of_Z
+
+        _persist_meta_integration(
+            adata,
+            "bbknn",
+            {
+                "batch_key": batch_key,
+                "neighbors_within_batch": int(neighbors_within_batch),
+                "k_base_eff": k_base_eff,
+                "k_msZ_eff": k_msZ_eff,
+                "k_Z_eff": k_Z_eff,
+            },
+        )
+        return adata
+
+
+
+    def integrate_mnn(
+        adata: "AnnData",
+        *,
+        batch_key: str,
+        var_subset: Optional[list[str]] = None,
+        n_jobs: Optional[int] = None,
+        tg: "TopOGraph" = None,
+        **kwargs,
+    ) -> "AnnData":
+        """
+        MNN-backed integration on TopoGraph (no PCA).
+        Workflow:
+        1) Correct X via scanpy.external.pp.mnn_correct.
+        2) Base graph on corrected X → P_of_X (tg).
+        3) Refined graph on (ms)Z computed by TopoGraph.
+        4) Store TopoMAP/TopoPaCMAP with suffix '_MNN'.
+        """
+        res = sc.external.pp.mnn_correct(
+            adata, batch_key=batch_key, var_subset=var_subset, n_jobs=n_jobs, **kwargs
+        )
+        adata_corr = _unwrap_anndata(res)
+
+        # Align to original obs order robustly (don’t assume same/contiguous)
+        idx = adata_corr.obs_names.get_indexer(adata.obs_names)
+        if np.any(idx < 0):
+            raise ValueError("MNN corrected AnnData is missing some original cells.")
+        Xcorr = adata_corr.X[idx]
+        adata.layers["X_corrected_mnn"] = Xcorr.copy()
+
+        tg = _ensure_tg(adata, tg)
+
+        # Base graph from corrected X (plain kNN on corrected expression)
+        X_base = adata.layers["X_corrected_mnn"]
+        if sp.issparse(X_base):
+            X_base = X_base.toarray()
+        tg.base_metric = "cosine"
+        tg.fit(X=X_base)
+
+        # Refined graph already built by tg.fit(); compute/store layouts
+        _store_layouts(adata, tg, "MNN")
+        adata.obsm["X_spectral_scaffold_MNN"] = tg.spectral_scaffold(multiscale=True)
+        adata.obsp["P_of_X_MNN"] = tg.P_of_X
+        adata.obsp["P_of_msZ_MNN"] = tg.P_of_msZ
+        adata.obsp["P_of_Z_MNN"] = tg.P_of_Z
+
+        _persist_meta_integration(
+            adata, "mnn",
+            {"batch_key": batch_key, "var_subset": None if var_subset is None else len(var_subset)}
+        )
+        return adata
+
+
+
+    def integrate_scanorama(
+        adata: "AnnData",
+        *,
+        batch_key: str,
+        out_dim: Optional[int] = None,
+        tg: "TopOGraph" = None,
+        multiscale: bool = True,
+        **kwargs,
+    ) -> "AnnData":
+        """
+        Scanorama correction on spectral scaffold (never PCA):
+        - Fit tg on X if needed (to get base operator).
+        - Run scanorama on a TEMP batch-sorted view of the scaffold to avoid the
+            'non-contiguous batches' error, then restore original order.
+        - Rebuild refined kernel on corrected scaffold and project.
+
+        Note: Some Scanorama versions don’t support `out_dim`. We therefore never
+        pass it to the wrapper, and if `out_dim` is provided we truncate after.
+        """
+        tg = _ensure_tg(adata, tg)
+        if tg.base_kernel is None and tg.base_knn_graph is None:
+            tg.base_metric = "cosine"
+            tg.fit(X=adata.X)
+
+        Z = tg.spectral_scaffold(multiscale=multiscale)
+        key_in = "_scanorama_scaffold"
+
+        # --- sort by batch to ensure contiguity for the wrapper ---
+        b = np.asarray(adata.obs[batch_key]).astype(str)
+        order = np.argsort(b)
+        inv = np.empty_like(order)
+        inv[order] = np.arange(order.size)
+
+        A_sorted = adata[order].copy()
+        with _temp_obsm(A_sorted, key_in, Z[order]):
+            # IMPORTANT: do NOT pass out_dim; older scanorama.assemble() rejects it
+            sc.external.pp.scanorama_integrate(
+                A_sorted, key=batch_key, basis=key_in, **kwargs
+            )
+
+        # retrieve corrected scaffold and unsort back
+        if "X_scanorama" in A_sorted.obsm:
+            Zc_sorted = A_sorted.obsm["X_scanorama"]
+        else:
+            Zc_sorted = A_sorted.obsm[key_in]
+        Zc = np.asarray(Zc_sorted)[inv]
+
+        # If the caller asked for a specific dimensionality, truncate here
+        if out_dim is not None and Zc.shape[1] > int(out_dim):
+            Zc = Zc[:, :int(out_dim)]
+
+        # Rebuild refined kernel on corrected scaffold using Topo’s ANN kNN
+        knn_ref = _knn_from_topo(
+            Zc,
+            k=tg.graph_knn,
+            metric=tg.graph_metric,
+            n_jobs=getattr(tg, "n_jobs", -1),
+            backend=getattr(tg, "backend", "hnswlib"),
+        )
+
+        if multiscale:
+            tg._knn_msZ = knn_ref
+            tg._kernel_msZ, _ = tg._compute_kernel_from_version_knn(
+                tg._knn_msZ, tg.graph_knn, tg.graph_kernel_version, tg.GraphKernelDict,
+                suffix=" (scanorama msZ)", low_memory=tg.low_memory, base=False, data_for_expansion=Zc
+            )
+        else:
+            tg._knn_Z = knn_ref
+            tg._kernel_Z, _ = tg._compute_kernel_from_version_knn(
+                tg._knn_Z, tg.graph_knn, tg.graph_kernel_version, tg.GraphKernelDict,
+                suffix=" (scanorama Z)", low_memory=tg.low_memory, base=False, data_for_expansion=Zc
+            )
+
+        adata.obsm["X_spectral_scaffold_scanorama"] = Zc
+        _store_layouts(adata, tg, "scanorama")
+        adata.obsp["P_of_msZ_scanorama"] = tg.P_of_msZ
+        adata.obsp["P_of_Z_scanorama"] = tg.P_of_Z
+        _persist_meta_integration(adata, "scanorama", {"batch_key": batch_key, "multiscale": bool(multiscale), "out_dim": out_dim})
+        return adata
+
+    def integrate_harmony(
+        adata: "AnnData",
+        *,
+        batch_key: str,
+        tg: "TopOGraph" = None,
+        multiscale: bool = False,
+        adjusted_basis_key: str = "_harmony_scaffold",
+        # --- improvements / knobs ---
+        standardize: bool = True,
+        whiten: bool = True,
+        coarse_pass: bool = True,
+        coarse_params: Optional[dict] = None,
+        fine_params: Optional[dict] = None,
+        reference_values: Optional[list] = None,
+        blend_bbknn: bool = False,
+        bbknn_neighbors_within_batch: int = 2,
+        blend_alpha: float = 0.3,
+        target_min_degree: Optional[int] = None,
+        report_metrics: bool = True,
+        **kwargs,
+    ) -> "AnnData":
+        """
+        Harmony correction on the TopoMetry spectral scaffold (no PCA).
+
+        Pipeline (scaffold-centric):
+        1) Ensure TopOGraph P(X) is fitted on adata.X (never PCA).
+        2) Build scaffold Z (fixed-time) and/or msZ (coarse multiscale).
+        3) Standardize (and optionally rotate-whiten) the scaffold(s).
+        4) Optional coarse Harmony pass on msZ; then fine Harmony pass on Z (warm-start via concatenation).
+        5) Rebuild refined kNN from corrected scaffold Zc using Topo's ANN kNN.
+        6) Optional blend with a light BBKNN graph on Zc.
+        7) Optional enforce a minimum degree by increasing k once.
+        8) Rebuild kernels and project TopoMAP / TopoPaCMAP.
+        9) (Optional) record light diagnostics (batch-mixing@k before/after).
+
+        Parameters
+        ----------
+        standardize : bool
+            Z-score columns of the scaffold before Harmony.
+        whiten : bool
+            Apply rotation-only whitening (U from SVD) to standardized scaffold(s).
+        coarse_pass : bool
+            Run a coarse Harmony pass on msZ before the fine pass on Z.
+        coarse_params, fine_params : dict
+            Harmony parameters for coarse/fine passes. If None, sensible defaults are used.
+        reference_values : list[str] or None
+            Optional reference batch names for Harmony (anchors correction).
+        blend_bbknn : bool
+            If True, blend refined kNN on Zc with a BBKNN graph built on Zc to reduce seams.
+        bbknn_neighbors_within_batch : int
+            BBKNN's neighbors_within_batch used when blending.
+        blend_alpha : float
+            Blend weight in [0,1]; final_knn = (1 - alpha) * kNN + alpha * BBKNN.
+        target_min_degree : int or None
+            If set, rebuild the kNN once with k = max(graph_knn, target_min_degree) to avoid under-connected cells.
+        report_metrics : bool
+            Compute simple batch-mixing@k before/after and store in .uns['topometry_integration']['harmony']['metrics'].
+        """
+        try:
+            import harmonypy  # noqa: F401
+        except Exception:
+            # Scanpy wrapper will error if Harmony is actually missing
+            pass
+
+        # ---- local helpers ----
+        def _zscore(A):
+            if not standardize:
+                return A
+            m = A.mean(0)
+            s = A.std(0) + 1e-8
+            return (A - m) / s
+
+        def _rot_whiten(A):
+            if not whiten:
+                return A
+            U, _, _ = np.linalg.svd(np.nan_to_num(A), full_matrices=False)
+            return U  # rotation-only whitening (preserves scale in a stable way)
+
+        def _batch_mixing_at_k(emb, labels, k):
+            # fraction of neighbors with a batch != self batch
+            from sklearn.neighbors import NearestNeighbors
+            nn = NearestNeighbors(n_neighbors=min(k + 1, max(2, emb.shape[0] - 1)), metric="euclidean").fit(emb)
+            inds = nn.kneighbors(emb, return_distance=False)[:, 1:]
+            labs = np.asarray(labels)
+            return float((labs[inds] != labs[:, None]).mean())
+
+        # ---- ensure TopOGraph base operator ----
+        tg = _ensure_tg(adata, tg)
+        if tg.base_kernel is None and tg.base_knn_graph is None:
+            tg.base_metric = "cosine"
+            tg.fit(X=adata.X)
+
+        # ---- get scaffold(s) and standardize/whiten ----
+        Z = tg.spectral_scaffold(multiscale=False)      # fixed-time
+        msZ = tg.spectral_scaffold(multiscale=True)     # coarse multiscale
+
+        Zw = _rot_whiten(_zscore(Z))
+        msZw = _rot_whiten(_zscore(msZ))
+
+        # ---- default Harmony params ----
+        if coarse_params is None:
+            coarse_params = dict(
+                nclust=min(100, max(30, int(np.sqrt(max(100, adata.n_obs) / 100)))),
+                theta=4.0,
+                lambda_=4.0,
+                max_iter_harmony=30,
+                max_iter_kmeans=20,
+                epsilon_harmony=1e-3,
+                epsilon_cluster=1e-3,
+            )
+        if fine_params is None:
+            fine_params = dict(
+                nclust=min(80, max(30, int(np.sqrt(max(100, adata.n_obs) / 120)))),
+                theta=2.0,
+                lambda_=2.0,
+                max_iter_harmony=25,
+                max_iter_kmeans=20,
+                epsilon_harmony=1e-3,
+                epsilon_cluster=1e-3,
+            )
+
+        # Optionally include reference batches
+        if reference_values is not None:
+            coarse_params = {**coarse_params, "reference_values": reference_values}
+            fine_params = {**fine_params, "reference_values": reference_values}
+
+        # ---- metrics (pre) ----
+        metrics = {}
+        if report_metrics:
+            labels = adata.obs[batch_key].astype(str).values
+            try:
+                metrics["mixing_pre@{}".format(tg.graph_knn)] = _batch_mixing_at_k(Zw, labels, tg.graph_knn)
+            except Exception:
+                pass
+
+        # ---- Harmony coarse pass on msZ (optional) ----
+        if coarse_pass:
+            ms_key = "_harmony_msZ_basis"
+            with _temp_obsm(adata, ms_key, msZw):
+                sc.external.pp.harmony_integrate(adata, key=batch_key, basis=ms_key, **coarse_params)
+            msZc = adata.obsm.get(ms_key, None)
+            if msZc is None:
+                # some versions may rename; try common fallbacks
+                msZc = adata.obsm.get("_X_harmony", None) or adata.obsm.get("X_pca_harmony", None)
+            if msZc is None:
+                raise KeyError("Harmony (coarse) did not return an adjusted basis on msZ.")
+            msZc = np.asarray(msZc)
+            # warm-start by concatenation with fine scaffold
+            fine_basis = np.c_[Zw, msZc]
+        else:
+            fine_basis = Zw
+
+        # ---- Harmony fine pass on Z (warm-started by coarse if used) ----
+        with _temp_obsm(adata, adjusted_basis_key, fine_basis):
+            sc.external.pp.harmony_integrate(adata, key=batch_key, basis=adjusted_basis_key, **fine_params)
+
+        Zc = adata.obsm.get(adjusted_basis_key, None)
+        if Zc is None:
+            Zc = adata.obsm.get("_X_harmony", None) or adata.obsm.get("X_pca_harmony", None)
+            if Zc is None:
+                raise KeyError("Harmony (fine) did not return an adjusted basis on the scaffold.")
+        Zc = np.asarray(Zc)
+
+        # If we concatenated with msZc, truncate back to original Z dims
+        if Zc.shape[1] > Z.shape[1]:
+            Zc = Zc[:, : Z.shape[1]]
+
+        # ---- refined kNN on corrected scaffold using Topo's ANN ----
+        def _ref_knn(Z_embed, k):
+            return _knn_from_topo(
+                Z_embed,
+                k=k,
+                metric=tg.graph_metric,
+                n_jobs=getattr(tg, "n_jobs", -1),
+                backend=getattr(tg, "backend", "hnswlib"),
+            )
+
+        k_use = int(tg.graph_knn)
+        knn_ref = _ref_knn(Zc, k_use)
+
+        # Optional: blend with a light BBKNN on Zc to erase residual seams
+        if blend_bbknn:
+            tmp_key = "_bbknn_on_Zc"
+            with _temp_obsm(adata, tmp_key, Zc):
+                sc.external.pp.bbknn(
+                    adata,
+                    batch_key=batch_key,
+                    use_rep=tmp_key,
+                    neighbors_within_batch=int(bbknn_neighbors_within_batch),
+                )
+            if "connectivities" in adata.obsp:
+                knn_bb = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=False)
+                # convex blend; ensure shapes match
+                if knn_bb.shape == knn_ref.shape:
+                    knn_ref = (1.0 - float(blend_alpha)) * knn_ref + float(blend_alpha) * knn_bb
+
+        # Optional: enforce minimum degree by increasing k once
+        if target_min_degree is not None and target_min_degree > 0:
+            deg = np.diff(knn_ref.indptr)
+            if int(deg.min()) < int(target_min_degree):
+                k_new = max(k_use, int(target_min_degree))
+                knn_ref = _ref_knn(Zc, k_new)
+
+        # ---- install refined kernel on tg ----
+        if multiscale:
+            tg._knn_msZ = knn_ref
+            tg._kernel_msZ, _ = tg._compute_kernel_from_version_knn(
+                tg._knn_msZ,
+                tg.graph_knn,
+                tg.graph_kernel_version,
+                tg.GraphKernelDict,
+                suffix=" (harmony msZ)",
+                low_memory=tg.low_memory,
+                base=False,
+                data_for_expansion=Zc,
+            )
+        else:
+            tg._knn_Z = knn_ref
+            tg._kernel_Z, _ = tg._compute_kernel_from_version_knn(
+                tg._knn_Z,
+                tg.graph_knn,
+                tg.graph_kernel_version,
+                tg.GraphKernelDict,
+                suffix=" (harmony Z)",
+                low_memory=tg.low_memory,
+                base=False,
+                data_for_expansion=Zc,
+            )
+
+        # ---- store outputs ----
+        adata.obsm["X_spectral_scaffold_harmony"] = Zc
+        _store_layouts(adata, tg, "harmony")  # writes X_TopoMAP_harmony / X_TopoPaCMAP_harmony
+        adata.obsp["P_of_msZ_harmony"] = tg.P_of_msZ
+        adata.obsp["P_of_Z_harmony"] = tg.P_of_Z
+
+        # ---- metrics (post) ----
+        if report_metrics:
+            try:
+                labels = adata.obs[batch_key].astype(str).values
+                metrics["mixing_post@{}".format(tg.graph_knn)] = _batch_mixing_at_k(Zc, labels, tg.graph_knn)
+            except Exception:
+                pass
+            # persist
+            if "topometry_integration" not in adata.uns:
+                adata.uns["topometry_integration"] = {}
+            adata.uns["topometry_integration"].setdefault("harmony", {})
+            adata.uns["topometry_integration"]["harmony"]["metrics"] = metrics
+
+        _persist_meta_integration(
+            adata,
+            "harmony",
+            {
+                "batch_key": batch_key,
+                "multiscale": bool(multiscale),
+                "standardize": bool(standardize),
+                "whiten": bool(whiten),
+                "coarse_pass": bool(coarse_pass),
+                "blend_bbknn": bool(blend_bbknn),
+                "bbknn_neighbors_within_batch": int(bbknn_neighbors_within_batch),
+                "blend_alpha": float(blend_alpha),
+                "target_min_degree": (None if target_min_degree is None else int(target_min_degree)),
+                "reference_values": reference_values,
+                "coarse_params": coarse_params,
+                "fine_params": fine_params,
+            },
+        )
+        return adata
+
+
+
+    # def integrate_harmony(
+    #     adata: "AnnData",
+    #     *,
+    #     batch_key: str,
+    #     tg: "TopOGraph" = None,
+    #     multiscale: bool = True,
+    #     adjusted_basis_key: str = "_harmony_scaffold",
+    #     **kwargs,
+    # ) -> "AnnData":
+    #     """
+    #     Harmony correction on spectral scaffold:
+    #     - Fit tg on X if needed.
+    #     - Run harmony on scaffold via temp obsm key.
+    #     - Rebuild refined kernel from corrected scaffold using a robust kNN CSR.
+    #     """
+    #     try:
+    #         import harmonypy  # noqa: F401
+    #     except Exception:
+    #         pass
+
+    #     tg = _ensure_tg(adata, tg)
+    #     if tg.base_kernel is None and tg.base_knn_graph is None:
+    #         tg.base_metric = "cosine"
+    #         tg.fit(X=adata.X)
+
+    #     Z = tg.spectral_scaffold(multiscale=multiscale)
+    #     Zs = (Z - Z.mean(0)) / (Z.std(0) + 1e-8)
+        
+    #     # optional whitening
+    #     U, S, _ = np.linalg.svd(np.nan_to_num(Zs), full_matrices=False)
+    #     Zw = (U * 1.0)  # pure-rotation whitening (or use U/S for full whitening)
+    #     # prefer rotation-only whitening to avoid over-amplifying noise
+
+
+    #     with _temp_obsm(adata, adjusted_basis_key, Zw):
+    #         sc.external.pp.harmony_integrate(adata, key=batch_key, basis=adjusted_basis_key, **kwargs)
+
+    #     if adjusted_basis_key not in adata.obsm:
+    #         Zc = adata.obsm.get("_X_harmony", None) or adata.obsm.get("X_pca_harmony", None)
+    #         if Zc is None:
+    #             raise KeyError("Harmony did not return an adjusted basis on the scaffold.")
+    #     else:
+    #         Zc = adata.obsm[adjusted_basis_key]
+    #     Zc = np.asarray(Zc)
+
+    #     # Rebuild refined kernel on corrected scaffold
+    #     knn_ref = _knn_from_topo(
+    #                         Zc,
+    #                         k=tg.graph_knn,
+    #                         metric=tg.graph_metric,
+    #                         n_jobs=getattr(tg, "n_jobs", -1),
+    #                         backend=getattr(tg, "backend", "hnswlib"),
+    #                     )
+    #     if multiscale:
+    #         tg._knn_msZ = knn_ref
+    #         tg._kernel_msZ, _ = tg._compute_kernel_from_version_knn(
+    #             tg._knn_msZ, tg.graph_knn, tg.graph_kernel_version, tg.GraphKernelDict,
+    #             suffix=" (harmony msZ)", low_memory=tg.low_memory, base=False, data_for_expansion=Zc
+    #         )
+    #     else:
+    #         tg._knn_Z = knn_ref
+    #         tg._kernel_Z, _ = tg._compute_kernel_from_version_knn(
+    #             tg._knn_Z, tg.graph_knn, tg.graph_kernel_version, tg.GraphKernelDict,
+    #             suffix=" (harmony Z)", low_memory=tg.low_memory, base=False, data_for_expansion=Zc
+    #         )
+
+    #     adata.obsm["X_spectral_scaffold_harmony"] = Zc
+    #     _store_layouts(adata, tg, "harmony")
+    #     adata.obsp["P_of_msZ_harmony"] = tg.P_of_msZ
+    #     adata.obsp["P_of_Z_harmony"] = tg.P_of_Z
+
+    #     _persist_meta_integration(adata, "harmony", {"batch_key": batch_key, "multiscale": bool(multiscale)})
+    #     return adata
 
 
 
@@ -3397,7 +4413,7 @@ if _HAVE_SCANPY:
         """
         sc.tl.pca(AnnData, n_comps=n_pcs)
         sc.pp.neighbors(AnnData, n_neighbors=n_neighbors, metric=metric, n_pcs=n_pcs)
-        sc.tl.leiden(AnnData, resolution=resolution)
+        sc.tl.leiden(AnnData, resolution=resolution, flavor='igraph', n_iterations=2)
         sc.tl.umap(AnnData, min_dist=min_dist, spread=spread, maxiter=maxiter)
         AnnData.obsm['X_pca_umap'] = AnnData.obsm['X_umap']
         AnnData.obs['pca_leiden'] = AnnData.obs['leiden']
@@ -3509,7 +4525,7 @@ if _HAVE_SCANPY:
                     graph_key = graph_kernel + ' from ' + basis_key
                     AnnData.obsp[basis_key + '_distances'] = topograph.eigenbasis_knn_graph
                     AnnData.obsp[graph_key + '_connectivities'] = topograph.GraphKernelDict[graph_key].P
-                    sc.tl.leiden(AnnData, adjacency = topograph.GraphKernelDict[graph_key].P, resolution=resolution, key_added = graph_key + '_leiden', **kwargs)
+                    sc.tl.leiden(AnnData, adjacency = topograph.GraphKernelDict[graph_key].P, resolution=resolution, key_added = graph_key + '_leiden', flavor='igraph', n_iterations=2, **kwargs)
                     for projection in projections:
                         if projection in ['MAP', 'UMAP', 'MDE', 'Isomap']: 
                             suffix_key = graph_key
