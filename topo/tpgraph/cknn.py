@@ -64,7 +64,7 @@ def cknn_graph(X, n_neighbors=10,
         csr_matrix input is expected. If using 'hnwslib' or 'sklearn', a dense array is expected.
         * I strongly recommend you use 'hnswlib' if handling with somewhat dense, array-shaped data. If the data
         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
-        TopOMetry and will automatically convert the input array to csr_matrix for performance.
+        TopoMetry and will automatically convert the input array to csr_matrix for performance.
 
     n_jobs : int (optional, default 1).
         The number of jobs to use in the k-nearest-neighbors computation. Defaults to one (I highly recommend you use all available).

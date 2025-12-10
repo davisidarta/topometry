@@ -1,8 +1,8 @@
 # Evaluating embeddings
 
-As one realizes how much methods and strategies exist for dimensionality reduction, it can be challenging to decide which to use. TopOMetry employs various models, but even so it may be hard to decide for a single one _a priori_. Instead, a better approach would be to compute several alternatives and score them to decide which to trust more. In this tutorial, we'll see how to evaluate the results of dimensionality reduction methods. 
+As one realizes how much methods and strategies exist for dimensionality reduction, it can be challenging to decide which to use. TopoMetry employs various models, but even so it may be hard to decide for a single one _a priori_. Instead, a better approach would be to compute several alternatives and score them to decide which to trust more. In this tutorial, we'll see how to evaluate the results of dimensionality reduction methods. 
 
-In TopOMetry, there are three ways to do this _quantitatively_:
+In TopoMetry, there are three ways to do this _quantitatively_:
  
 * 1) [Trustworthiness](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.trustworthiness.html) - this classical score assess the preservation of neighborhoods (i.e., the local structure). It penalizes any unexpected nearest neighbors in the output space, in proportion to their rank in the input space. 
 
@@ -22,7 +22,7 @@ Very rarely a single method will be the best performer in every single score. In
 
 _What about qualitative evaluations?_
 
-Quantitative evaluations are important for deciding which embedding to trust 'the most', but they are not particularly useful to investigate _which_ regions of these embeddings are more worthy of trust than the others. Thus, in addition to these methods, TopOMetry also includes the [Riemann metric](https://doi.org/10.48550/arXiv.1305.7255), which was developed by Perraul-Joncas & Meila in 2013 and had originally been implemented in [megaman](https://github.com/mmp2/megaman). It has been adapted into TopOMetry to allow the qualitative evaluation of embeddings and their underlying manifold. 
+Quantitative evaluations are important for deciding which embedding to trust 'the most', but they are not particularly useful to investigate _which_ regions of these embeddings are more worthy of trust than the others. Thus, in addition to these methods, TopoMetry also includes the [Riemann metric](https://doi.org/10.48550/arXiv.1305.7255), which was developed by Perraul-Joncas & Meila in 2013 and had originally been implemented in [megaman](https://github.com/mmp2/megaman). It has been adapted into TopoMetry to allow the qualitative evaluation of embeddings and their underlying manifold. 
 
 .
 
@@ -196,7 +196,7 @@ tg
 
 
 
-You may have noticed that the naming of representations is quite descriptive within TopOMetry (and hopefully, self-explanatory at some extent). This is to avoid any potential confusion, as several different similarity-learning and matrix decomposition methods may have been used to generate the graphs or eigenbases used for the graph layout optimization. It's better to know what you are actually doing under the hood, right?! 
+You may have noticed that the naming of representations is quite descriptive within TopoMetry (and hopefully, self-explanatory at some extent). This is to avoid any potential confusion, as several different similarity-learning and matrix decomposition methods may have been used to generate the graphs or eigenbases used for the graph layout optimization. It's better to know what you are actually doing under the hood, right?! 
 
 For clarity, here, we are using 
 
@@ -262,7 +262,7 @@ However, dissecting the cellular hierarchies within this biological system is no
  
 ### Trustworthiness
 
-This is a very classic metric and is available within [scikit-learn](https://scikit-learn.org/). TopOMetry does have an adapted implementation which uses approximate-nearest-neighbors to achieve a better performance, but let's go with the default scikit-learn one this time. 
+This is a very classic metric and is available within [scikit-learn](https://scikit-learn.org/). TopoMetry does have an adapted implementation which uses approximate-nearest-neighbors to achieve a better performance, but let's go with the default scikit-learn one this time. 
 
 NOTE: Keep in mind we prefer the cosine metric over the euclidean metric in this case, since the euclidean metric performs *very poorly* in high-dimensional spaces. You can read the seminal work of [Aggarwal, Hinneburg and Keim](https://doi.org/10.1007/3-540-44503-X_27) on it, or go through this [recent benchmark](https://doi.org/10.1038/s41592-019-0372-4) for more empirical guidelines.
 
@@ -297,7 +297,7 @@ In this case, it points that the local geometry is somewhat equally preserved by
 
 However, this does not tell us much about the global preservation of geometry. The geodesic correlation score is better suited for this.
 
-Before we move on to geodesic correlation, let's see how we can use TopOMetry to calculate trustworthiness a little faster than with scikit-learn. This involves parallelization, so it escalates well with larger datasets. Let's compute the trustworthiness of the full PCA and msDM eigenbases:
+Before we move on to geodesic correlation, let's see how we can use TopoMetry to calculate trustworthiness a little faster than with scikit-learn. This involves parallelization, so it escalates well with larger datasets. Let's compute the trustworthiness of the full PCA and msDM eigenbases:
 
 
 ```python
@@ -345,7 +345,7 @@ The geodesic correlation score shows that msDM preserves the most of intercellul
 
 It is noticeable that the topoMAP and topoPaCMAP we computed performed rather poorly in this evaluation for this particular dataset. 
 
-Let's use this example as an exercise to guide tuning hyperparameters of MAP ('UMAP on a diet') and PaCMAP. We could also systematically optimize them using scikit-learn (since all TopOMetry classes are scikit-learn transformers and can be pipelined). However, for the sake of brevity, let's just recompute them with less iterations and then recalculate the GC scores:
+Let's use this example as an exercise to guide tuning hyperparameters of MAP ('UMAP on a diet') and PaCMAP. We could also systematically optimize them using scikit-learn (since all TopoMetry classes are scikit-learn transformers and can be pipelined). However, for the sake of brevity, let's just recompute them with less iterations and then recalculate the GC scores:
 
 
 ```python
@@ -440,7 +440,7 @@ print('TopoPaCMAP (new) (PaCMAP on msDM) global score: ', global_score_pca(adata
     TopoPaCMAP (new) (PaCMAP on msDM) global score:  0.94945097
 
 
-Because TopOMetry uses a similar spectral initialization to that used in UMAP, these embeddings actually preserve most of the global structure of the data. This is in line with some really cool work from [Kobak and Linderman](https://doi.org/10.1038/nbt.4314). 
+Because TopoMetry uses a similar spectral initialization to that used in UMAP, these embeddings actually preserve most of the global structure of the data. This is in line with some really cool work from [Kobak and Linderman](https://doi.org/10.1038/nbt.4314). 
 
 As such, we care much more with preserving the local structure of the data (isomorphic and isometric), as the global structure can be taken for granted, given an appropriate initialization for the graph layout optimization step.
 
@@ -448,7 +448,7 @@ As such, we care much more with preserving the local structure of the data (isom
 
 Pufff, these evaluations involve are a lot of analyses, right? 
 
-To make it easier, TopOMetry allows users to execute all these analyses with a single one-liner. The results are then stored in a dictionary of dictionaries, each containing one quantitative metric. 
+To make it easier, TopoMetry allows users to execute all these analyses with a single one-liner. The results are then stored in a dictionary of dictionaries, each containing one quantitative metric. 
 
 Here it is with the default parameters and some explanation on them. You won't need all of this if you're running by yourself, but do check the API do make sure you're doing what you actually aim to.
 
@@ -520,7 +520,7 @@ evaluation_dict
 
 
 
-TopOMetry also has a convenience function to allow users to plot all of these quality metrics. Note that here we are using a log scale to make the differences more visible!
+TopoMetry also has a convenience function to allow users to plot all of these quality metrics. Note that here we are using a log scale to make the differences more visible!
 
 
 ```python
@@ -565,7 +565,7 @@ tp.pl.plot_all_scores(evaluation_dict, fontsize=10, figsize=(5,5), log=True)
 
 As we can see, non-linear eigenbases perform better than PCA in preserving the local geometry (isomorphism, represented by the trustworthiness score) and distances between cells (isometrism, represented by the geodesic correlation score). The cost for this is a lower preservation of global structure (represented by the global score), although they are not much worse than PCA in that regard.
 
-Regarding the projections, it is easy to see that no single projection scores first in all metrics, but all of them preserve most of the global structure. This is largely expected, as per the [Kobak and Lindermann report](https://doi.org/10.1038/nbt.4314), the initialization will dictate whether or not a graph layout sucessfully preserves the global structure. More important than that is the preservation of geometry and distances, in which TopOMetry models outperform UMAP.
+Regarding the projections, it is easy to see that no single projection scores first in all metrics, but all of them preserve most of the global structure. This is largely expected, as per the [Kobak and Lindermann report](https://doi.org/10.1038/nbt.4314), the initialization will dictate whether or not a graph layout sucessfully preserves the global structure. More important than that is the preservation of geometry and distances, in which TopoMetry models outperform UMAP.
 
 ## Qualitative evaluation with the Riemannian metric
 
@@ -594,7 +594,7 @@ Quantifying this eccentricity allows us to add this information to the _AnnData_
 
 For starters, we'll need a _[graph Laplacian](https://en.wikipedia.org/wiki/Laplacian_matrix)_ - in this case, we'll use the default normalized graph Laplacian computed by the `Kernel` class within the `TopOGraph`. 
 
-NOTE: You can revisit the anatomy of a TopOGraph object at the 'TopOMetry at a glance' image in the 'About TopOMetry' tab.
+NOTE: You can revisit the anatomy of a TopOGraph object at the 'TopoMetry at a glance' image in the 'About TopoMetry' tab.
 
 
 ```python
@@ -750,12 +750,12 @@ ax1.set_ylabel('')
 ax1.set_ylim(bottom=0,top=20)
 
 ax2 = sc.pl.violin(adata, 'topoMAP_eccentricities', groupby='cell_type', rotation = 80, ylabel=None, ax=ax2, show=False,log=False, scale='area', fontsize=10, ncol=1)
-ax2.set_title('TopOMetry MAP\n on msDM diff. potential', fontsize=14)
+ax2.set_title('TopoMetry MAP\n on msDM diff. potential', fontsize=14)
 ax2.set_ylabel('')
 ax2.set_ylim(bottom=0,top=20)
 
 ax3 = sc.pl.violin(adata, 'topoPaCMAP_eccentricities', groupby='cell_type', rotation = 80, ylabel=None, ax=ax3, show=False,log=False, scale='area', fontsize=10, ncol=1)
-ax3.set_title('TopOMetry PaCMAP \n on msDM', fontsize=14)
+ax3.set_title('TopoMetry PaCMAP \n on msDM', fontsize=14)
 ax3.set_ylabel('')
 ax3.set_ylim(bottom=0,top=100)
 ```
@@ -777,7 +777,7 @@ As we can see, some populations are more distorted than others, and this varies 
 
 .
 
-In this case, TopOMetry's PaCMAP on msDM has quite strong distortions on microglial cells and native cells. topoMAP, on the other hand, seems to have less distortion for the majority of the populations. UMAP is a middle ground in this case.
+In this case, TopoMetry's PaCMAP on msDM has quite strong distortions on microglial cells and native cells. topoMAP, on the other hand, seems to have less distortion for the majority of the populations. UMAP is a middle ground in this case.
 
 .
 
@@ -787,6 +787,6 @@ Naturally, we could change the axes limits, plot the ellipses only for these cel
 
 Evaluating embeddings is central to get reliable results. Unfortunately, such rigor is not usually seen in single-cell applications, and practitioners either tune their UMAPs until they 'look good' or use other methods that as variable as UMAP without its formal guarantees.
 
-I hope this really stresses out the need to evaluate several different representations before choosing one of them to use in analyses that are going to guide years of work!  There are several other ways to evaluate embeddings, but these are the most direct, computationally efficient and intrinsically related to geometrical properties I could come up with. I do hope they are helpful for your work - if such, please cite TopOMetry.
+I hope this really stresses out the need to evaluate several different representations before choosing one of them to use in analyses that are going to guide years of work!  There are several other ways to evaluate embeddings, but these are the most direct, computationally efficient and intrinsically related to geometrical properties I could come up with. I do hope they are helpful for your work - if such, please cite TopoMetry.
 
 Feel free to drop a comment on the Issues section or by email if you would like to see different metrics or evaluation approaches here! :)

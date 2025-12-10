@@ -1,6 +1,6 @@
-# Using TopOMetry's classes: Kernel, EigenDecomposition and Project 
+# Using TopoMetry's classes: Kernel, EigenDecomposition and Project 
 
-This tutorial covers how to use TopOMetry's classes on their own. It covers the `Kernel`, `IntrinsicDim`, `EigenDecomposition` and `Project` classes:
+This tutorial covers how to use TopoMetry's classes on their own. It covers the `Kernel`, `IntrinsicDim`, `EigenDecomposition` and `Project` classes:
 - `Kernel`: similarity-learning and graph operators;
 - `IntrinsicDim`: estimating intrinsic dimensionalities;
 - `EigenDecomposition`: eigendecomposition of kernel matrices and graph operators;
@@ -9,7 +9,7 @@ This tutorial covers how to use TopOMetry's classes on their own. It covers the 
 
 ## The Kernel class
 
-We will start with the `Kernel` class. The `Kernel` class handles similarity learning and graph operators within TopOMetry, and integrates well with other libraries for graph analysis such as `pyGSP`, `igraph` and `networkx`.
+We will start with the `Kernel` class. The `Kernel` class handles similarity learning and graph operators within TopoMetry, and integrates well with other libraries for graph analysis such as `pyGSP`, `igraph` and `networkx`.
 
 Here, we'll again use the MNIST digits dataset to illustrate how to use `Kernel` on its own. This same data will be used afterwards to illustrate how to use `EigenDecomposition` and `Project` both with the `Kernel` class and with numpy arrays or scipy sparse matrices.
 
@@ -419,7 +419,7 @@ The `topo.spectral.EigenDecomposition` class aims to make our lives easier when 
 - these eigenfunctions are intrinsically related to the Fourier modes of oscilation of the graph and of the manifold and clustering structure
 - the eigenvalues are associated to the [Fiedler value](https://en.wikipedia.org/wiki/Algebraic_connectivity) and to the [intrinsic dimensionality](https://en.wikipedia.org/wiki/Intrinsic_dimension) of the data
 
-The `EigenDecomposition` class handles the eigendecomposition process in TopOMetry. To make things easier, it works either with a `Kernel class` or with arbitrary similarity matrices (`numpy.ndarray` or `scipy.sparse.csr_matrix`) as inputs. It also handles the post-processing of eigenvectors, depending on the selected `method`:
+The `EigenDecomposition` class handles the eigendecomposition process in TopoMetry. To make things easier, it works either with a `Kernel class` or with arbitrary similarity matrices (`numpy.ndarray` or `scipy.sparse.csr_matrix`) as inputs. It also handles the post-processing of eigenvectors, depending on the selected `method`:
 - 'DM': Computes Diffusion Maps. Uses the `Kernel` diffusion operator or computes a diffusion operator from the input kernel matrix. Computes top diffusion components (i.e. with largest eigenvalues) and by default multiscales the results.
 - 'LE': Computes Laplacian Eigenmaps. Uses the `Kernel` graph Laplacian or computes a Laplacian from the input kernel matrix. Computes bottom eigenvectors (i.e. with smallest eigenvalues) and by default multiscales the results.
 - 'top': Computes top eigenpairs (i.e. with largest eigenvalues). Optionally, these can be weighted or multiscaled.
@@ -512,7 +512,7 @@ As we can see, usually a large number of components is needed to sucessfully enc
 
 ## The Projector class
 
-The `topo.layout.Projector` class is an utility class which wraps around several graph-layout optimization methods for visualization. When using `TopOMetry` as a standalone library without further graph-layout libraries, it offers the Isomap, t-SNE and MAP (an adaptation of UMAP) methods. It handles the computation of the graph similarities, initialization, and overall compabilities of various methods with the adopted workflow. Current layout options are:
+The `topo.layout.Projector` class is an utility class which wraps around several graph-layout optimization methods for visualization. When using `TopoMetry` as a standalone library without further graph-layout libraries, it offers the Isomap, t-SNE and MAP (an adaptation of UMAP) methods. It handles the computation of the graph similarities, initialization, and overall compabilities of various methods with the adopted workflow. Current layout options are:
 
 * ['Isomap'](https://doi.org/10.1126/science.290.5500.2319) - one of the first manifold learning methods
 * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
@@ -560,6 +560,6 @@ tp.pl.scatter(diff_op_map, labels=labels, pt_size=0.1)
     
 
 
-I hope TopOMetry classes became more intuitive to you after this tutorial! You're free to either use the `TopOGraph` class, which orchestrates these classes into a comprehensive analysis, or to use these classes in a custom way as you see fit for your use case.
+I hope TopoMetry classes became more intuitive to you after this tutorial! You're free to either use the `TopOGraph` class, which orchestrates these classes into a comprehensive analysis, or to use these classes in a custom way as you see fit for your use case.
 
 In the following tutorials, we'll see how to visualize distortions from the obtained embeddings using the Riemann metric, and how to quantify the preservation of local geometry.

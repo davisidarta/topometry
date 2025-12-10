@@ -45,7 +45,7 @@ class Projector(BaseEstimator, TransformerMixin):
     """
     A scikit-learn compatible class that handles all projection methods. 
     Ideally, it takes in either a orthonormal eigenbasis or a graph kernel learned from such an eigenbasis.
-    It is included in TopOMetry to allow custom `TopOGraph`-like pipelines (projection is the final step).
+    It is included in TopoMetry to allow custom `TopOGraph`-like pipelines (projection is the final step).
 
     Parameters
     ----------
@@ -728,7 +728,7 @@ if _HAS_PYMDE:
         )
         mde._X_init = X_init
 
-        # Won't need to cache the graph - we have already computed it and cached with TopOMetry
+        # Won't need to cache the graph - we have already computed it and cached with TopoMetry
 
         distances = mde.distances(mde._X_init)
         if (distances == 0).any():

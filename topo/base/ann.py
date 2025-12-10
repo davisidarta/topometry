@@ -21,10 +21,10 @@ def kNN(X, Y=None,
         n_jobs=-1,
         backend='hnswlib',
         low_memory=True,
-        M=15,
+        M=60,
         p=11/16,
-        efC=50,
-        efS=50,
+        efC=200,
+        efS=200,
         n_trees=50,
         return_instance=False,
         verbose=False, **kwargs):
@@ -261,9 +261,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
                  method='hnsw',
                  n_jobs=-1,
                  p=None,
-                 M=30,
-                 efC=100,
-                 efS=100,
+                 M=60,
+                 efC=200,
+                 efS=200,
                  dense=False,
                  verbose=False
                  ):
@@ -690,9 +690,9 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
                  n_neighbors=30,
                  metric='cosine',
                  n_jobs=-1,
-                 M=30,
-                 efC=100,
-                 efS=100,
+                 M=60,
+                 efC=200,
+                 efS=200,
                  verbose=False
                  ):
         self.n_neighbors = n_neighbors

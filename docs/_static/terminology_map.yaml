@@ -1,0 +1,39 @@
+TopoMetry:
+  new_term: TopoMetry
+  definition: Geometry-aware framework that learns spectral scaffolds and refined operators to preserve the intrinsic geometry of single-cell data.
+
+topological basis:
+  new_term: spectral scaffold
+  definition: Orthonormal eigenbasis of the graph Laplace/diffusion operator (ordered by eigenvalue magnitude and sized via intrinsic dimensionality) that provides intrinsic coordinates.
+
+diffusion basis:
+  new_term: spectral scaffold
+  definition: Orthonormal eigenbasis of the graph Laplace/diffusion operator (ordered by eigenvalue magnitude and sized via intrinsic dimensionality) that provides intrinsic coordinates.
+
+diffusion components:
+  new_term: spectral scaffold components
+  definition: Individual eigenvectors in the scaffold, each encoding a smooth mode of variation across the manifold after removing the trivial stationary mode.
+
+multiscale diffusion maps (msDM):
+  new_term: multiscale spectral scaffold
+  definition: Analytic aggregation of diffusion coordinates across all times using lambda/(1 - lambda) weights to blend fine-grained neighborhoods with long-range connectivity.
+
+diffusion maps (DM):
+  new_term: single-time spectral scaffold
+  definition: Diffusion coordinates weighted by lambda^t at a chosen diffusion time, capturing manifold geometry at that specific scale.
+
+topological graph:
+  new_term: refined similarity graph
+  definition: kNN affinity rebuilt in spectral scaffold space with adaptive bandwidth/decay kernels, yielding the refined diffusion operator used for downstream analyses.
+
+diffusion graph:
+  new_term: refined diffusion operator
+  definition: Markov operator learned on the refined scaffold-derived graph that captures the "geometry of the geometry" for clustering, trajectories, and layouts.
+
+geodesic correlation:
+  new_term: Spectral Procrustes (SP) geometry-preservation score
+  definition: Operator-native R^2 from orthogonal Procrustes alignment of diffusion map coordinates across timescales, assessing meso- and global-scale fidelity.
+
+trustworthiness/continuity:
+  new_term: PF1 and PJS geometry-preservation scores
+  definition: Operator-native neighborhood metrics comparing diffusion operators via sparse top-k overlap (PF1) and row-wise Jensen-Shannon similarity (PJS).

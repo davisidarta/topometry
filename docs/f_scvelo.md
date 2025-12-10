@@ -1,8 +1,8 @@
-# RNA velocity with scVelo and TopOMetry
+# RNA velocity with scVelo and TopoMetry
 
-In this tutorial, we'll use TopOMetry results' with [scVelo](https://scvelo.readthedocs.io/) to obtain better estimates and visualizations of [RNA velocity](https://www.nature.com/articles/s41586-018-0414-6). RNA velocity allows identifying the directionality of cellular trajectories in single-cell datasets, and is in itself also intrinsically related to the concept of ['phenotypic manifold / epigenetic landscape'](https://doi.org/10.1002/bies.201100031) on which TopOMetry is theoretically grounded.
+In this tutorial, we'll use TopoMetry results' with [scVelo](https://scvelo.readthedocs.io/) to obtain better estimates and visualizations of [RNA velocity](https://www.nature.com/articles/s41586-018-0414-6). RNA velocity allows identifying the directionality of cellular trajectories in single-cell datasets, and is in itself also intrinsically related to the concept of ['phenotypic manifold / epigenetic landscape'](https://doi.org/10.1002/bies.201100031) on which TopoMetry is theoretically grounded.
 
-Generally speaking, RNA velocity vectors are the difference between two vectors: the actual spliced/unspliced projection vector (i.e. the 'velocity-based expectation') and a directed k-nearest-neighbors vector (i.e., the 'background expectation'), which is based on a latent embedding (e.g., PCA, t-SNE or UMAP). TopOMetry can be useful when estimating RNA velocity by providing embeddings that preserve most of the local geometry of the epigenetic manifold, resulting in more accurate backgroud expectations and thus more reliable RNA velocity vectors.
+Generally speaking, RNA velocity vectors are the difference between two vectors: the actual spliced/unspliced projection vector (i.e. the 'velocity-based expectation') and a directed k-nearest-neighbors vector (i.e., the 'background expectation'), which is based on a latent embedding (e.g., PCA, t-SNE or UMAP). TopoMetry can be useful when estimating RNA velocity by providing embeddings that preserve most of the local geometry of the epigenetic manifold, resulting in more accurate backgroud expectations and thus more reliable RNA velocity vectors.
 
 NOTE: This vector sum is discussed in Section 11 of the Supplementary Note 2 of the brilliant RNA velocity [manuscript](https://www.nature.com/articles/s41586-018-0414-6) by Gioele La Manno. His [PhD thesis](http://hdl.handle.net/10616/46460) is also a great reading material for those who want to know more about the topic of estimating phenotypic manifolds from single-cell data.
 
@@ -234,7 +234,7 @@ scv.pl.scatter(adata, basis='umap', color='standard_velocity_pseudotime', cmap='
 
 ## Topological workflow
 
-Now that we have executed the current standard workflow, we can follow up with TopOMetry. For that we'll:
+Now that we have executed the current standard workflow, we can follow up with TopoMetry. For that we'll:
 
 1) estimate the intrinsic dimensionalities (i.d.) of our data
 2) compute some topological representations with a TopOGraph object
@@ -266,7 +266,7 @@ From these results, we see that we should around 200 eigenvectors to faithfully 
 
 
 ```python
-# Run TopOMetry
+# Run TopoMetry
 
 # Create a TopOGraph object with the desired parameters
 tg = tp.TopOGraph(n_eigs=200, n_jobs=-1, verbosity=1, random_state=42)
@@ -390,7 +390,7 @@ scv.pl.scatter(adata, basis='topoMAP', color_gradients=['S_score', 'G2M_score'],
     
 
 
-As we can see, cycling cells are far better represented with the TopOMetry model than with the standard UMAP visualization obtained with Scanpy: they are in a reasonably circular shape and cells ongoing different phases are not scattered all around.
+As we can see, cycling cells are far better represented with the TopoMetry model than with the standard UMAP visualization obtained with Scanpy: they are in a reasonably circular shape and cells ongoing different phases are not scattered all around.
 
 What about the RNA velocity pseudotime?
 
@@ -408,7 +408,7 @@ scv.pl.scatter(adata, basis='topoMAP', color='topometry_velocity_pseudotime', cm
 
 So we also obtained good estimates of the pseudotime! The extremities with higher values correspond to mature neurons, while the cycling neural stem cells present the lowest values.
 
-One of the reasons why TopOMetry excels at representing such lineages is its use of Diffusion Components. We can also visualize how each individual component encodes a specific region of the manifold:
+One of the reasons why TopoMetry excels at representing such lineages is its use of Diffusion Components. We can also visualize how each individual component encodes a specific region of the manifold:
 
 
 ```python

@@ -1,6 +1,6 @@
 # Estimating intrinsic dimensionalities
 
-TopOMetry involves the estimation of the manifold intrinsic dimensionalities (i.d.) in its workflow. Estimating the i.d. is useful for:
+TopoMetry involves the estimation of the manifold intrinsic dimensionalities (i.d.) in its workflow. Estimating the i.d. is useful for:
 
 * 1) guessing an optimal number of components to decompose into during eigendecomposition
 
@@ -10,15 +10,15 @@ TopOMetry involves the estimation of the manifold intrinsic dimensionalities (i.
 
 
 
-TopOMetry uses two different approaches to estimate local i.d.: 
+TopoMetry uses two different approaches to estimate local i.d.: 
 
-* FSA - the manifold-adaptive i.d. estimation originally proposed by Farahmand-Szepesvári-Audibert (FSA) and enhanced by [Benko et al.](http://doi.org/10.7717/peerj-cs.790). It is based on what we call the 'Locality Ratio' - the ratio between the distances to the k- and k/2 ('median') neighbors. This ratio is used in TopOMetry's `bw_adaptive` (bandwidth-adaptive) kernel and can also be visualized for each sample.
+* FSA - the manifold-adaptive i.d. estimation originally proposed by Farahmand-Szepesvári-Audibert (FSA) and enhanced by [Benko et al.](http://doi.org/10.7717/peerj-cs.790). It is based on what we call the 'Locality Ratio' - the ratio between the distances to the k- and k/2 ('median') neighbors. This ratio is used in TopoMetry's `bw_adaptive` (bandwidth-adaptive) kernel and can also be visualized for each sample.
 
 * Maximum Likelihood Estimation (MLE) - this method was proposed by [Levina & Bickel](https://proceedings.neurips.cc/paper_files/paper/2004/file/74934548253bcab8490ebd74afed7031-Paper.pdf) and is based on  applying the principle of maximum likelihood to the distances between close neighbors. It is a rock-solid method, proven valuable by time and explored in numerous studies.
 
 i.d. estimates with FSA and MLE are quite inexpensive to compute. They tend to yield very similar results in the vast majority of datasets.
 
-The global i.d. can be estimated by weighting the local estimates obtained by MLE and FSA, or by the 'eigengap' method used during eigendecomposition in TopOMetry.
+The global i.d. can be estimated by weighting the local estimates obtained by MLE and FSA, or by the 'eigengap' method used during eigendecomposition in TopoMetry.
 
 For this tutorial, we'll compare these two methods in the PBMC3K single-cell RNA-seq dataset. The PBMC3K single-cell RNA-seq dataset is comprised of around 2,700 peripheral blood mononuclear cells (PBMC) from a healthy human donor. As usual, we'll use [scanpy](https://scanpy.readthedocs.io/en/stable/) to assist us handling the sc-data.
 
@@ -162,7 +162,7 @@ tg = tp.TopOGraph(base_knn=20,
                         n_jobs=-1,
                         verbosity=0)
 
-# Run a TopOMetry model for PBMC3K
+# Run a TopoMetry model for PBMC3K
 adata = tp.sc.topological_workflow(
     adata,                  # the anndata object
     tg,                # the TopOGraph object
@@ -206,7 +206,7 @@ adata.obs['FSA i.d. (k = 100)'] = id_est.local_id['fsa']['100']
 adata.obs['MLE i.d. (k = 100)'] = id_est.local_id['mle']['100']
 ```
 
-And by visualizing a TopOMetry projection using the precomputed labels in scanpy:
+And by visualizing a TopoMetry projection using the precomputed labels in scanpy:
 
 
 ```python

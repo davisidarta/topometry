@@ -1,4 +1,4 @@
-Welcome to TopOMetry documentation!
+Welcome to TopoMetry documentation!
 =======================================================
 .. raw:: html
 
@@ -26,7 +26,7 @@ Welcome to TopOMetry documentation!
 
 
 
-TopOMetry (Topologically Optimized geoMetry) is a comprehensive toolkit to explore high-dimensional
+TopoMetry (Topologically Optimized geoMetry) is a comprehensive toolkit to explore high-dimensional
 data, with a focus on single-cell genomics. It allows users to:
 
 * construct k-nearest-neighbors graphs with several approximate-nearest-neighbors algorithms
@@ -37,17 +37,17 @@ data, with a focus on single-cell genomics. It allows users to:
 * evaluate the quality of the learned embeddings with quantitative metrics
 * assess distortions in the learned embeddings with with the Riemannian metric 
 
-TopOMetry was designed to be user-friendly, consistent with the scikit-learn API,
+TopoMetry was designed to be user-friendly, consistent with the scikit-learn API,
 and to be easily integrated with the more general python computational environment for single-cell analysis. Users can compute and evaluate
 dozens of representations with a single line of code.
 
-TopOMetry's based on Laplacian-type topological operators, with a focus on the Laplace-Beltrami Operator (LBO) and its eigenfunctions.
+TopoMetry's based on Laplacian-type topological operators, with a focus on the Laplace-Beltrami Operator (LBO) and its eigenfunctions.
 The LBO is a natural way to describe data geometry and its high-dimensional topology, and is guaranteed to recover
 all of the relevant geometry if the manifold hypothesis holds true. These learned representations can be used for several downstream tasks in data analysis and single-cell bioinformatics,such as clustering, visualization with graph-layout optimization, RNA velocity and pseudotime estimation.
 This can yield strikingly new biological insights on single-cell data. Check the preprint for more information.
 
 
-TopOMetry classes are built in a modular fashion using scikit-learn `BaseEstimator`,
+TopoMetry classes are built in a modular fashion using scikit-learn `BaseEstimator`,
 meaning they can be easily pipelined.
 
 .. toctree::

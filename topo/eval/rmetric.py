@@ -1,5 +1,5 @@
 ######################################
-# Riemannian metric estimation and visualization tools for TopOMetry
+# Riemannian metric estimation and visualization tools for TopoMetry
 #
 # Inspired by earlier work on Riemann metric estimation in the Megaman library
 # by Marina Meila and collaborators (https://github.com/mmp2/megaman).

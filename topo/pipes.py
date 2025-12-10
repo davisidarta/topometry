@@ -34,7 +34,7 @@ def eval_models_layouts(TopOGraph, X,
     Evaluates all orthogonal bases, topological graphs and layouts in the TopOGraph object.
     
     Currently uses three different quality metrics: trustworthiness (https://scikit-learn.org/stable/modules/generated/sklearn.manifold.trustworthiness.html),
-    geodesic correlation (defined in the TopOMetry manuscript as the Spearman R correlation between high- and low-dimensional geodesic distances),
+    geodesic correlation (defined in the TopoMetry manuscript as the Spearman R correlation between high- and low-dimensional geodesic distances),
     and global score (defined in the TriMAP paper as the MRE normalized by PCA's MRE).
 
     

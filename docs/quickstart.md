@@ -3,7 +3,7 @@
 ## Fitting a TopOGraph
 Now, let's go through a quick start!
 
-TopOMetry functions around the `TopOGraph` class. It contains dictionaries, attributes and functions to analyse your data.
+TopoMetry functions around the `TopOGraph` class. It contains dictionaries, attributes and functions to analyse your data.
 From a  data matrix ``data`` (np.ndarray, pd.DataFrame or sp.csr_matrix), you can set up a ``TopoGraph`` 
 with default parameters: 
 
@@ -23,7 +23,7 @@ topological graphs.
 tgraph = tg.transform(data) 
 ```
 
-Then, it is possible to optimize the topological graph layout. TopOMetry has 5 different layout options: tSNE, MAP, 
+Then, it is possible to optimize the topological graph layout. TopoMetry has 5 different layout options: tSNE, MAP, 
 TriMAP, PaCMAP and MDE.
 
 ```
@@ -44,7 +44,7 @@ tp.plot.scatter(map_emb)
 ## Computing several models at once
 
 The `run_layouts()` attribute of the TopOGraph object runs all possible combinations of algorithms to perform DR
-in the TopOMetry framework.
+in the TopoMetry framework.
 
 ```
 # These settings run all models and layouts

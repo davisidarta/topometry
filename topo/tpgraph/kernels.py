@@ -79,7 +79,7 @@ def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
                    expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
                    backend='hnswlib', n_jobs=-1, verbose=False,
-                   use_angular=True, square_distances=True, **kwargs):
+                   use_angular=False, square_distances=True, **kwargs):
     """
     Compute a kernel matrix from a set of points.
 
@@ -423,7 +423,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                  expand_nbr_search=False,
                  alpha_decaying=False,
                  symmetrize=True,
-                 backend='nmslib',
+                 backend='hnswlib',
                  n_jobs=1,
                  laplacian_type='normalized',
                  anisotropy=1,

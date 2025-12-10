@@ -33,7 +33,7 @@ autoapi_dirs = ['../topo']
 
 # -- Project information -----------------------------------------------------
 
-project = 'TopOMetry'
+project = 'TopoMetry'
 copyright = '2021, Davi Sidarta-Oliveira'
 author = 'Davi Sidarta-Oliveira'
 copyright = f'2021, {author}'

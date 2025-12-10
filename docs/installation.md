@@ -1,6 +1,6 @@
 ## Installation and dependencies
 
-TopOMetry is implemented in python and and its models are implemented as classes that inherit from [scikit-learn](https://github.com/scikit-learn/scikit-learn) ``BaseEstimator`` and ``TransformerMixin``. This makes these classes compatible with `scikit-learn` Pipelines and thus flexible and easy to apply and/or combine with different workflows on virtually any domain. 
+TopoMetry is implemented in python and and its models are implemented as classes that inherit from [scikit-learn](https://github.com/scikit-learn/scikit-learn) ``BaseEstimator`` and ``TransformerMixin``. This makes these classes compatible with `scikit-learn` Pipelines and thus flexible and easy to apply and/or combine with different workflows on virtually any domain. 
 
 The hard dependencies are common building-blocks of the python machine-learning environment:
 
@@ -12,13 +12,13 @@ The hard dependencies are common building-blocks of the python machine-learning 
 * matplotlib
 
 
-Prior to installing TopOMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
+Prior to installing TopoMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
 ```
 sudo apt-get install cmake
 pip install scikit-build setuptools
 ```
 
-Then you can install TopOMetry from PyPI:
+Then you can install TopoMetry from PyPI:
 
 ```
 pip install topometry
@@ -34,11 +34,11 @@ pip install --use-pep517 topometry
 
 ## Optional dependencies
 
-Some optional packages can enhance the use of TopOMetry, but are not listed as hard-dependencies. These are libraries for approximate-nearest-neighbors search and libraries for graph-layout optimization.
+Some optional packages can enhance the use of TopoMetry, but are not listed as hard-dependencies. These are libraries for approximate-nearest-neighbors search and libraries for graph-layout optimization.
 
 ### Approximate Nearest Neighbors
 
-Included in TopOMetry there is `topo.ann.kNN()` - an utility wrapper around these methods that can learn k-nearest-neighbors graphs from data using various approximate nearest-neighbors search methods. The reason I tried to make it so flexible was to allow it to be efficiently used in multiple computational settings/environments.
+Included in TopoMetry there is `topo.ann.kNN()` - an utility wrapper around these methods that can learn k-nearest-neighbors graphs from data using various approximate nearest-neighbors search methods. The reason I tried to make it so flexible was to allow it to be efficiently used in multiple computational settings/environments.
 
 The optional libraries for approximate-nearest-neighbors are:
 
@@ -55,12 +55,12 @@ nmslib separately for the best performance:
 pip install --no-binary :all: nmslib
 ```
 
- If you don't have any of these installed, TopOMetry will run using `scikit-learn` neighborhood search, which can be quite slow when analysing large datasets. NMSLib and HNSWlib are my primary recommendations for large-scale data, but other methods also work well.
+ If you don't have any of these installed, TopoMetry will run using `scikit-learn` neighborhood search, which can be quite slow when analysing large datasets. NMSLib and HNSWlib are my primary recommendations for large-scale data, but other methods also work well.
 
 
 ### Additional layout methods
 
-From version `2.0.0 ` onwards, TopOMetry does not include any graph layout algorithm as a dependency, and includes fast versions of [Isomap](https://doi.org/10.1126/science.290.5500.2319) and of the cross-entropy minimization of [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) (MAP) for graph layout and visualization. Other layout algorithms can be used, but are not listed as hard-dependencies and the choice of installing and using them is left to the user:
+From version `2.0.0 ` onwards, TopoMetry does not include any graph layout algorithm as a dependency, and includes fast versions of [Isomap](https://doi.org/10.1126/science.290.5500.2319) and of the cross-entropy minimization of [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) (MAP) for graph layout and visualization. Other layout algorithms can be used, but are not listed as hard-dependencies and the choice of installing and using them is left to the user:
 
 * ['t-SNE'](https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf) - one of the first manifold learning methods  (optionally with `multicore-tsne`, otherwise uses `scikit-learn`)
 * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html) - arguably the state-of-the-art for graph layout optimization (requires installing `umap-learn`)

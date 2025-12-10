@@ -20,125 +20,92 @@ from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
 
 class TopOGraph(BaseEstimator, TransformerMixin):
     """
-    Main TopOMetry class for learning topological similarities, bases, graphs, and layouts from high-dimensional data.
+    Geometry-aware estimator that learns spectral scaffolds, refined operators, and 2-D layouts.
 
-    The public API exposes a small set of named, stable objects:
-      • knn_X               : initial kNN graph in input space
-      • P_of_X              : diffusion operator on input space
-      • spectral_scaffold(multiscale=True|False) : msDM/DM coordinates
-      • knn_msZ / knn_Z     : kNN graphs on msDM/DM scaffolds (Z spaces)
-      • P_of_msZ / P_of_Z   : refined diffusion operators on msDM/DM scaffolds
-      • eigenvalues         : eigenvalues of the active eigenbasis (msDM by default)
-      • MAP / msMAP         : 2D MAP layouts from DM/msDM refined graphs
-      • PaCMAP / msPaCMAP   : 2D PaCMAP layouts from DM/msDM refined graphs
-      • global_id, local_ids: intrinsic-dimension details
-
-    Legacy benchmarking and combinatorial exploration remain available through:
-      • BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict
-      • run_models(), eval_models_layouts()
+    TopOGraph builds the multiscale and single-time spectral scaffolds, reconstructs refined
+    similarity graphs in scaffold space, and exposes ready-to-plot TopoMAP/TopoPaCMAP embeddings
+    together with intrinsic dimensionality estimates. Legacy dictionaries remain available for
+    benchmarking and combinatorial model searches.
 
     Parameters
     ----------
-    base_knn : int (optional, default 30)
-        k-nearest-neighbors for the base input space.
-
-    graph_knn : int (optional, default 30)
-        k-nearest-neighbors for the refined graph built on the spectral scaffold (Z) space.
-
-    min_eigs : int (optional, default 100)
-        Minimum number of eigenpairs to compute (spectral scaffold size cap).
-
-    base_kernel : topo.tpgraph.Kernel (optional, default None)
-        If provided and already fitted, X is not required.
-
-    eigenmap_method : {'DM','msDM','LE','top','bottom'} (DEPRECATED; kept for BC)
-        Deprecated. The class now *always* computes both DM and msDM. This argument is
-        accepted for backwards compatibility and stored internally as `_eigenmap_method`.
-
-    laplacian_type : {'unnormalized','normalized','random_walk','geometric'} (default 'normalized')
-        Laplacian for spectral computations/layout.
-
-    base_kernel_version : str (optional, default 'bw_adaptive')
-        Kernel choice for the base graph (options include: 'bw_adaptive', 'fuzzy', 'cknn',
-        'bw_adaptive_alpha_decaying', 'bw_adaptive_nbr_expansion', 'bw_adaptive_alpha_decaying_nbr_expansion', 'gaussian').
-
-    graph_kernel_version : str (optional, default 'bw_adaptive')
-        Kernel choice for the scaffold graphs (applies to both DM and msDM scaffolds).
-
-    backend : {'hnswlib','nmslib','annoy','faiss','sklearn'} (default 'hnswlib')
-        ANN backend.
-
-    base_metric : str (optional, default 'cosine')
-        Distance metric for base kNN.
-
-    graph_metric : str (optional, default 'euclidean')
-        Distance metric for scaffold kNN.
-
-    diff_t : int (optional, default 1)
-        Diffusion time for DM (ignored for msDM).
-
-    sigma : float (optional, default 0.1)
-        Bandwidth if 'gaussian' kernels are used.
-
-    delta : float (optional, default 1.0)
-        'cknn' radius parameter.
-
-    n_jobs : int (optional, default 1)
-        Threads for kNN. Use -1 for all cores.
-
-    low_memory : bool (optional, default False)
-        If True, avoids caching large kernel objects in dicts.
-
-    eigen_tol : float (optional, default 1e-8)
-        Eigen solver tolerance.
-
-    eigensolver : {'arpack','lobpcg','amg','dense'} (default 'arpack')
-        Eigen solver choice.
-
-    projection_method : str (optional, default 'MAP')
-        Default projection method for `.project()`.
-
-    cache : bool (optional, default True)
-        Cache Kernel / Eigen objects in dicts.
-
-    verbosity : int (optional, default 0)
-        0: silent; 1: major steps; 2+: include layout messages; 3: full debug for neighborhoods.
-
-    random_state : int or np.random.RandomState (optional, default 42)
-
-    Intrinsic dimensionality (automated scaffold sizing)
-    ----------------------------------------------------
-    id_method : {'mle','fsa'} (default 'mle')
-        Method whose estimate selects scaffold size. (Both 'mle' and 'fsa' are computed and stored.)
-    id_ks : int or iterable (default 50)
-    id_metric : str (default 'euclidean')
-    id_quantile : float (default 0.99; for 'fsa' only)
-    id_min_components : int (default 128)
-    id_max_components : int (default 1024)
-    id_headroom : float (default 0.5)
+    base_knn : int, default 30
+        k-nearest neighbors for the base graph on input space.
+    graph_knn : int, default 30
+        k-nearest neighbors for the refined graph built in spectral scaffold space.
+    min_eigs : int, default 128
+        Minimum number of eigenpairs to compute for the scaffold.
+    base_kernel : topo.tpgraph.Kernel or None, default None
+        Pre-fitted kernel to reuse; if provided, `fit` skips base graph construction.
+    eigenmap_method : {'DM', 'msDM', 'LE', 'top', 'bottom'} or None, default None
+        Deprecated; retained for backward compatibility. Both DM and msDM are always computed.
+    laplacian_type : {'unnormalized', 'normalized', 'random_walk', 'geometric'}, default 'normalized'
+        Laplacian normalization used for spectral computations.
+    base_kernel_version : str, default 'bw_adaptive'
+        Kernel choice for the base graph (e.g., 'bw_adaptive', 'fuzzy', 'cknn').
+    graph_kernel_version : str, default 'bw_adaptive'
+        Kernel choice for scaffold graphs (applies to DM and msDM).
+    backend : {'hnswlib', 'nmslib', 'annoy', 'faiss', 'sklearn'}, default 'hnswlib'
+        Approximate nearest-neighbor backend.
+    base_metric : str, default 'cosine'
+        Distance for the base kNN graph (usually cosine/correlation on standardized inputs).
+    graph_metric : str, default 'euclidean'
+        Distance for kNN in scaffold space.
+    diff_t : int, default 0
+        Diffusion time used for the single-time scaffold; ignored for multiscale.
+    sigma : float, default 0.1
+        Bandwidth for Gaussian kernels (when selected).
+    delta : float, default 1.0
+        Radius parameter for cKNN kernels.
+    n_jobs : int, default 1
+        Threads for kNN searches; -1 uses all cores.
+    low_memory : bool, default False
+        Avoid caching large kernel objects when True.
+    eigen_tol : float, default 1e-8
+        Tolerance passed to the eigen solver.
+    eigensolver : {'arpack', 'lobpcg', 'amg', 'dense'}, default 'arpack'
+        Solver used for eigendecomposition.
+    projection_methods : list[str], default ['MAP', 'PaCMAP']
+        Layouts to compute when calling `project`.
+    cache : bool, default True
+        Cache kernel and eigen objects in dictionaries for reuse.
+    verbosity : int, default 0
+        0: silent; 1: major steps; 2+: include layout messages; 3: debug neighborhoods.
+    random_state : int or numpy.random.RandomState, default 0
+        Random seed/control for reproducibility.
+    id_method : {'mle', 'fsa'}, default 'fsa'
+        Intrinsic dimensionality estimator that selects scaffold size (both are stored).
+    id_ks : int or iterable, default 50
+        Neighborhood sizes for I.D. estimation.
+    id_metric : str, default 'euclidean'
+        Metric used for I.D. estimation.
+    id_quantile : float, default 0.99
+        Quantile for FSA-based I.D. estimation.
+    id_min_components : int, default 128
+        Lower bound on scaffold components.
+    id_max_components : int, default 1024
+        Upper bound on scaffold components.
+    id_headroom : float, default 0.5
+        Extra fraction of components beyond the estimated I.D. to keep.
+    uom : bool, default False
+        Enable unions-of-manifolds (block-diagonal scaffolds) if supported.
 
     Attributes
     ----------
     knn_X : scipy.sparse.csr_matrix
-        Initial kNN graph on X (read-only property).
-
+        Base kNN graph on the input space.
     P_of_X : scipy.sparse.csr_matrix
-        Diffusion operator on X (read-only property).
-
-    knn_msZ / knn_Z : scipy.sparse.csr_matrix
-        kNN graphs on the msDM/DM scaffolds (read-only properties).
-
-    P_of_msZ / P_of_Z : scipy.sparse.csr_matrix
-        Diffusion operators on the msDM/DM scaffolds (read-only properties).
-
-    eigenvalues : np.ndarray
-        Eigenvalues of the active eigenbasis (msDM by default).
-
-    MAP / msMAP / PaCMAP / msPaCMAP : np.ndarray (n_samples, 2)
-        Ready-to-plot embeddings.
-
+        Diffusion operator on the input space.
+    knn_msZ, knn_Z : scipy.sparse.csr_matrix
+        kNN graphs on the multiscale and single-time spectral scaffolds.
+    P_of_msZ, P_of_Z : scipy.sparse.csr_matrix
+        Refined diffusion operators on the multiscale and single-time scaffolds.
+    eigenvalues : numpy.ndarray
+        Eigenvalues of the active eigenbasis (multiscale by default).
+    MAP, msMAP, PaCMAP, msPaCMAP : numpy.ndarray
+        Ready-to-plot 2-D layouts computed on refined graphs.
     BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict : dict
-        Legacy storage for advanced/benchmarking use-cases.
+        Legacy storage used for benchmarking and model selection.
     """
 
     # --- Updated constructor (__init__) with UoM flag & state ----------------
@@ -146,7 +113,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 base_knn=30,
                 graph_knn=30,
                 min_eigs=128,
-                n_jobs=1,
+                n_jobs=-1,
                 projection_methods=['MAP','PaCMAP'],
                 base_kernel=None,
                 base_kernel_version='bw_adaptive',
@@ -1550,21 +1517,31 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         coords : np.ndarray or None
             The scaffold coordinates used to build `knn` (for neighborhood expansion kernels).
         """
-        import scipy.sparse as sp
-        if not sp.isspmatrix_csr(knn):
-            knn = knn.tocsr()
-        if multiscale:
-            self._knn_msZ = knn
-            self._kernel_msZ, _ = self._compute_kernel_from_version_knn(
-                self._knn_msZ, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
-                suffix=" (precomputed msZ)", low_memory=self.low_memory, base=False, data_for_expansion=coords
-            )
+        if coords is not None:
+            tag = "msDM" if multiscale else "DM"
+            eig_key = f"{tag} with {self.base_kernel_version}"
+            if not hasattr(self, "EigenbasisDict") or self.EigenbasisDict is None:
+                self.EigenbasisDict = {}
+            class _PrecomputedEigenbasis:
+                def __init__(self, Y): self.Y = np.asarray(Y, dtype=np.float32, order="C")
+                def transform(self, X=None): return self.Y
+            self.EigenbasisDict[eig_key] = _PrecomputedEigenbasis(coords)
         else:
-            self._knn_Z = knn
-            self._kernel_Z, _ = self._compute_kernel_from_version_knn(
-                self._knn_Z, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
-                suffix=" (precomputed Z)", low_memory=self.low_memory, base=False, data_for_expansion=coords
-            )
+            import scipy.sparse as sp
+            if not sp.isspmatrix_csr(knn):
+                knn = knn.tocsr()
+            if multiscale:
+                self._knn_msZ = knn
+                self._kernel_msZ, _ = self._compute_kernel_from_version_knn(
+                    self._knn_msZ, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                    suffix=" (precomputed msZ)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+                )
+            else:
+                self._knn_Z = knn
+                self._kernel_Z, _ = self._compute_kernel_from_version_knn(
+                    self._knn_Z, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                    suffix=" (precomputed Z)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+                )
 
 
     # ---------------------------------------------------------------------
@@ -1638,13 +1615,19 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         """
         if graph is None:
             if self.uom_enabled:
-                if self._kernel_msZ is None:
-                    raise ValueError('No UoM msZ kernel computed. Call .fit() first.')
-                graph = self._kernel_msZ.K
+                if self._kernel_msZ is not None:
+                    graph = self._kernel_msZ.K
+                elif self._kernel_Z is not None:
+                    graph = self._kernel_Z.K
+                else:
+                    raise ValueError('No UoM kernel computed. Call .fit() or .set_refined_from_precomputed() first.')
             else:
-                if self._kernel_msZ is None:
-                    raise ValueError('No graph kernel computed. Call .fit() first.')
-                graph = self._kernel_msZ.K
+                if self._kernel_msZ is not None:
+                    graph = self._kernel_msZ.K
+                elif self._kernel_Z is not None:
+                    graph = self._kernel_Z.K
+                else:
+                    raise ValueError('No graph kernel computed. Call .fit() or .set_refined_from_precomputed() first.')
         t0 = time.time()
         try:
             spt_layout = spectral_layout(
@@ -1661,6 +1644,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.SpecLayout = spt_layout
         gc.collect()
         return spt_layout
+
+
 
     def project(
         self,
@@ -1764,11 +1749,17 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 else:
                     raise ValueError('No projection found with the name ' + init + '.')
         else:
-            if self.SpecLayout is not None:
-                if np.shape(self.SpecLayout)[1] != n_components:
-                    self.SpecLayout = self.spectral_layout(n_components=n_components)
+            # choose the spectral graph consistent with `multiscale`
+            if projection_method in ['MAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
+                g = (self._kernel_msZ.K if multiscale else self._kernel_Z.K)
             else:
-                self.SpecLayout = self.spectral_layout(n_components=n_components)
+                # coordinate-based methods still benefit from spectral init; pick any available refined kernel
+                g = (self._kernel_msZ.K if (multiscale and self._kernel_msZ is not None)
+                    else (self._kernel_Z.K if self._kernel_Z is not None else None))
+            if g is None:
+                raise ValueError("No refined kernel available for spectral initialization. "
+                                "Call .fit() or .set_refined_from_precomputed() first.")
+            self.SpecLayout = self.spectral_layout(graph=g, n_components=n_components)
             init_Y = self.SpecLayout
 
         projection_key = projection_method + ' of ' + key
@@ -3285,6 +3276,5 @@ def load_topograph(filename: str) -> TopOGraph:
         warnings.warn("Loaded object is not a TopOGraph; returning as-is.", RuntimeWarning)
         return obj
     return obj
-
 
 

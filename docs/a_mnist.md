@@ -1,6 +1,6 @@
 # Quick-start with the MNIST digits dataset
 
-This tutorial covers a quick-start with `TopOMetry` using the MNIST handwritten digits dataset. This dataset is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into a latent orthonormal eigenbasis. From this eigenbasis we will learn a new topological graph and visualize it with graph-layout algorithms. Although there are extensive options within `TopOMetry`, most people are interested in learning similarities, orthonormal eigenbases and graphs and graph-layouts associated with such eigenbases. In this tutorial, we'll see how to do so with the most robust `TopOMetry` algorithm: multiscale diffusion maps, which covers nearly all use-cases.
+This tutorial covers a quick-start with `TopoMetry` using the MNIST handwritten digits dataset. This dataset is composed of ~1,800 handwritten digits images composed of 64 (8 x 8) pixels each. Our task will be to represent this high-dimensional space (of 64 dimensions) into a latent orthonormal eigenbasis. From this eigenbasis we will learn a new topological graph and visualize it with graph-layout algorithms. Although there are extensive options within `TopoMetry`, most people are interested in learning similarities, orthonormal eigenbases and graphs and graph-layouts associated with such eigenbases. In this tutorial, we'll see how to do so with the most robust `TopoMetry` algorithm: multiscale diffusion maps, which covers nearly all use-cases.
 
     
 First, we'll load some libraries:
@@ -30,12 +30,12 @@ X, labels = load_digits(return_X_y=True)
 
 ### Set and fit a TopOGraph object
 
-Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopOMetry to coordinate analyses between the multiple other classes available in the library. 
+Then, we'll create an empty TopOGraph object to perform our analyses. The TopOGraph class is the main class used in TopoMetry to coordinate analyses between the multiple other classes available in the library. 
  
 
 The TopOGraph can learn similarities, latent orthonormal eigenbases and new topological graphs from these eigenbases using various kernels and eigenmap strategies. By default, it uses an adaptive bandwidth kernel to learn a reweighted diffusion operator and and multiscale diffusion maps - this strategy is guaranteed to approximate the Laplace-Beltrami Operator (LBO) regardless of data geometry and sampling distribution. 
 
-Because we already know we have 10 classes, we'll use a slightly larger number of components (`n_eigs`) to account for possible digits images which may be odd looking (e.g. 8's that look like 3's or 1's). If we hadn't known it beforehand, we could use larger numbers and try to select a number of components to keep by visualizing an eigengap. We could also try to use Fischer Separability Analysis (FSA) to estimate the global dimensionality of the data, which is also included in TopOMetry.
+Because we already know we have 10 classes, we'll use a slightly larger number of components (`n_eigs`) to account for possible digits images which may be odd looking (e.g. 8's that look like 3's or 1's). If we hadn't known it beforehand, we could use larger numbers and try to select a number of components to keep by visualizing an eigengap. We could also try to use Fischer Separability Analysis (FSA) to estimate the global dimensionality of the data, which is also included in TopoMetry.
 
 
 ```python
@@ -200,7 +200,7 @@ tg
 
 
 
-The graph kernel object is acessible at `TopOGraph.graph_kernel`. By default, TopOMetry uses its diffusion operator for visualization:
+The graph kernel object is acessible at `TopOGraph.graph_kernel`. By default, TopoMetry uses its diffusion operator for visualization:
 
 We can see this diffusion operator encodes the main 10 digits classes present in the data, with some uncertaintiny between similar classes:
 
@@ -226,7 +226,7 @@ plt.spy(tg.graph_kernel.P, markersize=0.1)
 
 Now let's visualize this graph! FOr visualization, we''ll use the `project()` method in `TopOGraph`. It takes as arguments the number of components, the method to be use for graph projection, an optional initialization and other keyword arguments.
 
-For visualization, we'll use two methods that come with TopOMetry without need to install further libraries:
+For visualization, we'll use two methods that come with TopoMetry without need to install further libraries:
 * ['Isomap'](https://doi.org/10.1126/science.290.5500.2319) - one of the very first manifold learning methods (it can be quite slow). Isomap preserves geodesics distances, being called a 'global' method.
 
 * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with slightly looser assumptions (in essence just the cross-entropy optimization). MAP / UMAP preserve neighborhood relationships with a focus on local neighborhoods, being called a 'local' method.
@@ -323,7 +323,7 @@ Let's use PaCMAP for this example:
     Note: you may need to restart the kernel to use updated packages.
 
 
-PaCMAP has its own graph-learning algorithm, so instead of using the diffusion operator we learned from the multiscale diffusion maps,  TopOMetry automatically feeds it the diffusion maps itself.
+PaCMAP has its own graph-learning algorithm, so instead of using the diffusion operator we learned from the multiscale diffusion maps,  TopoMetry automatically feeds it the diffusion maps itself.
 
 
 ```python
@@ -350,7 +350,7 @@ plt.title('PaCMAP projection of Multiscale DM of the Digits dataset', fontsize=1
 
 ### Condensing analysis into a single line of code
 
-The `TopOGraph` class has the utility function `TopOGraph.run_models()` to run any given combinations of kernels, eigendecomposition strategies and projection methods. With it, you can perform all the analysis we have shown so far with a single line of code that populates TopOMetry slots. It takes as input a array-like dataset and the specified options:
+The `TopOGraph` class has the utility function `TopOGraph.run_models()` to run any given combinations of kernels, eigendecomposition strategies and projection methods. With it, you can perform all the analysis we have shown so far with a single line of code that populates TopoMetry slots. It takes as input a array-like dataset and the specified options:
 
 HINT: You may want to change the verbosity parameter of your TopOGraph object before running all models - it can get quite verborrhagic.
 
@@ -404,13 +404,13 @@ map_fuzzy_le = tg.ProjectionDict['MAP of bw_adaptive from LE with bw_adaptive']
 plt.scatter(map_fuzzy_le[:, 0], map_fuzzy_le[:, 1], c=labels, cmap='Spectral', s=0.5)
 plt.gca().set_aspect('equal', 'datalim')
 plt.colorbar(boundaries=np.arange(11)-0.5).set_ticks(np.arange(10))
-plt.title('A projection of the Digits dataset using TopOMetry', fontsize=12)
+plt.title('A projection of the Digits dataset using TopoMetry', fontsize=12)
 ```
 
 
 
 
-    Text(0.5, 1.0, 'A projection of the Digits dataset using TopOMetry')
+    Text(0.5, 1.0, 'A projection of the Digits dataset using TopoMetry')
 
 
 
@@ -420,4 +420,4 @@ plt.title('A projection of the Digits dataset using TopOMetry', fontsize=12)
     
 
 
-That's it for this first tutorial! To check how to use the `Kernel`, `EigenDecomposition` and `Projector` classes that are used to build TopOMetry to create your own analysis pipeline, check the next tutorial. Feel free to open an issue at GitHub if you have any questions.
+That's it for this first tutorial! To check how to use the `Kernel`, `EigenDecomposition` and `Projector` classes that are used to build TopoMetry to create your own analysis pipeline, check the next tutorial. Feel free to open an issue at GitHub if you have any questions.

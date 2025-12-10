@@ -3,84 +3,92 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
 [![Downloads](https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/topometry)
-[![CodeFactor](https://www.codefactor.io/repository/github/davisidarta/topometry/badge)](https://www.codefactor.io/repository/github/davisidarta/topometry)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta)](https://twitter.com/davisidarta)
 
-------------
-# About TopOMetry
+# About TopoMetry
 
-TopOMetry is a high-level python library to explore data topology through manifold learning. It is compatible with scikit-learn, meaning most of its operators can be easily pipelined.
+**TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
-Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an orthonormal eigenbasis. These eigenbases are special versions of [Diffusion Maps](https://doi.org/10.1016/j.acha.2006.04.006), [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf) or [Kernel Eigenmaps](https://www.merl.com/publications/docs/TR2003-21.pdf). New topological operators are then learned from such eigenbasis and can be used for clustering and
-graph-layout optimization (visualization).
+- **AnnData/Scanpy wrappers** for single-cell workflows 
+- **scikit-learn–style transformers** with a high-level orchestrator 
+- **Fixed-time & multiscale spectral scaffolds** (no `.X` mutation; namespaced outputs)
+- **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
+- Designed for **large, diverse datasets** (e.g., single-cell omics)
 
-For more information, please see our [pre-print](https://doi.org/10.1101/2022.03.14.484134).
+For background, see our preprint: https://doi.org/10.1101/2022.03.14.484134
 
-TopOMetry is designed to handle large-scale data matrices containing
-extreme sample diversity, such as those
-generated from [single-cell omics](https://en.wikipedia.org/wiki/Single_cell_sequencing). It includes wrappers to deal with [AnnData](https://anndata.readthedocs.io/en/latest/index.html) objects using [scanpy](https://scanpy.readthedocs.io/en/stable/).
 
------------------
+## Geometry-first rationale (short)
+
+We approximate the **Laplace–Beltrami operator (LBO)** by learning well-weighted similarity graphs and their Laplacian/diffusion operators. The **eigenfunctions** of these operators form an orthonormal basis—the **spectral scaffold**—that captures the dataset’s intrinsic geometry across scales. This view connects to **Diffusion Maps**, **Laplacian Eigenmaps**, and related kernel eigenmaps, and enables downstream tasks such as clustering and graph-layout optimization with geometry preserved.
+
+
+
+## When to use TopoMetry
+
+Use TopoMetry when you want:
+- Geometry-faithful representations beyond variance maximization (e.g., PCA)
+- Robust low-dimensional views and clustering from operator-grounded features
+- Quantitative **operator-native** metrics to compare methods and parameter choices
+- Reproducible, **non-destructive** pipelines (no mutation of `adata.X`)
+
+Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone layouts. Still, **let the data decide**—TopoMetry includes metrics and reports to support evidence-based choices.
+
+### When not to use TopoMetry
+
+- **Very small sample sizes** where the manifold hypothesis is weak
+- Workflows needing **streaming/online** updates or **inverse transforms** (embedding new points without recomputing operators is not currently supported). If that’s critical, consider UMAP or parametric/autoencoder approaches—and you can still use TopoMetry to **audit geometry** or **estimate intrinsic dimensionality** to guide model design.
+
+
 ## Tutorials
 
-If you haven't already, [install](installation.md) *topometry* and start using it ([quick-start](quickstart.md)).
+If you haven’t yet, first see the [installation guide](installation.md) and the [Quickstart](quickstart.md).
 
-* For a first introduction, check the tutorial with [MNIST handwritten digits](a_mnist.md).
-* To explore TopOMetry for document embedding, see the tutorial using the [Newsgroups dataset](b_newsgroups.md)
-* To dive deeper into TopOMetry classes, see the [classes tutorial](c_classes.md).
-* To explore how TopOMetry estimate local and global intrinsic dimensionality, check the [dimensionality estimation tutorial](d_id_estimation.md).
-* To learn how to systematically run and evaluate multiple models, check the [evaluation tutorial](e_evaluations.md)
-* To see how TopOMetry can be integrated into different single-cell workflows, check the [RNA velocity tutorial](f_scvelo.md) using [scVelo](https://scvelo.readthedocs.io/)
-* To use TopOMetry to embedd to non-euclidean spaces (similarly to [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html)), see the [tutorial on non-Euclidean spaces](h_non_euclidean.md).
+- **Quickstart**: run `tp.sc.fit_adata` on a small dataset; inspect scaffold keys; make a 2-D layout.
+- **Analysis**: end-to-end pipeline—data prep → scaffold → refined graphs → TopoMAP/PaCMAP → metrics → clean `h5ad` save.
+- **Integration**: apply Harmony / BBKNN / MNN / Scanorama and build graphs/embeddings from the integrated representation; compare geometry metrics.
+- **Classes**: deeper look at `TopOGraph` and the underlying transformers.
+- **Intrinsic dimensionality**: how local/global IDs are estimated and used.
+- **RNA velocity**: using TopoMetry with [scVelo](https://scvelo.readthedocs.io/).
+- **Non-Euclidean layouts**: embeddings on curved targets (UMAP-like use cases).
 
-All of the tutorials are also freely available as Jupyter Notebooks in this [separate repository](https://github.com/davisidarta/topometry-notebooks).
-
--------------
-
-## When it is best to use TopOMetry
-
-This is a frequently asked question with a simple answer: *always, unless the data tells you so*. 
-
-One should never assume a priori that a method will be the best with every single dataset. TopOMetry allows users to explore high-dimensional data in several ways and to compute many different representations for it. It is not claimed to be superior to every other method _a priori_. Instead, it allows practitioners to see which method works best for their particular use case by themselves, based on quantitative and qualitative assessments. 
-
-In all tested cases so far, TopOMetry models outperformed the classical PCA-based approach used in single-cell genomics, and in most of them it has also outperformed stand-alone UMAP. However, that should never be considered true without looking at the data and how these models perform on it. The aim here is to provide users with plenty of options and allow them to pick which is the best for them, empowering them with evidence-based decisions.
-
-## When not to use TopOMetry
-
-First and foremost, when you do not have enough samples to safely assume that the manifold hypothesis holds true. 
-In addition, one should consider that TopOMetry does not currently support neither including new data without recomputing decompositions, nor inverse transforms. If that is critical to your production workflow, then TopOMetry is problably not be the best option, and you might prefer to use UMAP or topological autoencoers. However, even in that case, you should consider TopOMetry in some of your data to evaluate whether your current workflow is generating reliable embeddings, or to estimate its intrinsic dimensionalities in order to properly build an adequate architecture.
-
-------------
-## TopOMetry classes
-
-TopOMetry is centered around four classes of scikit-learn-like transformers:
-* [Kernel](https://topometry.readthedocs.io/en/latest/autoapi/topo/tpgraph/kernels/index.html#topo.tpgraph.kernels.Kernel) - learns similarities and builds topological operators that approximate the LBO.
-* [EigenDecomposition](https://topometry.readthedocs.io/en/latest/autoapi/topo/spectral/eigen/index.html#topo.spectral.eigen.EigenDecomposition) - obtains and post-processes eigenfunctions.
-* [Projector](https://topometry.readthedocs.io/en/latest/autoapi/topo/layouts/projector/index.html#topo.layouts.projector.Projector) - handles graph-layout optimization methods.
-* [TopOGraph](https://topometry.readthedocs.io/en/latest/topograph/) - orchestrates analysis by employing the above estimators and others.
-
-The following diagram represent how TopOMetry uses these transformers to learn topological operators, their eigenfunctions as orthonormal eigenbases, topological operators of these eigenfunctions and graph projections of these graphs or eigenbases:
-
-![TopOMetry in a glance](img/TopOGraph_models.png)
+All tutorials are also available as Jupyter notebooks in this repository:
+https://github.com/davisidarta/topometry-notebooks
 
 
+## Minimal example (current API)
 
+```python
+import scanpy as sc
+import topo as tp
 
+adata = sc.datasets.pbmc3k_processed()
 
+# Fit TopoMetry end-to-end (non-destructive; outputs are namespaced)
+tg = tp.sc.fit_adata(adata, n_jobs=1, verbosity=0, random_state=7)
 
---------------
-#### Citation
+# Plot some results
+sc.pl.embedding(adata, basis='spectral_scaffold', color='topo_clusters')
+sc.pl.embedding(adata, basis='TopoMAP', color='topo_clusters')
+sc.pl.embedding(adata, basis='TopoPaCMAP', color='topo_clusters')
 
+# Save cleanly (I/O-safe)
+adata.write_h5ad("pbmc3k_topometry.h5ad")
 ```
-@article {Sidarta-Oliveira2022.03.14.484134,
-	author = {Sidarta-Oliveira, Davi and Velloso, Licio A},
-	title = {A comprehensive dimensional reduction framework to learn single-cell phenotypic topology uncovers T cell diversity},
+
+
+#### Citation
+--------------
+```
+@article {Oliveira2022.03.14.484134,
+	author = {Oliveira, David S and Domingos, Ana I. and Velloso, Licio A},
+	title = {TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
 	elocation-id = {2022.03.14.484134},
-	year = {2022},
+	year = {2025},
 	doi = {10.1101/2022.03.14.484134},
 	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134},
-	eprint = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134.full.pdf},
+	URL = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134},
+	eprint = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134.full.pdf},
 	journal = {bioRxiv}
 }
 ```
