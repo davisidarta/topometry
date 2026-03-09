@@ -37,8 +37,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Minimum number of eigenpairs to compute for the scaffold.
     base_kernel : topo.tpgraph.Kernel or None, default None
         Pre-fitted kernel to reuse; if provided, `fit` skips base graph construction.
-    eigenmap_method : {'DM', 'msDM', 'LE', 'top', 'bottom'} or None, default None
-        Deprecated; retained for backward compatibility. Both DM and msDM are always computed.
     laplacian_type : {'unnormalized', 'normalized', 'random_walk', 'geometric'}, default 'normalized'
         Laplacian normalization used for spectral computations.
     base_kernel_version : str, default 'bw_adaptive'
@@ -117,8 +115,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 projection_methods=['MAP','PaCMAP'],
                 base_kernel=None,
                 base_kernel_version='bw_adaptive',
-                eigenmap_method=None,  # deprecated
-                laplacian_type='normalized', # deprecated
                 graph_kernel_version='bw_adaptive',
                 base_metric='cosine',
                 graph_metric='euclidean',
@@ -131,7 +127,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 backend='hnswlib',
                 cache=True,
                 verbosity=0,
-                random_state=0,
+                random_state=42,
                 # ID defaults (both methods computed; `id_method` selects the size used)
                 id_method='fsa',
                 id_ks=50,
@@ -141,10 +137,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 id_max_components=1024,
                 id_headroom=0.5,
                 uom=False,
+                eigenmap_method=None,  # deprecated
+                laplacian_type='normalized', # deprecated
                 ):
         # Core config
         self.projection_methods = projection_methods
         self.diff_t = diff_t
+        self.min_eigs = min_eigs
         self.n_eigs = min_eigs
         self.base_knn = base_knn
         self.graph_knn = graph_knn
@@ -158,7 +157,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.base_kernel = base_kernel
         self.base_kernel_version = base_kernel_version
         # deprecated, kept for BC
-        self._eigenmap_method = eigenmap_method
+        self.eigenmap_method = getattr(self, "eigenmap_method", None)
         if eigenmap_method is not None:
             warnings.warn(
                 "`eigenmap_method` is deprecated. TopOGraph now computes both DM and msDM scaffolds.",
@@ -228,6 +227,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self.TopoMAP_snapshots = []
 
         # ------------------ Union-of-Manifolds state ------------------
+        self.uom = uom
         self.uom_enabled = bool(uom)
         self.uom_comp_labels_ = None                 # shape (n,)
         self.uom_components_ = None                  # list of np.ndarray indices (per component)
@@ -2334,7 +2334,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             self.base_kernel_version = kernel
             for eig_method in eigenmap_methods:
                 # kept for BC, but dual scaffold is always computed anyway
-                self._eigenmap_method = eig_method
+                self.eigenmap_method = eig_method
                 self.fit(X)
                 gc.collect()
                 for kernel in kernels:

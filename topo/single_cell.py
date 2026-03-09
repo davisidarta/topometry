@@ -16,6 +16,9 @@ from scipy.sparse.csgraph import connected_components
 import colorsys
 from matplotlib.backends.backend_pdf import PdfPages
 import textwrap
+from matplotlib.collections import PathCollection
+import matplotlib.patheffects as patheffects
+from adjustText import adjust_text
 
 try:
     import scanpy as sc
@@ -26,7 +29,6 @@ except ImportError:
 # Functions will be defined only if user has scanpy installed.
 if _HAVE_SCANPY:
     from anndata import AnnData
-
     from topo.topograph import TopOGraph, save_topograph, load_topograph
     from topo.eval.rmetric import (
         plot_riemann_metric_localized,
@@ -247,8 +249,12 @@ if _HAVE_SCANPY:
         else:
             ax_diff.vlines(max_eigs, ax_diff.get_ylim()[0], ax_diff.get_ylim()[1], linestyles="--", label='Eigengap')
 
-    def plot_id_histograms(ax_fsa, ax_mle, id_est):
+    def plot_id_histograms(adata, ax_fsa=None, ax_mle=None, id_est=None, figsize=(10, 4), dpi=100):
+        if ax_fsa is None or ax_mle is None:
+            fig, (ax_fsa, ax_mle) = plt.subplots(1, 2, figsize=figsize, dpi=dpi)
         # accept either an IntrinsicDim object or a {'local_id':..., 'global_id':...} dict
+        if id_est is None:
+            id_est = adata.uns.get('intrinsic_dim_estimator', None)
         if id_est is None:
             local = {}; global_ = {}
         elif isinstance(id_est, dict):
@@ -409,6 +415,68 @@ if _HAVE_SCANPY:
     # STEPWISE API (new)
     # =========================
 
+    def filter_cells(
+        adata,
+        qc_metrics,
+        percentile=5,
+    ):
+        """
+        Filter cells by trimming extremes of QC metrics in `AnnData.obs`.
+
+        For each metric in `qc_metrics`, cells in the bottom `percentile` and top
+        `percentile` (by that metric) are removed. The final keep mask is the
+        intersection across metrics (a cell must pass all metrics to be kept).
+
+        Parameters
+        ----------
+        AnnData : anndata.AnnData
+            Input annotated matrix.
+        qc_metrics : list
+            List of keys in `AnnData.obs` to use for filtering.
+        percentile : float, default 5
+            Percentile cutoff on each tail. Must be in (0, 50).
+
+        Returns
+        -------
+        anndata.AnnData
+            Filtered copy of the input AnnData.
+        """
+        if not isinstance(adata, AnnData):
+            raise TypeError("adata must be an AnnData object.")
+        qc_metrics = list(qc_metrics) if qc_metrics is not None else []
+        p = float(percentile)
+        if p <= 0.0 or p >= 50.0:
+            raise ValueError("percentile must be in (0, 50).")
+        if len(qc_metrics) == 0:
+            return adata.copy()
+
+        keep = np.ones(adata.n_obs, dtype=bool)
+
+        for key in qc_metrics:
+            if key not in adata.obs:
+                raise KeyError("QC metric not found in adata.obs: %r" % key)
+
+            x = adata.obs[key]
+
+            if pd.api.types.is_numeric_dtype(x) or pd.api.types.is_bool_dtype(x):
+                v = np.asarray(x, dtype=float)
+            else:
+                # Robust conversion for categorical/object/string
+                if pd.api.types.is_categorical_dtype(x):
+                    codes = x.cat.codes.to_numpy(dtype=float)
+                else:
+                    codes = pd.Categorical(x).codes.astype(float)
+                codes[codes < 0] = np.nan
+                v = codes
+
+            lo = np.nanpercentile(v, p)
+            hi = np.nanpercentile(v, 100.0 - p)
+
+            keep &= (v > lo) & (v < hi)
+
+        return adata[keep].copy()
+
+
 
     def preprocess(
         AnnData,
@@ -484,26 +552,21 @@ if _HAVE_SCANPY:
         >>> processed.X.shape
         (5, 2)
         """
-        import numpy as np
-        import scipy.sparse as sp
-        import scanpy as sc
-
-        adata = AnnData
 
         # 1) Keep a copy of raw counts before any normalization/log
-        adata.layers["counts"] = adata.X.copy()
+        AnnData.layers["counts"] = AnnData.X.copy()
 
         # 2) Library-size normalization (on X)
         if normalize:
-            sc.pp.normalize_total(adata, target_sum=target_sum)
+            sc.pp.normalize_total(AnnData, target_sum=target_sum)
 
         # 3) Log1p transform (on X)
         if log:
-            sc.pp.log1p(adata)
+            sc.pp.log1p(AnnData)
 
         # 4) HVGs on raw counts layer (Seurat v3-style)
         sc.pp.highly_variable_genes(
-            adata,
+            AnnData,
             layer="counts",
             n_top_genes=n_top_genes,
             min_mean=min_mean,
@@ -514,40 +577,40 @@ if _HAVE_SCANPY:
         )
         if plot_hvg:
             try:
-                sc.pl.highly_variable_genes(adata, layer="counts")
+                sc.pl.highly_variable_genes(AnnData, layer="counts")
             except TypeError:
                 # older Scanpy versions may not support layer= in the plot call
-                sc.pl.highly_variable_genes(adata)
+                sc.pl.highly_variable_genes(AnnData)
 
         # 5) Save full matrix snapshot to .raw (optional)
         if save_to_raw:
-            adata.raw = adata.copy()
+            AnnData.raw = AnnData.copy()
 
         # 6) Subset to HVGs
-        adata = adata[:, adata.var.highly_variable].copy()
+        AnnData = AnnData[:, AnnData.var.highly_variable].copy()
 
         # 7) Scale into .layers['scaled'] then make X == scaled
         if scale:
             # stash a dense copy into 'scaled'
-            Xdense = adata.X.toarray() if sp.issparse(adata.X) else np.asarray(adata.X)
-            adata.layers["scaled"] = Xdense.copy()
+            Xdense = AnnData.X.toarray() if sp.issparse(AnnData.X) else np.asarray(AnnData.X)
+            AnnData.layers["scaled"] = Xdense.copy()
 
             # Some Scanpy versions don't support `layer=` in scale; handle both.
             try:
-                sc.pp.scale(adata, layer="scaled", max_value=max_value)
+                sc.pp.scale(AnnData, layer="scaled", max_value=max_value)
                 # ensure X follows the scaled layer
-                adata.X = adata.layers["scaled"]
+                AnnData.X = AnnData.layers["scaled"]
             except TypeError:
                 # fallback: temporarily operate on X
-                adata.X = adata.layers["scaled"].copy()
-                sc.pp.scale(adata, max_value=max_value)
-                adata.layers["scaled"] = adata.X.copy()
+                AnnData.X = AnnData.layers["scaled"].copy()
+                sc.pp.scale(AnnData, max_value=max_value)
+                AnnData.layers["scaled"] = AnnData.X.copy()
 
         else:
             # even if not scaling, keep X consistent with the (possibly log-normalized) values
             pass
 
-        return adata.copy()
+        return AnnData.copy()
 
 
     def fit_adata(
@@ -959,13 +1022,59 @@ if _HAVE_SCANPY:
         if return_df:
             return df
 
-    
+    def calculate_deformation_on_projection(adata, tg, proj_key='TopoMAP', diffusion_t=1, **kwargs):
+            """Compute and store a deformation metric (centered log det(G)) for a given projection.
+            This quantifies local volume changes induced by the projection relative to the original graph geometry.
+            The metric is stored in `adata.obs['deformation_{proj_key}']`
+            
+            Parameters
+            ----------
+            adata : AnnData
+                Annotated data matrix with projections in adata.obsm.
+            tg : TopoGraph
+                TopoGraph object fitted on `adata` with base_kernel and Laplacian.
+            proj_key : str, list of str, default 'TopoMAP'
+                Key in adata.obsm (without the 'X_' prefix) to use as the 2D embedding for computing deformation.
+                If a list is provided, computes deformation for each key and stores in separate columns.
+            diffusion_t : int, default 1
+                Diffusion time parameter for smoothing the deformation metric; higher values yield smoother estimates.
+            """
+            from topo.eval.rmetric import calculate_deformation
+            L = tg.graph_kernel.L
+            # check if proj_key is a list; if not, make it a single-item list for uniform processing
+            if isinstance(proj_key, str):
+                proj_keys = [proj_key]
+            else:
+                proj_keys = list(proj_key)
+            for proj_key in proj_keys:
+                if proj_key not in adata.obsm:
+                    # check with 'X_' prefix if not found directly
+                    if 'X_' + proj_key in adata.obsm:
+                        continue
+                    else:
+                        raise KeyError(f"X_{proj_key} not found in adata.obsm")
+                Y = adata.obsm['X_' + proj_key]
+                # Compute deformation once (centered log det(G)), optionally smoothed
+                deform_vals, (dmin, dmax) = calculate_deformation(
+                    Y, L,
+                    diffusion_t=diffusion_t,
+                    diffusion_op=getattr(tg.base_kernel, "P", None),
+                    return_limits=True,
+                    **kwargs
+                )
+                # store metric
+                adata.obs[f'deformation_{proj_key}'] = deform_vals
+                # store limits for potential use in plotting
+                adata.uns[f'deformation_{proj_key}_limits'] = (dmin, dmax)
+
 
     def plot_riemann_diagnostics(
         adata,
         tg,
         proj_key='X_TopoMAP',
         groupby='topo_clusters',
+        diffusion_t=1,
+        n_plot='10%',
         scale_gain=1.0,
         ellipse_alpha=0.15,
         point_size=6,
@@ -989,6 +1098,10 @@ if _HAVE_SCANPY:
             Key in adata.obsm to use as the 2D embedding for plotting.
         groupby : str
             Key in adata.obs for categorical labels (used for coloring).
+        diffusion_t : int, default 1
+            Diffusion time for smoothing the deformation metric; higher values yield smoother estimates
+        n_plot : int or str, default '10%'
+            Number of localized indicatrices to plot, or a percentage string (e.g. '10%')
         scale_gain : float, default 1.0
             Global multiplicative scale for ellipse axes. Increase to make ellipses larger.
         ellipse_alpha : float, default 0.15
@@ -1010,7 +1123,7 @@ if _HAVE_SCANPY:
 
         Returns
         -------
-        None (plots are shown and saved in adata)
+        None (plots are shown and metrics saved in adata)
 
         """
         from topo.eval.rmetric import (
@@ -1019,11 +1132,23 @@ if _HAVE_SCANPY:
         plot_riemann_metric_global,
         calculate_deformation,
         )
-        if proj_key not in adata.obsm:
+        if isinstance(n_plot, str) and n_plot.endswith('%'):
+            try:
+                pct = float(n_plot[:-1]) / 100.0
+                n_localized = int(len(adata) * pct)
+            except ValueError:
+                raise ValueError(f"Invalid percentage string for n_plot: {n_plot}")
+        elif isinstance(n_plot, int):
+            n_localized = n_plot
+        elif isinstance(n_plot, float) and 0 < n_plot < 1:
+            n_localized = int(len(adata) * n_plot)
+        else:
+            raise ValueError(f"Invalid value for n_plot: {n_plot}. Must be int, float in (0,1), or percentage string like '10%'.")
+        if 'X_' + proj_key not in adata.obsm:
             raise KeyError(f"{proj_key} not found in adata.obsm")
         if not hasattr(tg, 'base_kernel') or not hasattr(tg.base_kernel, 'L'):
             raise ValueError("tg must have a fitted base_kernel with attribute L (Laplacian)")
-        proj_nick = proj_key.replace("X_", "")
+        
         # --- choose highest-resolution clustering if 'topo_clusters' has no palette ---
         if groupby == 'topo_clusters':
             if f'{groupby}_colors' in adata.uns:
@@ -1060,13 +1185,13 @@ if _HAVE_SCANPY:
 
         L = tg.graph_kernel.L
 
-        def _make_plot(Y, L, proj_key, proj_nick, show=show):            
+        def _make_plot(Y, L, proj_key, show=show):            
             fig, axs = plt.subplots(1, 3, figsize=figsize, dpi=dpi)
             # fig.suptitle(f"Riemannian diagnostics - {proj_nick}", fontsize=title_fontsize)
             # plot using the mapped colors directly (do not pass cmap)
             plot_riemann_metric_localized(
                 Y, L,
-                n_plot=adata.shape[0]//10,
+                n_plot=n_localized,
                 scale_mode="logdet",
                 scale_gain=scale_gain,
                 alpha=ellipse_alpha,
@@ -1091,14 +1216,14 @@ if _HAVE_SCANPY:
                 clip_percentile=2.0,
                 return_limits=True,
             )
-            adata.obs[f'metric_contract_expand_{proj_nick}'] = deform_vals
+            adata.obs[f'deformation_{proj_key}'] = deform_vals
 
             # (b) Global indicatrices (thinned grid-averaged ellipses) overlaid on the embedding,
             #     colored by local contraction/expansion using the shared color scale
             #fig, ax = plt.subplots(1, 1, figsize=(8, 6), dpi=300)
             sc.pl.embedding(
                 adata,
-                basis=proj_nick,
+                basis=proj_key,
                 color='topo_clusters',
                 legend_loc=None,
                 legend_fontsize=6,
@@ -1140,8 +1265,8 @@ if _HAVE_SCANPY:
             # (c) Metric-derived scalar maps (anisotropy and log-det(G))
             G = RiemannMetric(Y, L).get_rmetric()
             lam = np.linalg.eigvalsh(G); lam = np.clip(lam, 1e-12, None)
-            adata.obs[f'metric_anisotropy_{proj_nick}'] = np.log(lam[:, -1] / lam[:, 0])
-            adata.obs[f'metric_logdetG_{proj_nick}'] = np.sum(np.log(lam), axis=1)
+            adata.obs[f'metric_anisotropy_{proj_key}'] = np.log(lam[:, -1] / lam[:, 0])
+            adata.obs[f'metric_logdetG_{proj_key}'] = np.sum(np.log(lam), axis=1)
 
             # (d) CONTRACTION vs EXPANSION PANEL (points), using the same deformation and limits
             # Try to suppress colorbar via Scanpy arg (newer versions)
@@ -1150,7 +1275,7 @@ if _HAVE_SCANPY:
                 sc.pl.embedding(
                     adata,
                     basis=proj_key,
-                    color=[f'metric_contract_expand_{proj_nick}'],
+                    color=[f'deformation_{proj_key}'],
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
@@ -1164,7 +1289,7 @@ if _HAVE_SCANPY:
                 sc.pl.embedding(
                     adata,
                     basis=proj_key,
-                    color=[f'metric_contract_expand_{proj_nick}'],
+                    color=[f'deformation_{proj_key}'],
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
@@ -1197,17 +1322,16 @@ if _HAVE_SCANPY:
                     proj_names.append(name)
             for proj_name in proj_names:
                 Y = np.asarray(adata.obsm[proj_name])
-                proj_nick = proj_name.replace("X_", "")
                 if verbose:
-                    print(f"Riemannian diagnostics for projection '{proj_nick}'")
-                _fig = _make_plot(Y, L, proj_name, proj_nick, show=show)
+                    print(f"Riemannian diagnostics for projection '{proj_name}'")
+                _fig = _make_plot(Y, L, proj_name, show=show)
                 if (not show) and (_fig is not None):
                     plt.close(_fig)
             return None
         else:
-            Y = np.asarray(adata.obsm[proj_key])
+            Y = np.asarray(adata.obsm['X_'+proj_key])
             if verbose: print(f"Riemannian diagnostics for projection '{proj_key}'")
-            return _make_plot(Y, L, proj_key, proj_nick, show=show)
+            return _make_plot(Y, L, proj_key, show=show)
 
 
     def visualize_optimization(
@@ -2364,6 +2488,493 @@ if _HAVE_SCANPY:
         }
 
 
+    def find_ppv_markers(
+        AnnData,
+        groupby,
+        use_raw=False,
+        pval_thr=0.05,
+        logfc_thr=0.5,
+        min_frac_in_cluster=0.5,
+        return_df=False,
+        logreg_tol=1e-8,
+        logreg_max_iter=300,
+        n_jobs=1
+    ):
+        """
+        Compute PPV-ranked marker genes per group using:
+        - Wilcoxon DE for p-values / logFC
+        - Logistic regression (logreg) for a secondary ranking signal
+        and write results back to `.uns` in Scanpy's rank_genes_groups format.
+
+        The resulting key can be consumed by:
+        - `sc.get.rank_genes_groups_df(AnnData, key=...)`
+        - `sc.pl.rank_genes_groups_dotplot(AnnData, key=...)`
+
+        Parameters
+        ----------
+        AnnData : anndata.AnnData
+            Input AnnData. Must contain `AnnData.obs[groupby]`.
+        groupby : str
+            Grouping key in `AnnData.obs`.
+        use_raw : bool, default True
+            Use `AnnData.raw.X` (and `.raw.var_names`) for expression when available.
+        pval_thr : float, default 0.05
+            Threshold on adjusted p-values from Wilcoxon (`pvals_adj`).
+        logfc_thr : float, default 0.5
+            Threshold on log fold-changes from Wilcoxon (`logfoldchanges`).
+        min_frac_in_cluster : float, default 0.5
+            Minimum fraction of cells in a group expressing the gene (>0) required.
+        return_df : bool, default False
+            If True, also return a tidy DataFrame of per-(group,gene) statistics.
+        logreg_tol: float, default 1e-4
+            Tolerance for sklearn.linear_model.LogisticRegression stopping criteria.
+        logreg_max_iter: int, default 300
+            Maximum number of iterations taken for the LogisticRegression solver to converge.
+        n_jobs: int, default 1
+            Number of CPU cores used when parallelizing.
+
+        Returns
+        -------
+        dict
+            keys:
+            - 'key_added': str, the `.uns` key for the PPV-ranked results
+            - 'uns_key_wilcoxon': str, Wilcoxon DE key
+            - 'uns_key_logreg': str, LogReg DE key
+            - 'uns_key_reordered': str|None, if `{groupby}_logreg_X` was reordered in-place
+            - 'ppv': dict[group -> dict[gene -> ppv]]
+            - 'ranked_markers': dict[group -> list[gene]]
+            - 'candidates': dict[group -> set[gene]]
+            - 'df': pandas.DataFrame (only if return_df=True)
+        """
+        if not isinstance(AnnData, AnnData):
+            raise TypeError("AnnData must be an anndata.AnnData")
+        if groupby not in AnnData.obs:
+            raise KeyError("groupby key not found in AnnData.obs: %r" % groupby)
+        if not (0.0 < float(min_frac_in_cluster) <= 1.0):
+            raise ValueError("min_frac_in_cluster must be in (0, 1].")
+
+        labels = AnnData.obs[groupby].astype("category")
+        clusters = list(labels.cat.categories)
+        labels_arr = labels.to_numpy()
+
+        # ---- Run (or reuse) DE: Wilcoxon + LogReg ----
+        wilcoxon_key = "%s_wilcoxon_X" % groupby
+        logreg_key = "%s_logreg_X" % groupby
+
+        if wilcoxon_key not in AnnData.uns:
+            sc.tl.rank_genes_groups(
+                AnnData,
+                groupby=groupby,
+                method="wilcoxon",
+                use_raw=bool(use_raw),
+                key_added=wilcoxon_key,
+            )
+
+        if logreg_key not in AnnData.uns:
+            sc.tl.rank_genes_groups(
+                AnnData,
+                groupby=groupby,
+                method="logreg",
+                use_raw=bool(use_raw),
+                key_added=logreg_key,
+            )
+
+        # ---- Collect Wilcoxon stats (pvals/logfc) ----
+        wdf = sc.get.rank_genes_groups_df(AnnData, key=wilcoxon_key, group=None)
+        if wdf is None or len(wdf) == 0:
+            raise ValueError("Wilcoxon rank_genes_groups produced no results under key: %r" % wilcoxon_key)
+
+        if "pvals_adj" in wdf.columns:
+            wdf = wdf[wdf["pvals_adj"] < float(pval_thr)]
+        if "logfoldchanges" in wdf.columns:
+            wdf = wdf[wdf["logfoldchanges"] > float(logfc_thr)]
+        if wdf is None or len(wdf) == 0:
+            raise ValueError("No candidate genes after filtering Wilcoxon by pval/logfc thresholds.")
+
+        # Map (group,gene) -> wilcoxon stats
+        wdf["group"] = wdf["group"].astype(str)
+        wdf["names"] = wdf["names"].astype(str)
+
+        w_stats = {}
+        for _, r in wdf.iterrows():
+            g = str(r["group"])
+            gene = str(r["names"])
+            if g not in set(map(str, clusters)):
+                continue
+            w_stats[(g, gene)] = {
+                "pvals": float(r["pvals"]) if "pvals" in r and pd.notnull(r["pvals"]) else np.nan,
+                "pvals_adj": float(r["pvals_adj"]) if "pvals_adj" in r and pd.notnull(r["pvals_adj"]) else np.nan,
+                "logfoldchanges": float(r["logfoldchanges"]) if "logfoldchanges" in r and pd.notnull(r["logfoldchanges"]) else np.nan,
+            }
+
+        # Candidates per group
+        cluster_candidates = {str(c): set() for c in clusters}
+        for (g, gene) in w_stats.keys():
+            cluster_candidates[g].add(gene)
+
+        # ---- Collect LogReg scores for tie-breaking ----
+        ldf = sc.get.rank_genes_groups_df(AnnData, key=logreg_key, group=None)
+        logreg_scores = {}
+        if ldf is not None and len(ldf) > 0 and "scores" in ldf.columns:
+            ldf["group"] = ldf["group"].astype(str)
+            ldf["names"] = ldf["names"].astype(str)
+            for _, r in ldf.iterrows():
+                g = str(r["group"])
+                gene = str(r["names"])
+                if g not in cluster_candidates:
+                    continue
+                if pd.isnull(r["scores"]):
+                    continue
+                logreg_scores[(g, gene)] = float(r["scores"])
+
+        # ---- Expression matrix selection ----
+        if AnnData.raw is not None and bool(use_raw):
+            X_expr = AnnData.raw.X
+            var_names = AnnData.raw.var_names.astype(str)
+        else:
+            X_expr = AnnData.X
+            var_names = AnnData.var_names.astype(str)
+
+        if issparse(X_expr):
+            X_expr = X_expr.tocsr()
+
+        # ---- Compute PPV + pct_in/out using expressed>0 for candidate genes only ----
+        all_candidate_genes = sorted(set().union(*cluster_candidates.values()))
+        gene_to_idx = {g: i for i, g in enumerate(var_names) if g in set(all_candidate_genes)}
+        present_genes = [g for g in all_candidate_genes if g in gene_to_idx]
+        if len(present_genes) == 0:
+            raise ValueError("None of the candidate genes are present in `.var_names` / `.raw.var_names`.")
+
+        gene_idx = np.array([gene_to_idx[g] for g in present_genes], dtype=int)
+
+        if issparse(X_expr):
+            bool_expr = (X_expr[:, gene_idx] > 0)
+            total_expr = np.asarray(bool_expr.sum(axis=0)).ravel().astype(int)
+        else:
+            sub_expr = np.asarray(X_expr[:, gene_idx])
+            bool_expr = (sub_expr > 0)
+            total_expr = bool_expr.sum(axis=0).astype(int)
+
+        # Precompute not-in-group denominators
+        n_total = int(AnnData.n_obs)
+
+        cluster_ppv = {str(c): {} for c in clusters}
+        ranked_markers = {str(c): [] for c in clusters}
+
+        rows = []  # optional tidy DF
+
+        for c in clusters:
+            c = str(c)
+            idx_in = np.where(labels_arr.astype(str) == c)[0]
+            if idx_in.size == 0:
+                continue
+            n_in = int(idx_in.size)
+            n_out = n_total - n_in
+
+            if issparse(bool_expr):
+                n_in_cluster = np.asarray(bool_expr[idx_in, :].sum(axis=0)).ravel().astype(int)
+            else:
+                n_in_cluster = bool_expr[idx_in, :].sum(axis=0).astype(int)
+
+            frac_in = n_in_cluster / float(n_in)
+
+            # Compute outside counts efficiently
+            if issparse(bool_expr):
+                n_out_cluster = total_expr - n_in_cluster
+            else:
+                n_out_cluster = total_expr - n_in_cluster
+
+            pct_out = (n_out_cluster / float(n_out)) if n_out > 0 else np.zeros_like(frac_in, dtype=float)
+            pct_in = frac_in
+
+            cand = cluster_candidates.get(c, set())
+            scores = {}
+
+            for j, gene in enumerate(present_genes):
+                if gene not in cand:
+                    continue
+                if total_expr[j] == 0:
+                    continue
+                if frac_in[j] < float(min_frac_in_cluster):
+                    continue
+
+                ppv = float(n_in_cluster[j]) / float(total_expr[j])
+                scores[gene] = ppv
+                cluster_ppv[c][gene] = ppv
+
+                ws = w_stats.get((c, gene), {"pvals": np.nan, "pvals_adj": np.nan, "logfoldchanges": np.nan})
+                rows.append(
+                    {
+                        "group": c,
+                        "names": gene,
+                        "ppv": ppv,
+                        "pvals": ws["pvals"],
+                        "pvals_adj": ws["pvals_adj"],
+                        "logfoldchanges": ws["logfoldchanges"],
+                        "pct_nz_group": float(pct_in[j]),
+                        "pct_nz_reference": float(pct_out[j]),
+                        "logreg_score": float(logreg_scores.get((c, gene), np.nan)),
+                    }
+                )
+
+            # Sort: PPV desc, then logreg score desc (if available), then gene name
+            def _key(gene):
+                return (
+                    -float(scores.get(gene, -np.inf)),
+                    -float(logreg_scores.get((c, gene), -np.inf)) if (c, gene) in logreg_scores else 0.0,
+                    gene,
+                )
+
+            ranked = sorted(scores.keys(), key=_key)
+            ranked_markers[c] = ranked
+
+        # ---- Build Scanpy rank_genes_groups-like structure under a new key ----
+        key_added = "%s_ppv" % groupby
+
+        # Determine per-group gene lists (ensure consistent length)
+        max_len = max((len(ranked_markers[str(c)]) for c in clusters), default=0)
+        if max_len == 0:
+            raise ValueError("No PPV markers found after applying min_frac_in_cluster and DE thresholds.")
+
+        # Build recarrays with fields named by groups (Scanpy convention in many versions)
+        fields = tuple([str(i) for i in range(len(clusters))])
+
+        def _make_recarr(fill_value):
+            arr = np.empty((max_len,), dtype=[(f, object) for f in fields])
+            for f in fields:
+                arr[f] = fill_value
+            return arr
+
+        names_arr = _make_recarr("")
+        scores_arr = _make_recarr(np.nan)          # use PPV as 'scores'
+        pvals_arr = _make_recarr(np.nan)
+        pvals_adj_arr = _make_recarr(np.nan)
+        logfc_arr = _make_recarr(np.nan)
+        pct_in_arr = _make_recarr(np.nan)          # pct_nz_group
+        pct_out_arr = _make_recarr(np.nan)         # pct_nz_reference
+
+        # Index tidy DF for fast lookup
+        df_all = pd.DataFrame(rows) if len(rows) > 0 else pd.DataFrame(
+            columns=["group","names","ppv","pvals","pvals_adj","logfoldchanges","pct_nz_group","pct_nz_reference","logreg_score"]
+        )
+        df_idx = None
+        if len(df_all) > 0:
+            df_idx = df_all.set_index(["group", "names"], drop=False)
+
+        for gi, c in enumerate(clusters):
+            c = str(c)
+            field = fields[gi]
+            genes = ranked_markers.get(c, [])
+            if len(genes) == 0:
+                continue
+
+            # Fill in
+            for k, gene in enumerate(genes[:max_len]):
+                names_arr[field][k] = gene
+                if df_idx is not None and (c, gene) in df_idx.index:
+                    r = df_idx.loc[(c, gene)]
+                    # r can be Series or DataFrame if duplicate; handle robustly
+                    if isinstance(r, pd.DataFrame):
+                        r = r.iloc[0]
+                    scores_arr[field][k] = float(r["ppv"])
+                    pvals_arr[field][k] = float(r["pvals"]) if pd.notnull(r["pvals"]) else np.nan
+                    pvals_adj_arr[field][k] = float(r["pvals_adj"]) if pd.notnull(r["pvals_adj"]) else np.nan
+                    logfc_arr[field][k] = float(r["logfoldchanges"]) if pd.notnull(r["logfoldchanges"]) else np.nan
+                    pct_in_arr[field][k] = float(r["pct_nz_group"]) if pd.notnull(r["pct_nz_group"]) else np.nan
+                    pct_out_arr[field][k] = float(r["pct_nz_reference"]) if pd.notnull(r["pct_nz_reference"]) else np.nan
+
+        AnnData.uns[key_added] = {
+            "params": {
+                "groupby": groupby,
+                "reference": "rest",
+                "method": "ppv",
+                "use_raw": bool(use_raw),
+                "pval_thr": float(pval_thr),
+                "logfc_thr": float(logfc_thr),
+                "min_frac_in_cluster": float(min_frac_in_cluster),
+                "source_wilcoxon_key": wilcoxon_key,
+                "source_logreg_key": logreg_key,
+            },
+            "names": names_arr,
+            "scores": scores_arr,               # Scanpy expects 'scores'
+            "pvals": pvals_arr,
+            "pvals_adj": pvals_adj_arr,
+            "logfoldchanges": logfc_arr,
+            "pct_nz_group": pct_in_arr,
+            "pct_nz_reference": pct_out_arr,
+        }
+
+        # ---- Optionally reorder the existing logreg key in-place using PPV order ----
+        uns_key_reordered = None
+        if logreg_key in AnnData.uns and isinstance(AnnData.uns[logreg_key], dict) and "names" in AnnData.uns[logreg_key]:
+            try:
+                rg = AnnData.uns[logreg_key]
+                names0 = rg["names"]
+                group_fields = names0.dtype.names
+                if group_fields is not None and len(group_fields) == len(clusters):
+                    n_genes_all = names0.shape[0]
+                    for group_idx, cname in enumerate(map(str, clusters)):
+                        field = group_fields[group_idx]
+                        orig = [str(x) for x in list(names0[field])]
+                        ppv_rank = ranked_markers.get(cname, [])
+                        if not ppv_rank:
+                            continue
+                        seen = set()
+                        new_list = []
+                        for g in ppv_rank:
+                            if g and g not in seen:
+                                new_list.append(g)
+                                seen.add(g)
+                        for g in orig:
+                            if g and g not in seen:
+                                new_list.append(g)
+                                seen.add(g)
+                        if len(new_list) < n_genes_all:
+                            new_list.extend([""] * (n_genes_all - len(new_list)))
+                        elif len(new_list) > n_genes_all:
+                            new_list = new_list[:n_genes_all]
+                        names0[field] = np.array(new_list, dtype=object)
+                    AnnData.uns[logreg_key]["names"] = names0
+                    uns_key_reordered = logreg_key
+            except Exception:
+                uns_key_reordered = None
+
+        out = {
+            "key_added": key_added,
+            "uns_key_wilcoxon": wilcoxon_key,
+            "uns_key_logreg": logreg_key,
+            "uns_key_reordered": uns_key_reordered,
+            "ppv": cluster_ppv,
+            "ranked_markers": ranked_markers,
+            "candidates": cluster_candidates,
+        }
+
+        if return_df:
+            out["df"] = df_all
+
+        return out
+
+
+
+    def repel_annotation_labels(
+        adata,
+        groupby,
+        basis="TopoMAP",
+        exclude=(),
+        ax=None,
+        adjust_kwargs=dict(arrowprops=dict(
+                arrowstyle="-",
+                color="black",
+                lw=0.5,
+                alpha=0.7,
+            ),
+        ),
+        text_kwargs=dict(
+            fontsize=16,
+            fontweight="bold",
+            color="black",
+            path_effects=[patheffects.withStroke(linewidth=3.0, foreground="white")])
+        ):
+        """
+        Repel group labels on a Scanpy 2-D embedding by placing them at group medians and using adjustText for repulsion.
+        Use for creating publication-quality figures.
+
+        Parameters
+        ----------
+        adata : AnnData
+            Input dataset with the embedding in `adata.obsm[f"X_{basis}"]` and group labels in `adata.obs[groupby]`.
+        groupby : str
+            Column in `adata.obs` defining groups for which to place labels.
+        basis : str, default "TopoMAP"
+            Which embedding in `adata.obsm` to use for coordinates (without the "X_" prefix).
+        exclude : iterable of group labels to exclude from labeling, default ()
+            Groups in `adata.obs[groupby]` to skip when placing labels.
+        ax : matplotlib.axes.Axes or None, default None
+            Optional axes to plot on; if None, a new figure and axes are created.
+        adjust_kwargs : dict, default dict(arrowprops=dict(
+            Additional keyword arguments passed to `adjust_text` for fine-tuning repulsion behavior.
+        text_kwargs : dict, default dict(...))
+            Keyword arguments for styling the text labels (passed to `ax.text`).
+        
+        Example
+        -------
+        ```python
+
+        fig, ax = plt.subplots(1, 1, figsize=(6,6))  
+
+        sc.pl.embedding(adata, basis="TopoMAP", color="topo_clusters", show=False, ax=ax) 
+
+        tp.sc.repel_annotation_labels(adata, groupby='topo_clusters', basis='TopoPaCMAP', ax=ax,
+         adjust_kwargs=dict(arrowprops=dict(
+                arrowstyle="-",
+                color="red",
+                lw=0.5,
+                alpha=0.7,            ),
+        ),
+          text_kwargs=dict(fontsize=12,
+            fontweight='bold',
+              color='black',
+                path_effects=[patheffects.withStroke(linewidth=3.0, foreground='white')]
+                )
+            )
+        fig = ax.get_figure()
+        fig.tight_layout()
+        plt.show()
+        ```
+
+
+        """
+
+        if adjust_kwargs is None:
+            adjust_kwargs = {}
+        if text_kwargs is None:
+            text_kwargs = {}
+
+        coords = np.asarray(adata.obsm[f"X_{basis}"])
+        groups = adata.obs[groupby]
+
+        # compute medians per group using a boolean mask
+        medians = {}
+        for g in groups.cat.categories if hasattr(groups, "cat") else groups.unique():
+            if g in exclude:
+                continue
+            mask = (groups.values == g)
+            if not np.any(mask):
+                continue
+            medians[g] = np.median(coords[mask, :], axis=0)
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        # find the main scatter artist for repulsion
+        scatters = [c for c in ax.collections if isinstance(c, PathCollection)]
+        scatter = scatters[0] if scatters else None
+
+        texts = []
+        for k, (x, y) in medians.items():
+            t = ax.text(x, y, k, zorder=10, **text_kwargs)
+            
+            texts.append(t)
+
+        base_adjust_kwargs = dict(
+            autoalign="xy",
+            only_move={"points": "xy", "text": "xy"},
+            expand_points=(1.3, 1.5),
+            expand_text=(1.1, 1.3),
+            force_points=0.5,
+            force_text=0.8,
+            lim=500,
+        )
+        base_adjust_kwargs.update(adjust_kwargs or {})
+
+        if scatter is not None:
+            adjust_text(texts, add_objects=[scatter], **base_adjust_kwargs)
+        else:
+            adjust_text(texts, **base_adjust_kwargs)
+
+        return texts
+
+
 
 
     # --------------------------------------
@@ -3049,7 +3660,7 @@ if _HAVE_SCANPY:
             # ID histograms (original style)
             ax_fsa = fig.add_subplot(gs[1, 0]); ax_mle = fig.add_subplot(gs[1, 1])
             id_est = adata.uns.get('intrinsic_dim_estimator', None)
-            plot_id_histograms(ax_fsa, ax_mle, id_est)
+            plot_id_histograms(adata, ax_fsa, ax_mle, id_est)
 
             #fig.suptitle("Scaffold eigenspectrum / intrinsic dimensionality", y=0.98, fontsize=14)
             fig.text(0.02, 0.98, "Scaffold eigenspectrum and intrinsic dimensionality estimates", fontsize=16, weight='bold', va='center', ha='left')
@@ -4596,21 +5207,25 @@ if _HAVE_SCANPY:
 
 
 
-    def explained_variance_by_hvg(AnnData, title='scRNAseq data', n_pcs=200, gene_number_range = [250, 1000, 3000], figsize=(12,6), sup_title_fontsize=20, title_fontsize=16, return_dicts=False):
+    def pca_explained_variance_by_hvg(adata, title='PCA explained variance', n_pcs=200, gene_number_range=[1000, 2000, 3000, 'Default'], figsize=(8, 6), sup_title_fontsize=30, title_fontsize=20, return_dicts=False):
         """
-        Plots the explained variance by PCA with varying number of highly variable genes.
+        Plots and saves the explained variance by PCA with varying numbers of highly variable genes, including a default option.
 
         Parameters
         ----------
-        AnnData: the target AnnData object.
+        adata: AnnData
+            The target AnnData object.
 
-        title: str (optional, default 'scRNAseq data').
+        output_path: str
+            Path to save the plot.
+
+        title: str (optional, default 'PCA explained variance').
 
         n_pcs: int (optional, default 200).
             Number of principal components to use.
 
-        gene_number_range: list of int (optional, default [250, 1000, 3000]).
-            List of numbers of highly variable genes to test.
+        gene_number_range: list of int or 'Default' (optional, default [250, 1000, 3000, 'Default']).
+            List of numbers of highly variable genes to test, including 'Default'.
 
         figsize: tuple of int (optional, default (12,6)).
 
@@ -4623,43 +5238,536 @@ if _HAVE_SCANPY:
 
         Returns
         -------
-        A plot. If `return_dicts=True`, also returns a tuple of dictionaries (explained_cov_ratio, singular_values) with the keys
-        being strings with the number of genes and the values being the explained covariance ratio
-        and the singular values for PCA.
-        
+        Saves a plot as a .tif file. If `return_dicts=True`, also returns a tuple of dictionaries (explained_cov_ratio, singular_values).
         """
+        from sklearn.decomposition import PCA
         prop_cycle = plt.rcParams['axes.prop_cycle']
         colors = prop_cycle.by_key()['color']
         explained_cov_ratio = {}
         singular_values = {}
         for n_genes in gene_number_range:
-            sc.pp.highly_variable_genes(AnnData, n_top_genes=n_genes)
-            AnnData.raw = AnnData.copy()
-            AnnData = AnnData[:, AnnData.var.highly_variable]
-            sc.pp.scale(AnnData, max_value=10)
+            if n_genes == 'Default':
+                sc.pp.highly_variable_genes(adata)
+            else:
+                sc.pp.highly_variable_genes(adata, n_top_genes=n_genes)
+            adata_sub = adata[:, adata.var.highly_variable].copy()
+            sc.pp.scale(adata_sub, max_value=10)
             pca = PCA(n_components=n_pcs)
-            pca.fit(AnnData.X)
-            AnnData.obsm['X_pca'] = pca.transform(AnnData.X)
-            explained_cov_ratio[n_genes] = pca.explained_variance_ratio_
-            singular_values[n_genes] = pca.singular_values_
-        plt.figure(figsize=figsize)
-        plt.subplots_adjust(left=0.2, right=0.98, bottom=0.001,
-                            top=0.9, wspace=0.15, hspace=0.01)
+            pca.fit(adata_sub.X)
+            adata_sub.obsm['X_pca'] = pca.transform(adata_sub.X)
+            explained_cov_ratio[str(n_genes)] = pca.explained_variance_ratio_
+            singular_values[str(n_genes)] = pca.singular_values_
+
+        # Create subplots for eigenspectrum and cumulative explained variance
+        fig, axes = plt.subplots(1, 2, figsize=(figsize[0] * 2, figsize[1]))
+        fig.subplots_adjust(left=0.1, right=0.98, wspace=0.3)
+
         plt.suptitle(title, fontsize=sup_title_fontsize)
+
+        # Plot eigenspectrum
+        axes[0].set_title('Eigenspectrum', fontsize=title_fontsize)
+        axes[0].set_xlabel('Principal component', fontsize=title_fontsize - 6)
+        axes[0].set_ylabel('Singular values', fontsize=title_fontsize - 6)
+
+        # Plot cumulative explained variance
+        axes[1].set_title('Total explained variance', fontsize=title_fontsize)
+        axes[1].set_xlabel('Principal component', fontsize=title_fontsize - 6)
+        axes[1].set_ylabel('Cumulative explained variance', fontsize=title_fontsize - 6)
+
         for j, gene_number in enumerate(gene_number_range):
-            plt.subplot(1, 2, 1)
-            plt.plot(singular_values[gene_number], label='{} genes'.format(gene_number), color=colors[j])
-            plt.title('Eigenspectrum', fontsize=title_fontsize)
-            plt.xlabel('Principal component', fontsize=title_fontsize-6)
-            plt.ylabel('Singular values', fontsize=title_fontsize-6)
-            plt.legend(fontsize=11)
-            plt.subplot(1, 2, 2)
-            plt.plot(explained_cov_ratio[gene_number].cumsum(), label='{} genes'.format(gene_number), color=colors[j])
-            plt.title('Total explained variance', fontsize=title_fontsize)
-            plt.xlabel('Principal component', fontsize=13)
-            plt.ylabel('Cumulative explained variance', fontsize=title_fontsize-6)
-            plt.legend(fontsize=11)
+            axes[0].plot(singular_values[str(gene_number)], label='{} genes'.format(gene_number), color=colors[j])
+            axes[1].plot(explained_cov_ratio[str(gene_number)].cumsum(), label='{} genes'.format(gene_number), color=colors[j])
+
+        axes[0].legend(title='Number of HVGs', fontsize=14)
+        axes[1].legend(title='Number of HVGs', fontsize=14)
+
         plt.tight_layout()
         plt.show()
+
         if return_dicts:
             return explained_cov_ratio, singular_values
+
+
+    # =====================================================================
+    # Scaffold feature modes: gene–component association matrix
+    # =====================================================================
+
+    def _stationary_distribution_sc(P, *, maxiter=10_000, tol=1e-12, dtype=np.float64):
+        """
+        Compute the stationary distribution of a (sparse) Markov operator via power
+        iteration on P^T. Falls back to uniform if iteration does not converge.
+        """
+        P = P.tocsr() if sp.issparse(P) else sp.csr_matrix(P)
+        n = P.shape[0]
+        pi = np.full(n, 1.0 / n, dtype=dtype)
+        PT = P.T.tocsr()
+        for _ in range(int(maxiter)):
+            pi_new = PT @ pi
+            s = float(pi_new.sum())
+            if not np.isfinite(s) or s <= 0:
+                break
+            pi_new /= s
+            if float(np.linalg.norm(pi_new - pi, ord=1)) < float(tol):
+                pi = pi_new
+                break
+            pi = pi_new
+        pi = np.clip(pi, 0.0, None)
+        s = float(pi.sum())
+        return (pi / s) if s > 0 else np.full(n, 1.0 / n, dtype=dtype)
+
+
+    def calculate_feature_modes(
+        adata: "AnnData",
+        tg: "TopOGraph",
+        return_results: bool = False,
+        *,
+        multiscale: bool = True,
+        use_scaffold_components: bool = True,
+        operator: str = "X",
+        standardize: str = "corr",
+        weight: bool = True,
+        center_weighted: bool = True,
+        check_basis: bool = True,
+        basis_atol: float = 1e-2,
+        basis_rtol: float = 1e-2,
+        tail_q: float = 0.95,
+        topk: int = 50,
+        eps: float = 1e-12,
+        dtype=np.float32,
+        chunk_size: int = 2048,
+    ):
+        """
+        Compute a genes × scaffold-components association matrix (feature loadings).
+
+        Associates each gene profile with each TopoMetry scaffold component via
+        a geometry-consistent inner product under the stationary distribution π of
+        a chosen Markov operator, optionally transformed for discovery.
+
+        Parameters
+        ----------
+        adata : AnnData
+            Must contain `adata.X` (scaled expression, same cell order as used to
+            fit `tg`). Genes are rows of `adata.var`.
+        tg : TopOGraph
+            Fitted TopoMetry model.
+        return_results : bool, default False
+            If True, return the resulting DataFrame (genes × components).
+        multiscale : bool, default True
+            If True, use `tg.spectral_scaffold(multiscale=True)` (msDM).
+        use_scaffold_components : bool, default True
+            Truncate scaffold to `tg._scaffold_components_ms` / `_dm` if available.
+        operator : {'X','Z','msZ'}, default 'X'
+            Which diffusion operator to use for the stationary measure π.
+        standardize : str, default 'corr'
+            Scoring mode. Options:
+
+            * ``'raw'``             – raw weighted inner products X^T diag(π) Ψ.
+            * ``'corr'``            – π-weighted correlation in [-1, 1] (signed).
+            * ``'abs_corr'``        – |corr| in [0, 1] (magnitude only).
+            * ``'r2'``              – corr² in [0, 1] (energy-like).
+            * ``'corr_pow0.5'``     – sign(corr)·|corr|^0.5 in [-1, 1] (boosts mid-range).
+            * ``'corr_atanh'``      – arctanh(corr) normalized to [-1, 1] (expands near ±1).
+            * ``'corr_rank'``       – signed percentile rank in [-1, 1] (magnitude-free).
+            * ``'abs_corr_tailq95'``– |corr| / column q95 clipped to [0, 1] (outlier-robust).
+            * ``'topk'``            – signed corr with top-k genes kept, rest zeroed.
+        weight : bool, default True
+            Use stationary π; if False, use uniform weights.
+        center_weighted : bool, default True
+            π-center X and Ψ before correlation computation (prevents constant-mode
+            leakage).
+        check_basis : bool, default True
+            Run Gram-matrix diagnostics on Ψ under <·,·>_π.
+        basis_atol, basis_rtol : float
+            Tolerances for orthonormality warning.
+        tail_q : float, default 0.95
+            Quantile used by ``'abs_corr_tailq95'``.
+        topk : int, default 50
+            Number of top genes per component kept in ``'topk'`` mode.
+        eps : float, default 1e-12
+            Numerical stability floor.
+        dtype : numpy dtype, default np.float32
+            Stored output dtype.
+        chunk_size : int, default 2048
+            Genes processed per chunk to limit peak memory.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            If `return_results=True`, genes × components DataFrame; else None.
+
+        Side Effects
+        ------------
+        * ``adata.varm[store_key]`` – (n_genes, n_components) array.
+        * ``adata.uns[store_key + '_meta']`` – metadata dict.
+
+        Store key pattern: ``feature_modes_{prefix}_{op}_{score_name}``
+        where ``prefix`` is ``ms`` (multiscale) or ``dm`` (fixed-time DM),
+        and ``op`` is ``operator.lower()``.
+        """
+        import warnings as _warn
+
+        valid_modes = {
+            "raw", "corr", "abs_corr", "r2",
+            "corr_pow0.5", "corr_atanh", "corr_rank",
+            "abs_corr_tailq95", "topk",
+        }
+        standardize = str(standardize).lower()
+        if standardize not in valid_modes:
+            raise ValueError(
+                f"`standardize` must be one of {sorted(valid_modes)}. Got {standardize!r}."
+            )
+
+        # ---- 1) Expression matrix X ----------------------------------------
+        X = adata.X
+        if sp.issparse(X):
+            X = X.toarray()
+        X = np.asarray(X, dtype=np.float64, order="C")   # (n_cells, n_genes)
+
+        # ---- 2) Scaffold Ψ --------------------------------------------------
+        Psi = tg.spectral_scaffold(multiscale=bool(multiscale))
+        Psi = np.asarray(Psi, dtype=np.float64, order="C")  # (n_cells, k)
+
+        n = Psi.shape[0]
+        if X.shape[0] != n:
+            raise ValueError(
+                f"adata.X has {X.shape[0]} cells but scaffold has {n}."
+            )
+
+        # truncate scaffold to automated sizing if available
+        k = None
+        if use_scaffold_components:
+            attr = "_scaffold_components_ms" if multiscale else "_scaffold_components_dm"
+            k = getattr(tg, attr, None)
+            if k is not None:
+                k = int(k)
+        if k is None:
+            k = int(Psi.shape[1])
+        k = int(min(k, Psi.shape[1]))
+        Psi = Psi[:, :k]
+
+        # ---- 3) Operator kernel & π -----------------------------------------
+        # Both DM and msDM are eigenbases of the base kernel (P_of_X).
+        # operator='X'   → use base kernel (natural for both multiscale and DM scaffold)
+        # operator='Z'   → use refined DM kernel (measure adapted to DM geometry)
+        # operator='msZ' → use refined msDM kernel (measure adapted to msDM geometry)
+        op = str(operator).lower().strip()
+        if op == "x":
+            _kernel_obj = tg.base_kernel
+        elif op == "z":
+            _kernel_obj = tg._kernel_Z
+        elif op == "msz":
+            _kernel_obj = tg._kernel_msZ
+        else:
+            raise ValueError("`operator` must be one of {'X','Z','msZ'}.")
+
+        # Mild consistency hints (not errors — all combinations are valid).
+        if op == "z" and multiscale:
+            _warn.warn(
+                "operator='Z' with multiscale=True: the DM-kernel measure will be used "
+                "for a multiscale scaffold. Consider operator='msZ' for a measure "
+                "consistent with the msDM geometry, or operator='X' (default) for the "
+                "base-kernel measure.",
+                UserWarning, stacklevel=2,
+            )
+        if op == "msz" and not multiscale:
+            _warn.warn(
+                "operator='msZ' with multiscale=False: the msDM-kernel measure will be "
+                "used for a fixed-time DM scaffold. Consider operator='Z' for a "
+                "measure consistent with the DM geometry, or operator='X' (default).",
+                UserWarning, stacklevel=2,
+            )
+
+        if weight:
+            # π ∝ kernel degree d_i = Σ_j K_ij — the stationary distribution of the
+            # underlying asymmetric row-stochastic diffusion operator D^{-1}K.
+            # This avoids power-iteration on the internally symmetrized .P matrix,
+            # which is not row-stochastic and would yield an ill-defined stationary.
+            try:
+                _K = _kernel_obj.K
+                _d = np.asarray(_K.sum(axis=1) if sp.issparse(_K) else np.asarray(_K).sum(axis=1)).ravel()
+                _d = np.clip(_d.astype(np.float64), 0.0, None)
+                _s = float(_d.sum())
+                pi = _d / _s if (_s > 0 and np.all(np.isfinite(_d))) else np.full(n, 1.0 / n, dtype=np.float64)
+            except Exception:
+                pi = np.full(n, 1.0 / n, dtype=np.float64)
+        else:
+            pi = np.full(n, 1.0 / n, dtype=np.float64)
+
+        # sanity
+        if not np.all(np.isfinite(Psi)):
+            raise ValueError("Scaffold Ψ contains non-finite values.")
+        pi = np.clip(pi, 0.0, None)
+        _s = float(pi.sum())
+        if not np.isfinite(_s) or _s <= 0:
+            pi = np.full(n, 1.0 / n, dtype=np.float64)
+        else:
+            pi /= _s
+
+        # ---- 4) Basis diagnostics (Gram matrix under <·,·>_π) ---------------
+        diag_report: Dict[str, Any] = {}
+        if check_basis:
+            Gram = Psi.T @ (pi[:, None] * Psi)
+            _diag = np.diag(Gram)
+            _off  = Gram - np.diag(_diag)
+            diag_report["gram_diag_mean"]    = float(np.mean(_diag))
+            diag_report["gram_diag_min"]     = float(np.min(_diag))
+            diag_report["gram_diag_max"]     = float(np.max(_diag))
+            diag_report["gram_offdiag_maxabs"] = float(np.max(np.abs(_off))) if _off.size else 0.0
+            if not np.allclose(Gram, np.eye(k), atol=basis_atol, rtol=basis_rtol):
+                # Expected when π is degree-weighted and Ψ was computed for the
+                # symmetrized operator (L2-orthonormal, not π-orthonormal).
+                # Correlation-based scoring normalises per-gene and per-component,
+                # so the result is well-defined regardless.
+                diag_report["orthonormal_under_pi"] = False
+
+        p = X.shape[1]  # n_genes
+        cs = int(chunk_size)
+
+        # ---- 5a) Raw mode (no correlation) -----------------------------------
+        if standardize == "raw":
+            WPsi = pi[:, None] * Psi   # (n, k)
+            S = np.empty((p, k), dtype=np.float64)
+            for j0 in range(0, p, cs):
+                j1 = min(p, j0 + cs)
+                S[j0:j1, :] = X[:, j0:j1].T @ WPsi
+            score_name = "raw"
+
+        # ---- 5b) Correlation-based modes (build corr first) ------------------
+        else:
+            mu_psi = (pi @ Psi) if center_weighted else np.zeros(k, dtype=np.float64)
+            Psi_c  = Psi - mu_psi[None, :] if center_weighted else Psi
+            denom_psi = np.sqrt(np.maximum((Psi_c * Psi_c).T @ pi, 0.0) + eps)
+            denom_psi = np.where(denom_psi > 0, denom_psi, 1.0)
+            WPsi_c = pi[:, None] * Psi_c   # (n, k)
+
+            corr = np.empty((p, k), dtype=np.float64)
+            for j0 in range(0, p, cs):
+                j1 = min(p, j0 + cs)
+                Xb = X[:, j0:j1].copy()    # (n, chunk)
+                if center_weighted:
+                    Xb -= (pi @ Xb)[None, :]
+                numer   = Xb.T @ WPsi_c    # (chunk, k)
+                denom_x = np.sqrt(np.maximum((Xb * Xb).T @ pi, 0.0) + eps)
+                denom_x = np.where(denom_x > 0, denom_x, 1.0)
+                corr[j0:j1, :] = np.clip(
+                    numer / (denom_x[:, None] * denom_psi[None, :] + eps),
+                    -1.0, 1.0,
+                )
+
+            # apply the requested transformation
+            if standardize == "corr":
+                S = corr
+                score_name = "corr"
+
+            elif standardize == "abs_corr":
+                S = np.abs(corr)
+                score_name = "abs_corr"
+
+            elif standardize == "r2":
+                S = corr ** 2
+                score_name = "r2"
+
+            elif standardize == "corr_pow0.5":
+                S = np.sign(corr) * np.sqrt(np.abs(corr))
+                score_name = "corr_pow0.5"
+
+            elif standardize == "corr_atanh":
+                # arctanh is defined on (-1, 1); clip slightly inside
+                _c = np.clip(corr, -1.0 + 1e-7, 1.0 - 1e-7)
+                raw_atanh = np.arctanh(_c)
+                # normalize each column to [-1, 1] by its max absolute value
+                col_max = np.max(np.abs(raw_atanh), axis=0, keepdims=True)
+                col_max = np.where(col_max > 0, col_max, 1.0)
+                S = raw_atanh / col_max
+                score_name = "corr_atanh"
+
+            elif standardize == "corr_rank":
+                # per-column signed percentile rank mapped to [-1, 1]
+                S = np.empty_like(corr)
+                for j in range(k):
+                    col  = corr[:, j]
+                    rank = np.argsort(np.argsort(np.abs(col)))  # rank by magnitude
+                    pct  = rank / max(p - 1, 1)                 # [0, 1]
+                    S[:, j] = np.sign(col) * pct                # [-1, 1]
+                score_name = "corr_rank"
+
+            elif standardize == "abs_corr_tailq95":
+                q_int = int(round(tail_q * 100))
+                abs_c = np.abs(corr)
+                col_q = np.quantile(abs_c, tail_q, axis=0)      # (k,)
+                col_q = np.where(col_q > eps, col_q, 1.0)
+                S = np.clip(abs_c / col_q[None, :], 0.0, 1.0)
+                score_name = f"abs_corr_tailq{q_int}"
+
+            elif standardize == "topk":
+                S = np.zeros_like(corr)
+                _topk = int(max(1, min(topk, p)))
+                for j in range(k):
+                    col     = corr[:, j]
+                    top_idx = np.argpartition(np.abs(col), -_topk)[-_topk:]
+                    S[top_idx, j] = col[top_idx]
+                score_name = f"topk{_topk}"
+
+        # ---- 6) Store -------------------------------------------------------
+        S = S.astype(dtype, copy=False)
+        # prefix "ms"/"dm" matches adata.obsm key convention (X_ms_spectral_scaffold)
+        prefix     = "ms" if multiscale else "dm"
+        columns    = [f"SC_{i}" for i in range(k)]
+        store_key  = f"feature_modes_{prefix}_{op}_{score_name}"
+
+        adata.varm[store_key] = S
+        adata.uns[f"{store_key}_meta"] = {
+            "columns":          columns,
+            "index":            "var_names",
+            "multiscale":       bool(multiscale),
+            "operator":         str(operator),
+            "weight":           bool(weight),
+            "center_weighted":  bool(center_weighted),
+            "standardize":      str(standardize),
+            "score":            str(score_name),
+            "dtype":            str(np.dtype(dtype)),
+            "tail_q":           float(tail_q),
+            "topk":             int(topk),
+            "basis_diagnostics": diag_report,
+        }
+
+        if return_results:
+            return pd.DataFrame(S, index=adata.var_names, columns=columns)
+        return None
+
+
+    def plot_feature_modes(
+        adata: "AnnData",
+        components_to_plot=range(0, 11),
+        n_top_features: int = 3,
+        cmap: str = "bwr",
+        show_colorbar: bool = True,
+        fontsize: int = 14,
+        ax=None,
+        show: bool = True,
+        store_key: Optional[str] = None,
+    ):
+        """
+        Visualize a gene × scaffold-components association heatmap.
+
+        Selects the top genes per component by score magnitude and displays them
+        as a color-coded matrix.  The color scale is chosen automatically based
+        on the stored score type (signed or unsigned).
+
+        Parameters
+        ----------
+        adata : AnnData
+            Must contain at least one ``feature_modes_*`` entry in ``.varm``
+            (produced by :func:`calculate_feature_modes`).
+        components_to_plot : iterable of int or str, default range(0, 11)
+            Which components to include (integer indices or column-name strings).
+            Pass ``None`` to plot the first 8.
+        n_top_features : int, default 3
+            Top genes to show per component (selected by |score| magnitude).
+        cmap : str, default 'bwr'
+            Colormap; 'bwr' works well for signed scores; 'viridis'/'plasma'
+            for unsigned.
+        show_colorbar : bool, default True
+            Whether to attach a colorbar.
+        fontsize : int, default 14
+            Tick-label and colorbar font size.
+        ax : matplotlib.Axes or None, default None
+            Axes to draw into; a new figure is created if None.
+        show : bool, default True
+            If True, call ``plt.show()`` and return None; else return the Axes.
+        store_key : str or None, default None
+            Explicit key in ``adata.varm``.  If None, the most recently added
+            ``feature_modes_*`` key is used.
+
+        Returns
+        -------
+        matplotlib.Axes or None
+        """
+        # ---- key selection --------------------------------------------------
+        if store_key is None:
+            keys = [k for k in adata.varm.keys() if str(k).startswith("feature_modes_")]
+            if not keys:
+                raise KeyError(
+                    "No feature-modes matrix found in adata.varm. "
+                    "Run tp.sc.calculate_feature_modes(adata, tg) first."
+                )
+            store_key = keys[-1]
+        elif store_key not in adata.varm:
+            raise KeyError(f"store_key {store_key!r} not found in adata.varm.")
+
+        A_mat = np.asarray(adata.varm[store_key])
+        meta  = adata.uns.get(f"{store_key}_meta", {})
+        cols  = list(meta.get("columns", [f"mode_{i+1}" for i in range(A_mat.shape[1])]))
+        idx   = list(adata.var_names)
+
+        # ---- component selection -------------------------------------------
+        if components_to_plot is None:
+            comps = cols[:8]
+        else:
+            comps_in = list(components_to_plot)
+            if not comps_in:
+                comps = cols[:6]
+            elif isinstance(comps_in[0], (int, np.integer)):
+                comps = [cols[int(i)] for i in comps_in if 0 <= int(i) < len(cols)]
+            else:
+                comps = [str(c) for c in comps_in]
+        col_to_j = {c: j for j, c in enumerate(cols)}
+        comps    = [c for c in comps if c in col_to_j]
+        js       = [col_to_j[c] for c in comps]
+        if not js:
+            raise ValueError("No valid components selected from components_to_plot.")
+
+        # ---- top genes per component (by |score|) --------------------------
+        n_top  = int(n_top_features)
+        genes  = []
+        seen   = set()
+        for j in js:
+            v       = A_mat[:, j]
+            top_idx = np.argsort(np.abs(v))[::-1][:n_top]
+            for ii in top_idx:
+                g = idx[int(ii)]
+                if g not in seen:
+                    seen.add(g)
+                    genes.append(g)
+
+        row_to_i = {g: i for i, g in enumerate(idx)}
+        rows     = [row_to_i[g] for g in genes]
+        M        = A_mat[np.ix_(rows, js)]   # (n_genes_selected, n_comps)
+
+        # ---- color scale ---------------------------------------------------
+        score = meta.get("score", "")
+        _SIGNED_SCORES = {"corr", "corr_pow0.5", "corr_atanh", "corr_rank", "raw"}
+        # topk keeps signs; abs_corr_tailq*, abs_corr, r2 are unsigned
+        if score in _SIGNED_SCORES or score.startswith("topk"):
+            vmin, vmax = -1.0, 1.0
+        elif score == "raw":
+            vmin, vmax = None, None   # use data range
+        else:
+            vmin, vmax = 0.0, 1.0
+
+        # ---- plot ----------------------------------------------------------
+        if ax is None:
+            _, ax = plt.subplots(
+                figsize=(0.6 * len(comps) + 6, 0.18 * len(genes) + 4)
+            )
+
+        im = ax.imshow(
+            M, aspect="auto", interpolation="nearest",
+            vmin=vmin, vmax=vmax, cmap=cmap,
+        )
+        if show_colorbar:
+            cbar = plt.colorbar(im, ax=ax)
+            cbar.ax.tick_params(labelsize=fontsize)
+            cbar.set_label(score or "score", fontsize=fontsize)
+
+        ax.set_xticks(np.arange(len(comps)))
+        ax.set_xticklabels(comps, rotation=45, ha="right", fontsize=fontsize)
+        ax.set_yticks(np.arange(len(genes)))
+        ax.set_yticklabels(genes, fontsize=fontsize)
+        ax.grid(False)
+        ax.figure.tight_layout()
+
+        if show:
+            plt.show()
+            return None
+        return ax

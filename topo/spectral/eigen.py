@@ -64,9 +64,10 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
 
     Returns
     -------
-    eigen_values : array, shape (n_vertices,)
-        Eigenvalues of the graph matrix.
-    eigen_vectors : array, shape (n_vertices, n_vertices)
+    eigen_values : array, shape (n_components + 1,)
+        Eigenvalues of the graph matrix (one extra is always requested
+        internally to allow the caller to drop the trivial component).
+    eigen_vectors : array, shape (n_vertices, n_components + 1)
         Eigenvectors of the graph matrix.
     """
     n_components = n_components+1
@@ -88,7 +89,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
         evals, evecs = eigh(G)
     if sparse.issparse(G):
         if not isinstance(G, sparse.csr_matrix):
-            G.tocsr()
+            G = G.tocsr()
     G = G.astype(float)
     if eigensolver == 'arpack':
         if largest:
@@ -347,7 +348,13 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def rescale(self, use_eigs=50):
         """
-        If using multiscale diffusion maps, this rescales the mapping to a new number of eigenvectors.
+        Re-compute the msDM embedding using a different number of eigenvectors.
+
+        Parameters
+        ----------
+        use_eigs : int, default 50
+            Number of eigenvectors to include in the embedding
+            (must be ≤ the number retained during ``fit``).
         """
         if self.method != 'msDM':
             raise ValueError(
@@ -355,10 +362,9 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         if use_eigs > self.eigenvectors.shape[1]:
             raise ValueError(
                 "Cannot rescale to more eigenvectors than are available.")
-        eigs_idx = list(range(1, int(use_eigs)))
-        eig_vals = np.ravel(self.eigenvalues[eigs_idx])
-        self.embedding = self.eigenvectors[:,
-                                       eigs_idx] * (eig_vals / (1 - eig_vals))
+        use_eigs = int(use_eigs)
+        eig_vals = np.ravel(self.eigenvalues[:use_eigs])
+        self.embedding = self.eigenvectors[:, :use_eigs] * (eig_vals / (1 - eig_vals))
         return self
 
     def results(self, return_evals=None):
@@ -374,7 +380,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
     
         """
         if self.eigenvectors is None:
-            return ValueError('The estimator has not been fitted yet.')
+            raise ValueError('The estimator has not been fitted yet.')
         if self.method == 'DM' or self.method == 'msDM':
             if return_evals:
                 return self.embedding, self.eigenvalues
@@ -390,12 +396,14 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
     def transform(self, X=None):
         """
         Return the current representation. For DM/msDM, compute the embedding
-        from stored eigenpairs on-the-fly:
-        - DM:  evecs * (evals ** t)
-        - msDM: evecs[:, 1:use] * (λ / (1 - λ))   (same as before)
+        from stored eigenpairs:
+
+        * ``DM``  : ``evecs * (evals ** t)``
+        * ``msDM``: ``evecs[:, :use] * (λ / (1 - λ))`` where *use* counts
+          the positive-eigenvalue components.
         """
         if self.eigenvectors is None:
-            return ValueError('The estimator has not been fitted yet.')
+            raise ValueError('The estimator has not been fitted yet.')
 
         # Return eigenvectors/evals for non-diffusion methods.
         if self.method not in ['DM', 'msDM']:
@@ -414,14 +422,13 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             self.embedding = emb
 
         elif self.method == 'msDM':
-            # original msDM scaling
-            if evecs.shape[1] <= 5:
-                emb = evecs * (evals / (1 - evals))
-            else:
-                use_eigs = int(np.sum(evals > 0, axis=0))
-                eigs_idx = list(range(1, int(use_eigs)))
-                eig_vals = np.ravel(evals[eigs_idx])
-                emb = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
+            # msDM scaling: weight each component by λ / (1 - λ), using only
+            # positive-eigenvalue components (all of them after drop_first).
+            use_eigs = int(np.sum(evals > 0, axis=0))
+            if use_eigs == 0:
+                use_eigs = len(evals)  # fallback: keep all
+            eig_vals = np.ravel(evals[:use_eigs])
+            emb = evecs[:, :use_eigs] * (eig_vals / (1 - eig_vals))
             self.embedding = emb
 
         if self.return_evals:
@@ -433,17 +440,23 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, X=None):
         """
-        Here for scikit-learn compability. Returns the eigenvectors learned during fitting.
+        Fit the model and return the embedding.
+
+        If the model has already been fitted, ``transform`` is called on the
+        existing eigenpairs; otherwise ``fit(X)`` is called first.
+
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_samples).
-            Kernel matrix or Kernel() object. Ignored, here for consistency with scikit-learn API.
+        X : array-like of shape (n_samples, n_samples), or Kernel object
+            Matrix to decompose.  Required when the model has not yet been
+            fitted.
+
         Returns
         -------
-        evecs : array-like, shape (n_samples, n_components)
-            Eigenvectors of the matrix.
-        evals : array-like, shape (n_components, )
-            Eigenvalues of the matrix. Returned only if return_evals is True.
+        embedding : array-like of shape (n_samples, n_components)
+            The embedding (or eigenvectors for non-diffusion methods).
+        eigenvalues : array-like of shape (n_components,)
+            Returned only when ``return_evals=True``.
         """
         if self.eigenvectors is None:
             self.fit(X)

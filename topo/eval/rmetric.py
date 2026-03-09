@@ -76,14 +76,6 @@ def riemann_metric(Y, laplacian, n_dim=None):
     return H, G, Vh, S, Sinv
 
 
-def compute_G_from_H(H):
-    U, S, Vh = np.linalg.svd(H, full_matrices=False)
-    eps = 1e-8
-    Sinv = 1.0 / (S + eps)
-    G = Vh.transpose(0, 2, 1) @ (Sinv[..., None] * U.transpose(0, 2, 1))
-    return G, H, Vh, S, Sinv
-
-
 class RiemannMetric:
     def __init__(self, Y, L):
         self.Y = _center(Y)
@@ -134,33 +126,6 @@ def eigsorted(cov):
     vals, vecs = np.linalg.eigh(cov)
     idx = np.argsort(vals)[::-1]
     return vals[idx], vecs[:, idx]
-
-
-def _ellipse_from_G(Gi, scale=1.0):
-    vals, vecs = eigsorted(Gi)
-    vals = np.clip(vals, 1e-12, None)
-    a = np.sqrt(vals[0]) * scale
-    b = np.sqrt(vals[-1]) * scale
-    v = vecs[:, 0]
-    theta = np.degrees(np.arctan2(v[1], v[0]))
-    return a, b, theta
-
-
-def _scaling_values(G, mode="logdet", eps=1e-8):
-    if mode == "logdet":
-        U, s, Vh = np.linalg.svd(G, full_matrices=False)
-        # log det(G) = sum log s_i
-        ld = np.sum(np.log(np.clip(s, eps, None)), axis=1)
-        v = ld
-    elif mode == "anisotropy":
-        vals = np.linalg.eigvalsh(G)
-        vals = np.clip(vals, eps, None)
-        v = np.log(vals[:, -1] / vals[:, 0])
-    else:
-        v = np.ones(G.shape[0], dtype=float)
-    v = v - np.nanmin(v)
-    denom = np.nanmax(v) - np.nanmin(v) + eps
-    return (v / denom) + eps
 
 
 def _project_spd(Gi, eps=1e-8, norm="trace"):
@@ -719,7 +684,7 @@ def calculate_deformation(
     diffusion_t=0,
     diffusion_op=None,
     re_center_after_diffusion=True,
-    clip_percentile=2.0,
+    clip_percentile=1.0,
     normalize="symmetric",
     return_limits=True,
 ):

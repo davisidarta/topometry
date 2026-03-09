@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib.patches import Ellipse
 from sklearn.neighbors import KDTree
 from sklearn.utils import check_random_state
+from topo.eval.rmetric import eigsorted
 try:
     from matplotlib import cm
     import matplotlib.pyplot as plt
@@ -364,12 +365,6 @@ def plot_point_cov(points, nstd=2, ax=None, **kwargs):
     pos = points.mean(axis=0)
     cov = np.cov(points, rowvar=False)
     return plot_cov_ellipse(cov, pos, nstd, ax, **kwargs)
-
-
-def eigsorted(cov):
-    vals, vecs = np.linalg.eigh(cov)
-    order = vals.argsort()[::-1]
-    return vals[order], vecs[:, order]
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):

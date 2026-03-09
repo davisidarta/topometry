@@ -133,17 +133,13 @@ def eval_models_layouts(TopOGraph, X,
             base_graph = TopOGraph.base_knn_graph[landmark_indices, :][:, landmark_indices]
         elif landmark_method == 'kmeans':
             if isinstance(landmarks, int):
-                landmarks = get_landmark_indices(
-                    TopOGraph.base_knn_graph, n_landmarks=landmarks, method=landmark_method, random_state=TopOGraph.random_state)
+                landmark_indices = get_landmark_indices(
+                    X, n_landmarks=landmarks, method='kmeans',
+                    random_state=TopOGraph.random_state)
             else:
                 raise ValueError(
                     '\'landmarks\' must be either an integer or a numpy array.')
-            base_graph = kNN(landmarks, n_neighbors=n_neighbors,
-                            metric=TopOGraph.base_metric,
-                            n_jobs=n_jobs,
-                            backend=TopOGraph.backend,
-                            return_instance=False,
-                            verbose=False, **kwargs)
+            base_graph = TopOGraph.base_knn_graph[landmark_indices, :][:, landmark_indices]
             gc.collect()
         else:
             raise ValueError(

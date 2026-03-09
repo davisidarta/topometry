@@ -3,13 +3,11 @@ scikit-learn
 scipy
 matplotlib
 pandas
-torch>=1.2
 setuptools
-mkdocstrings >= 0.14.0
 sphinx
-livereload
 myst-parser
 sphinx-rtd-theme
 sphinx-autoapi
 mock
+livereload
 topometry

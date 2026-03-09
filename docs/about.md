@@ -1,4 +1,3 @@
-
 [![Latest PyPI version](https://img.shields.io/pypi/v/topometry.svg)](https://pypi.org/project/topometry/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
@@ -9,24 +8,22 @@
 
 **TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
-- **AnnData/Scanpy wrappers** for single-cell workflows 
-- **scikit-learn–style transformers** with a high-level orchestrator 
+- **AnnData/Scanpy wrappers** for single-cell workflows
+- **scikit-learn–style transformers** with a high-level orchestrator
 - **Fixed-time & multiscale spectral scaffolds** (no `.X` mutation; namespaced outputs)
 - **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
 - Designed for **large, diverse datasets** (e.g., single-cell omics)
 
 For background, see our preprint: https://doi.org/10.1101/2022.03.14.484134
 
-
 ## Geometry-first rationale (short)
 
 We approximate the **Laplace–Beltrami operator (LBO)** by learning well-weighted similarity graphs and their Laplacian/diffusion operators. The **eigenfunctions** of these operators form an orthonormal basis—the **spectral scaffold**—that captures the dataset’s intrinsic geometry across scales. This view connects to **Diffusion Maps**, **Laplacian Eigenmaps**, and related kernel eigenmaps, and enables downstream tasks such as clustering and graph-layout optimization with geometry preserved.
 
-
-
 ## When to use TopoMetry
 
 Use TopoMetry when you want:
+
 - Geometry-faithful representations beyond variance maximization (e.g., PCA)
 - Robust low-dimensional views and clustering from operator-grounded features
 - Quantitative **operator-native** metrics to compare methods and parameter choices
@@ -38,7 +35,6 @@ Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone lay
 
 - **Very small sample sizes** where the manifold hypothesis is weak
 - Workflows needing **streaming/online** updates or **inverse transforms** (embedding new points without recomputing operators is not currently supported). If that’s critical, consider UMAP or parametric/autoencoder approaches—and you can still use TopoMetry to **audit geometry** or **estimate intrinsic dimensionality** to guide model design.
-
 
 ## Tutorials
 
@@ -52,8 +48,6 @@ If you haven’t yet, first see the [installation guide](installation.md) and th
 - **RNA velocity**: using TopoMetry with [scVelo](https://scvelo.readthedocs.io/).
 - **Non-Euclidean layouts**: embeddings on curved targets (UMAP-like use cases).
 
-All tutorials are also available as Jupyter notebooks in this repository:
-https://github.com/davisidarta/topometry-notebooks
 
 
 ## Minimal example (current API)
@@ -76,9 +70,10 @@ sc.pl.embedding(adata, basis='TopoPaCMAP', color='topo_clusters')
 adata.write_h5ad("pbmc3k_topometry.h5ad")
 ```
 
-
 #### Citation
---------------
+
+---
+
 ```
 @article {Oliveira2022.03.14.484134,
 	author = {Oliveira, David S and Domingos, Ana I. and Velloso, Licio A},

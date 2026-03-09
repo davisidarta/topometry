@@ -256,8 +256,8 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
     n_eigs : int (optional, default 10).
         The number of eigenvectors to compute.
 
-    laplacian : str (optional, default 'random_walk').
-        The type of laplacian to use. Can be 'unnormalized', 'symmetric', or 'random_walk'.
+    laplacian_type : str (optional, default 'random_walk').
+        The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
 
     drop_first : bool (optional, default True).
         Whether to drop the first eigenvector.
@@ -387,112 +387,6 @@ def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D
             return P
     else:
         return P
-
-
-def DM(W, n_eigs=10, alpha=0, return_evals=False, symmetric=False, eigen_tol=10e-4, t=None):
-    """
-    Performs [Diffusion Maps](https://doi.org/10.1016/j.acha.2006.04.006), given a adjacency or affinity graph W.
-    The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is),
-    and with zero diagonal (all diagonal elements are 0). The eigenvectors associated with the largest eigenvalues
-    form a new orthonormal basis which represents the graph in the feature space and are useful for denoising and clustering.
-
-    Parameters
-    ----------
-
-    W : scipy.sparse.csr_matrix or np.ndarray
-        The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
-
-    n_eigs : int (optional, default 10).
-        The number of eigenvectors to return.
-
-    alpha : float (optional, default 0).
-        Anisotropy to be applied to the diffusion map. Refered to as alpha in the diffusion maps literature.
-
-    return_evals : bool (optional, default False).
-        Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
-
-    symmetric : bool (optional, default False).
-        Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator, but
-        that can also be obtained by a simplistic mean with its the transpose with near identical results.
-
-    eigen_tol : float (optional, default 0).
-        The tolerance for the eigendecomposition in scipy.sparse.linalg.eigsh().
-
-    t : int (optional, default 1).
-        The number of steps to take in the diffusion map.
-
-    Returns
-    ----------
-        * If return_evals is True :
-            A tuple of scaled eigenvectors (the diffusion maps) and eigenvalues.
-        * If return_evals is False :
-            An array of scaled eigenvectors (the diffusion maps).
-
-    """
-    if t is not None:
-        if not isinstance(t, int):
-            raise ValueError('t must be `None` or an integer.')
-    if n_eigs > np.shape(W)[0]:
-        raise ValueError(
-            'n_eigs must be less than or equal to the number of nodes.')
-    # Compute diffusion operator
-    if symmetric:
-        P, D_left = diffusion_operator(
-            W, alpha, symmetric, return_D_inv_sqrt=True)
-    else:
-        P = diffusion_operator(W, alpha, symmetric, return_D_inv_sqrt=False)
-    # Compute eigenvalues and eigenvectors
-    evals, evecs = sparse.linalg.eigsh(
-        P, k=n_eigs, which='LM', tol=eigen_tol, maxiter=P.shape[0] * 5)
-    evecs = np.real(evecs)
-    evals = np.real(evals)
-    if symmetric:
-        evecs = D_left.dot(evecs)
-    idx = evals.argsort()[::-1]
-    evals = evals[idx]
-    evecs = evecs[:, idx]
-    # Normalize
-    for i in range(evecs.shape[1]):
-        evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
-    if t is not None:
-        if t > 1:
-            evals = np.power(evals, t)
-        diffmap = evecs * evals
-    else:
-        use_eigs = int(np.sum(evals > 0, axis=0))
-        eigs_idx = list(range(1, int(use_eigs)))
-        eig_vals = np.ravel(evals[eigs_idx])
-        diffmap = evecs[:, eigs_idx] * (eig_vals / (1 - eig_vals))
-    if return_evals:
-        return diffmap, evals
-    else:
-        return diffmap
-
-
-def _set_diag(laplacian, value, norm_laplacian):
-    n_nodes = laplacian.shape[0]
-    # We need all entries in the diagonal to values
-    if not sparse.isspmatrix(laplacian):
-        if norm_laplacian:
-            laplacian.flat[:: n_nodes + 1] = value
-    else:
-        laplacian = laplacian.tocoo()
-        if norm_laplacian:
-            diag_idx = laplacian.row == laplacian.col
-            laplacian.data[diag_idx] = value
-        # If the matrix has a small number of diagonals (as in the
-        # case of structured matrices coming from images), the
-        # dia format might be best suited for matvec products:
-        n_diags = np.unique(laplacian.row - laplacian.col).size
-        if n_diags <= 7:
-            # 3 or less outer diagonals on each side
-            laplacian = laplacian.todia()
-        else:
-            # csr has the fastest matvec and is thus best suited to
-            # arpack
-            laplacian = laplacian.tocsr()
-    return laplacian
-
 
 
 

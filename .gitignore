@@ -1,11 +1,56 @@
+# --- Python build artifacts ---
 site/
 env/
 build/
 dist/
-idea/
 .eggs/
 *.egg-info/
 *.eggs
 *.pyc
-/__pycache__/
+*.pyo
+__pycache__/
 !**/site-packages/
+
+# --- Virtual environments ---
+.venv/
+venv/
+idea/
+
+# --- Jupyter ---
+*.ipynb
+.ipynb_checkpoints/
+
+# --- Large data / model files ---
+*.h5ad
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.loom
+*.lz4
+*.tar.gz
+*.tar.bz2
+*.zarr
+
+# --- Docs output and large assets ---
+docs/_build/
+docs/autoapi/
+*.gif
+docs/my_topometry_report.pdf
+docs/topometry_revised.pdf
+docs/topometry_revised.txt
+docs/GSE126480_Raw_counts.txt
+docs/DentateGyrus.loom
+docs/filtered_matrices_mex/
+docs/*.pdf
+
+# --- LLM / AI tool configuration ---
+.claude/
+
+# --- IDE and OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

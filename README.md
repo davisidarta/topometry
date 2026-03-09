@@ -1,67 +1,96 @@
-
 [![Latest PyPI version](https://img.shields.io/pypi/v/topometry.svg)](https://pypi.org/project/topometry/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
 [![Downloads](https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/topometry)
-[![CodeFactor](https://www.codefactor.io/repository/github/davisidarta/topometry/badge)](https://www.codefactor.io/repository/github/davisidarta/topometry)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta)](https://twitter.com/davisidarta)
 
-# TopOMetry - Topologically Optimized geoMetry
+# About TopoMetry
 
+**TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
-TopOMetry is a high-level python library to explore data topology through manifold learning. It is compatible with scikit-learn, meaning most of its operators can be easily pipelined.
+- **AnnData/Scanpy wrappers** for single-cell workflows
+- **scikit-learn–style transformers** with a high-level orchestrator
+- **Fixed-time & multiscale spectral scaffolds** (no `.X` mutation; namespaced outputs)
+- **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
+- Designed for **large, diverse datasets** (e.g., single-cell omics)
 
-Its main idea is to approximate the [Laplace-Beltrami Operator (LBO)](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator). This is done by learning properly weighted similarity graphs and their Laplacian and Diffusion operators. By definition, the eigenfunctions of these operators describe all underlying data topology in an set of orthonormal eigenbases (classically named the spectral or diffusion components). New topological operators are then learned from such eigenbases and can be used for clustering and graph-layout optimization (visualization). 
+For background, see our preprint: https://doi.org/10.1101/2022.03.14.484134
 
-There are many different ways to computationally approximate the LBO. TopOMetry tests a wide array of possible algorithmic combinations, combines them with existing graph-layout algorithm and scores them aftwerwards. This way, users do not have to choose a fixed method _a priori_, and can instead decide what works best for each use case. It also includes various utilities for scoring the performance of similarity kernels and dimensional reductions of high-dimensional data. It includes methods for the estimation of intrinsic dimensionalities (global and local), and implements the [Riemann metric]() to qualitatively visualize distortions in 2-D embeddings.
+## Geometry-first rationale (short)
 
-For more information, see the [manuscript](https://doi.org/10.1101/2022.03.14.484134).
+We approximate the **Laplace–Beltrami operator (LBO)** by learning well-weighted similarity graphs and their Laplacian/diffusion operators. The **eigenfunctions** of these operators form an orthonormal basis—the **spectral scaffold**—that captures the dataset’s intrinsic geometry across scales. This view connects to **Diffusion Maps**, **Laplacian Eigenmaps**, and related kernel eigenmaps, and enables downstream tasks such as clustering and graph-layout optimization with geometry preserved.
 
+## When to use TopoMetry
 
-## Single-cell analysis
+Use TopoMetry when you want:
 
-TopOMetry was designed to handle large-scale data matrices containing extreme sample diversity, such as those generated from high-throughput [single-cell experiments](https://en.wikipedia.org/wiki/Single_cell_sequencing). It includes wrappers to deal with [AnnData](https://anndata.readthedocs.io/en/latest/index.html) objects using [scanpy](https://scanpy.readthedocs.io/en/stable/) and integrates well with tools in the [scverse](https://scverse.org/) python suite for single-cell analysis.
+- Geometry-faithful representations beyond variance maximization (e.g., PCA)
+- Robust low-dimensional views and clustering from operator-grounded features
+- Quantitative **operator-native** metrics to compare methods and parameter choices
+- Reproducible, **non-destructive** pipelines (no mutation of `adata.X`)
 
--------------------
+Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone layouts. Still, **let the data decide**—TopoMetry includes metrics and reports to support evidence-based choices.
 
-## Documentation
+### When not to use TopoMetry
 
-Instalation can be quickly done with pip:
+- **Very small sample sizes** where the manifold hypothesis is weak
+- Workflows needing **streaming/online** updates or **inverse transforms** (embedding new points without recomputing operators is not currently supported). If that’s critical, consider UMAP or parametric/autoencoder approaches—and you can still use TopoMetry to **audit geometry** or **estimate intrinsic dimensionality** to guide model design.
+
+## Installation
+
+Prior to installing TopoMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
+```
+sudo apt-get install cmake
+pip install scikit-build setuptools
+```
+
+Then you can install TopoMetry from PyPI:
 
 ```
 pip install topometry
 ```
 
-Further installation instructions such as optional dependencies, information about the implemented methods tutorials and a detailed API are available at the available at the [documentation](https://topometry.readthedocs.io/en/latest/). 
 
--------------------
+## Tutorials and documentation
 
-## Contributing
+Check TopoMetry's [documentation](https://topometry.readthedocs.io/en/latest/) for tutorials, guided analyses and other documentation.
 
-Contributions are very welcome! If you're interested in adding a new feature, just let me know in the Issues section.
 
--------------------
 
-## License
+## Minimal example (current API)
 
-[MIT License](https://github.com/davisidarta/topometry/blob/master/LICENSE)
+```python
+import scanpy as sc
+import topo as tp
 
--------------------
+adata = sc.datasets.pbmc3k_processed()
 
-## Citation
+# Fit TopoMetry end-to-end (non-destructive; outputs are namespaced)
+tg = tp.sc.fit_adata(adata, n_jobs=1, verbosity=0, random_state=7)
 
-If you use TopOMetry for your work, please cite the manuscript:
+# Plot some results
+sc.pl.embedding(adata, basis='spectral_scaffold', color='topo_clusters')
+sc.pl.embedding(adata, basis='TopoMAP', color='topo_clusters')
+sc.pl.embedding(adata, basis='TopoPaCMAP', color='topo_clusters')
 
-``` bibtex
-@article {Sidarta-Oliveira2022.03.14.484134,
-	author = {Sidarta-Oliveira, Davi and Velloso, Licio A},
-	title = {A comprehensive dimensional reduction framework to learn single-cell phenotypic topology uncovers T cell diversity},
+# Save cleanly (I/O-safe)
+adata.write_h5ad("pbmc3k_topometry.h5ad")
+```
+
+#### Citation
+
+---
+
+```
+@article {Oliveira2022.03.14.484134,
+	author = {Oliveira, David S and Domingos, Ana I. and Velloso, Licio A},
+	title = {TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
 	elocation-id = {2022.03.14.484134},
-	year = {2022},
+	year = {2025},
 	doi = {10.1101/2022.03.14.484134},
 	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134},
-	eprint = {https://www.biorxiv.org/content/early/2022/03/17/2022.03.14.484134.full.pdf},
+	URL = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134},
+	eprint = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134.full.pdf},
 	journal = {bioRxiv}
 }
 ```

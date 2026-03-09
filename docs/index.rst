@@ -54,30 +54,17 @@ meaning they can be easily pipelined.
     :maxdepth: 2
     :glob:
     :titlesonly:
-    :caption: Installation:
+    :caption: Getting started:
 
+    about
     installation
     
 .. toctree::
     :maxdepth: 2
-    :glob:
-    :titlesonly:
-    :caption: Getting started:
-
-    about
-    quickstart
-
-.. toctree::
-    :maxdepth: 2
     :caption: Tutorials:
 
-    a_mnist
-    b_newsgroups
-    c_classes
-    d_id_estimation
-    e_evaluations
-    f_scvelo
-    h_non_euclidean
+    T1_introduction
+    T2_step_by_step
 
 .. toctree::
     :maxdepth: 2

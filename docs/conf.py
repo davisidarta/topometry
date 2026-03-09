@@ -80,8 +80,8 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv',
-                    'docs/run_livereload.py', 'docs/conf.py', 'base/dists.py',
-                    'base/sparse.py', ]
+                    'run_livereload.py', 'base/dists.py', 'base/sparse.py',
+                    '**.ipynb_checkpoints', ]
 
 master_doc = 'index'
 # -- Options for HTML output -------------------------------------------------
@@ -105,6 +105,12 @@ source_suffix = {
 
 # -- General default extension configuration ------------------------------
 
+# MyST-Parser settings: allow raw HTML (nbconvert output), enable math
+myst_enable_extensions = [
+    "colon_fence",
+    "dollarmath",
+    "html_image",
+]
 
 autoapi_type = 'python'
 autoapi_generate_api_docs = True
