@@ -17,11 +17,6 @@ Welcome to TopoMetry documentation!
 
 .. raw:: html
 
-    <a href="https://www.codefactor.io/repository/github/davisidarta/topometry"><img src="https://www.codefactor.io/repository/github/davisidarta/topometry/badge" alt="CodeFactor" /></a>
-
-
-.. raw:: html
-
     <a href="https://twitter.com/davisidarta"><img src="https://img.shields.io/twitter/follow/davisidarta.svg?style=social&label=Follow @davisidarta" alt="Twitter"></a>
 
 
@@ -58,7 +53,8 @@ meaning they can be easily pipelined.
 
     about
     installation
-    
+    math_details
+
 .. toctree::
     :maxdepth: 2
     :caption: Tutorials:
