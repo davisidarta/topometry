@@ -288,6 +288,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         msg += " \n Active graph kernel  -  .graph_kernel"
         return msg
 
+    def _noANN_lib(self):
+        print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
+        self.backend = 'sklearn'
+
     def _parse_backend(self):
         try:
             import hnswlib  # noqa: F401
@@ -309,10 +313,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             self._have_faiss = True
         except ImportError:
             self._have_faiss = False
-
-        def _noANN_lib(self):
-            print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-            self.backend = 'sklearn'
 
         if self.backend == 'hnswlib':
             if not self._have_hnswlib:

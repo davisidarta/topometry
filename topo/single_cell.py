@@ -1047,13 +1047,14 @@ if _HAVE_SCANPY:
             else:
                 proj_keys = list(proj_key)
             for proj_key in proj_keys:
-                if proj_key not in adata.obsm:
-                    # check with 'X_' prefix if not found directly
-                    if 'X_' + proj_key in adata.obsm:
-                        continue
-                    else:
-                        raise KeyError(f"X_{proj_key} not found in adata.obsm")
-                Y = adata.obsm['X_' + proj_key]
+                # Normalise: accept keys with or without 'X_' prefix
+                if 'X_' + proj_key in adata.obsm:
+                    obsm_key = 'X_' + proj_key
+                elif proj_key in adata.obsm:
+                    obsm_key = proj_key
+                else:
+                    raise KeyError(f"X_{proj_key} not found in adata.obsm")
+                Y = adata.obsm[obsm_key]
                 # Compute deformation once (centered log det(G)), optionally smoothed
                 deform_vals, (dmin, dmax) = calculate_deformation(
                     Y, L,
@@ -1065,7 +1066,7 @@ if _HAVE_SCANPY:
                 # store metric
                 adata.obs[f'deformation_{proj_key}'] = deform_vals
                 # store limits for potential use in plotting
-                adata.uns[f'deformation_{proj_key}_limits'] = (dmin, dmax)
+                adata.uns[f'deformation_{proj_key}_limits'] = [float(dmin), float(dmax)]
 
 
     def plot_riemann_diagnostics(
@@ -1144,7 +1145,12 @@ if _HAVE_SCANPY:
             n_localized = int(len(adata) * n_plot)
         else:
             raise ValueError(f"Invalid value for n_plot: {n_plot}. Must be int, float in (0,1), or percentage string like '10%'.")
-        if 'X_' + proj_key not in adata.obsm:
+        # Normalise: accept both 'TopoMAP' and 'X_TopoMAP' as proj_key.
+        # obsm_key  → the actual key in adata.obsm  (with    'X_' prefix)
+        # basis_key → the key for sc.pl.embedding   (without 'X_' prefix)
+        obsm_key  = proj_key if proj_key.startswith('X_') else ('X_' + proj_key)
+        basis_key = proj_key[2:] if proj_key.startswith('X_') else proj_key
+        if obsm_key not in adata.obsm:
             raise KeyError(f"{proj_key} not found in adata.obsm")
         if not hasattr(tg, 'base_kernel') or not hasattr(tg.base_kernel, 'L'):
             raise ValueError("tg must have a fitted base_kernel with attribute L (Laplacian)")
@@ -1185,9 +1191,10 @@ if _HAVE_SCANPY:
 
         L = tg.graph_kernel.L
 
-        def _make_plot(Y, L, proj_key, show=show):            
+        def _make_plot(Y, L, basis_key, show=show):
+            # basis_key is WITHOUT the 'X_' prefix (e.g. 'TopoMAP'), for use with
+            # sc.pl.embedding and adata.obs key names.
             fig, axs = plt.subplots(1, 3, figsize=figsize, dpi=dpi)
-            # fig.suptitle(f"Riemannian diagnostics - {proj_nick}", fontsize=title_fontsize)
             # plot using the mapped colors directly (do not pass cmap)
             plot_riemann_metric_localized(
                 Y, L,
@@ -1216,14 +1223,13 @@ if _HAVE_SCANPY:
                 clip_percentile=2.0,
                 return_limits=True,
             )
-            adata.obs[f'deformation_{proj_key}'] = deform_vals
+            adata.obs[f'deformation_{basis_key}'] = deform_vals
 
             # (b) Global indicatrices (thinned grid-averaged ellipses) overlaid on the embedding,
             #     colored by local contraction/expansion using the shared color scale
-            #fig, ax = plt.subplots(1, 1, figsize=(8, 6), dpi=300)
             sc.pl.embedding(
                 adata,
-                basis=proj_key,
+                basis=basis_key,
                 color='topo_clusters',
                 legend_loc=None,
                 legend_fontsize=6,
@@ -1261,12 +1267,12 @@ if _HAVE_SCANPY:
             )
             plt.gca().set_aspect('equal'); plt.tight_layout()
             axs[1].set_title("Global indicatrices (C/E overlay)", fontsize=title_fontsize)
-            
+
             # (c) Metric-derived scalar maps (anisotropy and log-det(G))
             G = RiemannMetric(Y, L).get_rmetric()
             lam = np.linalg.eigvalsh(G); lam = np.clip(lam, 1e-12, None)
-            adata.obs[f'metric_anisotropy_{proj_key}'] = np.log(lam[:, -1] / lam[:, 0])
-            adata.obs[f'metric_logdetG_{proj_key}'] = np.sum(np.log(lam), axis=1)
+            adata.obs[f'metric_anisotropy_{basis_key}'] = np.log(lam[:, -1] / lam[:, 0])
+            adata.obs[f'metric_logdetG_{basis_key}'] = np.sum(np.log(lam), axis=1)
 
             # (d) CONTRACTION vs EXPANSION PANEL (points), using the same deformation and limits
             # Try to suppress colorbar via Scanpy arg (newer versions)
@@ -1274,8 +1280,8 @@ if _HAVE_SCANPY:
             try:
                 sc.pl.embedding(
                     adata,
-                    basis=proj_key,
-                    color=[f'deformation_{proj_key}'],
+                    basis=basis_key,
+                    color=[f'deformation_{basis_key}'],
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
@@ -1288,8 +1294,8 @@ if _HAVE_SCANPY:
                 # Older Scanpy: draw normally, then remove any colorbar axes added
                 sc.pl.embedding(
                     adata,
-                    basis=proj_key,
-                    color=[f'deformation_{proj_key}'],
+                    basis=basis_key,
+                    color=[f'deformation_{basis_key}'],
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
@@ -1322,16 +1328,18 @@ if _HAVE_SCANPY:
                     proj_names.append(name)
             for proj_name in proj_names:
                 Y = np.asarray(adata.obsm[proj_name])
+                # proj_name from obsm_keys() already has 'X_' prefix; strip for _make_plot
+                bk = proj_name[2:] if proj_name.startswith('X_') else proj_name
                 if verbose:
                     print(f"Riemannian diagnostics for projection '{proj_name}'")
-                _fig = _make_plot(Y, L, proj_name, show=show)
+                _fig = _make_plot(Y, L, bk, show=show)
                 if (not show) and (_fig is not None):
                     plt.close(_fig)
             return None
         else:
-            Y = np.asarray(adata.obsm['X_'+proj_key])
+            Y = np.asarray(adata.obsm[obsm_key])
             if verbose: print(f"Riemannian diagnostics for projection '{proj_key}'")
-            return _make_plot(Y, L, proj_key, show=show)
+            return _make_plot(Y, L, basis_key, show=show)
 
 
     def visualize_optimization(

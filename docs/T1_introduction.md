@@ -23,10 +23,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 ```
 
-    /home/davi/intelpython3/lib/python3.9/site-packages/louvain/__init__.py:54: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
-      from pkg_resources import get_distribution, DistributionNotFound
-
-
 We’ll use the PBMC 3k dataset from 10x Genomics—a small, widely used dataset composed of peripheral blood mononuclear cells. We'll use `scanpy` [standard workflow](https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering-2017.html#) for comparisons. 
 
 Before analysis we perform minimal quality control to filter cells with very few detected genes and genes expressed in very few cells. 
@@ -91,7 +87,7 @@ del adata.obsm['X_umap'] #remove duplicate key
 
 ```
 
-    2026-02-16 13:59:19.847829: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+    2026-03-10 09:25:14.135398: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
 
 
 
@@ -143,6 +139,10 @@ tg, pdf_path = tp.sc.run_and_report(adata,
 )
 print(f"PDF report saved to: {pdf_path}")
 ```
+
+    /home/davi/topometry/topo/topograph.py:2703: RuntimeWarning: invalid value encountered in log
+      H = -_np.sum(P * _np.log(P + eps), axis=1)
+
 
     PDF report saved to: ./my_topometry_report.pdf
 
@@ -212,7 +212,7 @@ After completion, your `AnnData` will be populated with:
 
 * **Spectral Scaffold coordinates:** `adata.obsm['X_spectral_scaffold']`, `adata.obsm['X_multiscale_scaffold']`.
     * Construct your own neighborhood graphs on these scaffolds using `sc.pp.neighbors(adata, use_rep='X_spectral_scaffold')` to generate custom UMAPs, clusters, etc.
-    * For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_msDM with bw_adaptive', n_neighbors=10)`
+    * For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_ms_spectral_scaffold', n_neighbors=10)`
 
 * **2D layouts for visualization:** e.g., `adata.obsm['X_msTopoMAP']`, `adata.obsm['X_TopoMAP']`.
     * Visualize gene expression and metadata in `adata.obs` using `sc.pl.embedding(adata, basis='TopoMAP',...)`
@@ -232,7 +232,7 @@ adata
 
 
     AnnData object with n_obs × n_vars = 2700 × 3000
-        obs: 'n_genes', 'pca_leiden', 'X_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topo_clusters_ms', 'id_fsa_k10', 'id_fsa_k90', 'id_mle_k10', 'id_mle_k90', 'spectral_EAS', 'spectral_RayScore', 'spectral_LAC', 'spectral_axis', 'spectral_axis_sign', 'spectral_radius', 'metric_deformation__X_PCA_UMAP', 'metric_deformation__X_UMAP_on_adataX_', 'metric_deformation__X_msTopoMAP', 'metric_deformation__X_TopoMAP', 'metric_deformation__X_msTopoPaCMAP', 'metric_deformation__X_TopoPaCMAP', 'topo_clusters_highestres', 'metric_contract_expand_TopoMAP', 'metric_anisotropy_TopoMAP', 'metric_logdetG_TopoMAP', 'metric_contract_expand_msTopoMAP', 'metric_anisotropy_msTopoMAP', 'metric_logdetG_msTopoMAP', 'metric_contract_expand_TopoPaCMAP', 'metric_anisotropy_TopoPaCMAP', 'metric_logdetG_TopoPaCMAP', 'metric_contract_expand_msTopoPaCMAP', 'metric_anisotropy_msTopoPaCMAP', 'metric_logdetG_msTopoPaCMAP'
+        obs: 'n_genes', 'pca_leiden', 'X_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topo_clusters_ms', 'id_fsa_k10', 'id_fsa_k90', 'id_mle_k10', 'id_mle_k90', 'spectral_EAS', 'spectral_RayScore', 'spectral_LAC', 'spectral_axis', 'spectral_axis_sign', 'spectral_radius', 'metric_deformation__X_PCA_UMAP', 'metric_deformation__X_UMAP_on_adataX_', 'metric_deformation__X_msTopoMAP', 'metric_deformation__X_TopoMAP', 'metric_deformation__X_msTopoPaCMAP', 'metric_deformation__X_TopoPaCMAP', 'topo_clusters_highestres', 'deformation_TopoMAP', 'metric_anisotropy_TopoMAP', 'metric_logdetG_TopoMAP', 'deformation_msTopoMAP', 'metric_anisotropy_msTopoMAP', 'metric_logdetG_msTopoMAP', 'deformation_TopoPaCMAP', 'metric_anisotropy_TopoPaCMAP', 'metric_logdetG_TopoPaCMAP', 'deformation_msTopoPaCMAP', 'metric_anisotropy_msTopoPaCMAP', 'metric_logdetG_msTopoPaCMAP'
         var: 'gene_ids', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
         uns: 'log1p', 'hvg', 'pca', 'pca_leiden', 'umap', 'X', 'X_leiden', 'pca_leiden_colors', 'X_leiden_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topometry_id_details', 'topometry_id_global_mle', 'intrinsic_dim_estimator', 'spectral_alignment_summary', 'metric_limits', 'imputation_qc', 'topometry_representation_eval', 'topo_clusters_res0.2_colors', 'topo_clusters_res0.8_colors', 'topo_clusters_res1.2_colors', 'topo_clusters_highestres_colors', 'topo_clusters_colors', 'simulated_state_for_example_colors', '_simulated_state_for_example_colors'
         obsm: 'X_pca', 'X_PCA_UMAP', 'X_UMAP_on_adataX_', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP', 'X_msTopoPaCMAP', 'X_TopoPaCMAP'
