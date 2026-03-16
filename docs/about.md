@@ -3,6 +3,7 @@
 [![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
 [![Downloads](https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/topometry)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta)](https://twitter.com/davisidarta)
+[![GitHub Stars](https://img.shields.io/github/stars/davisidarta/topometry?style=social&label=Stars)](https://github.com/davisidarta/topometry/)
 
 # About TopoMetry
 

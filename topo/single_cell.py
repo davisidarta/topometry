@@ -12,6 +12,7 @@ import time
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
 from scipy.sparse import issparse, csr_matrix
+from scipy.stats import gaussian_kde
 from scipy.sparse.csgraph import connected_components
 import colorsys
 from matplotlib.backends.backend_pdf import PdfPages
@@ -698,6 +699,14 @@ if _HAVE_SCANPY:
         if need_refit:
             tg.fit(adata.X)
 
+        # Normalise leiden_resolutions: accept a bare scalar (e.g. 0.4) or any iterable.
+        if isinstance(leiden_resolutions, (int, float)):
+            leiden_resolutions = (float(leiden_resolutions),)
+        else:
+            leiden_resolutions = tuple(leiden_resolutions)
+        # Clamp primary index so a single-resolution call never raises IndexError.
+        leiden_primary_index = min(leiden_primary_index, len(leiden_resolutions) - 1)
+
         # (1) store scaffolds (TopOGraph.spectral_scaffold already returns UoM aggregates if enabled)
         adata.obsm["X_ms_spectral_scaffold"] = tg.spectral_scaffold(multiscale=True)[:, :getattr(tg, "_scaffold_components_ms", tg.n_eigs)]
         adata.obsm["X_spectral_scaffold"]    = tg.spectral_scaffold(multiscale=False)[:, :getattr(tg, "_scaffold_components_dm", tg.n_eigs)]
@@ -1191,9 +1200,50 @@ if _HAVE_SCANPY:
 
         L = tg.graph_kernel.L
 
+        # Initialise per-tg cache (survives across calls, keyed by basis_key + Y fingerprint)
+        if not hasattr(tg, '_riemann_cache'):
+            tg._riemann_cache = {}
+
         def _make_plot(Y, L, basis_key, show=show):
             # basis_key is WITHOUT the 'X_' prefix (e.g. 'TopoMAP'), for use with
             # sc.pl.embedding and adata.obs key names.
+
+            # --- Cached geometry computations (keyed by basis_key + Y fingerprint) ---
+            Y_fp = (Y.shape, float(Y[0, 0]), float(Y[-1, -1]))  # lightweight fingerprint
+            cache_key = (basis_key, Y_fp)
+            _cache = tg._riemann_cache.get(cache_key, None)
+
+            if _cache is not None:
+                if verbose:
+                    print(f"  [riemann] Using cached geometry for '{basis_key}'")
+                deform_vals = _cache['deform_vals']
+                dmin        = _cache['dmin']
+                dmax        = _cache['dmax']
+                G           = _cache['G']
+                lam         = _cache['lam']
+            else:
+                if verbose:
+                    print(f"  [riemann] Computing geometry for '{basis_key}' (will be cached)...")
+                deform_vals, (dmin, dmax) = calculate_deformation(
+                    Y, L,
+                    center="median",
+                    diffusion_t=8,
+                    diffusion_op=getattr(tg.base_kernel, "P", None),
+                    normalize="symmetric",
+                    clip_percentile=2.0,
+                    return_limits=True,
+                )
+                G   = RiemannMetric(Y, L).get_rmetric()
+                lam = np.linalg.eigvalsh(G)
+                lam = np.clip(lam, 1e-12, None)
+                tg._riemann_cache[cache_key] = {
+                    'deform_vals': deform_vals,
+                    'dmin': dmin, 'dmax': dmax,
+                    'G': G, 'lam': lam,
+                }
+
+            adata.obs[f'deformation_{basis_key}'] = deform_vals
+
             fig, axs = plt.subplots(1, 3, figsize=figsize, dpi=dpi)
             # plot using the mapped colors directly (do not pass cmap)
             plot_riemann_metric_localized(
@@ -1212,18 +1262,6 @@ if _HAVE_SCANPY:
             )
             axs[0].set_title('Localized indicatrices', fontsize=title_fontsize)
             plt.gca().set_aspect('equal'); plt.tight_layout()
-
-            # Compute deformation once (centered log det(G)), optionally smoothed
-            deform_vals, (dmin, dmax) = calculate_deformation(
-                Y, L,
-                center="median",
-                diffusion_t=8,
-                diffusion_op=getattr(tg.base_kernel, "P", None),
-                normalize="symmetric",
-                clip_percentile=2.0,
-                return_limits=True,
-            )
-            adata.obs[f'deformation_{basis_key}'] = deform_vals
 
             # (b) Global indicatrices (thinned grid-averaged ellipses) overlaid on the embedding,
             #     colored by local contraction/expansion using the shared color scale
@@ -1269,8 +1307,7 @@ if _HAVE_SCANPY:
             axs[1].set_title("Global indicatrices (C/E overlay)", fontsize=title_fontsize)
 
             # (c) Metric-derived scalar maps (anisotropy and log-det(G))
-            G = RiemannMetric(Y, L).get_rmetric()
-            lam = np.linalg.eigvalsh(G); lam = np.clip(lam, 1e-12, None)
+            # G and lam come from the cache computed above.
             adata.obs[f'metric_anisotropy_{basis_key}'] = np.log(lam[:, -1] / lam[:, 0])
             adata.obs[f'metric_logdetG_{basis_key}'] = np.sum(np.log(lam), axis=1)
 
@@ -1285,6 +1322,7 @@ if _HAVE_SCANPY:
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
+                    frameon=False,
                     ax=axs[2],
                     vmin=dmin,
                     vmax=dmax,
@@ -1299,6 +1337,7 @@ if _HAVE_SCANPY:
                     cmap='seismic',
                     wspace=0.25,
                     show=False,
+                    frameon=False,
                     ax=axs[2],
                     vmin=dmin,
                     vmax=dmax,
@@ -5779,3 +5818,162 @@ if _HAVE_SCANPY:
             plt.show()
             return None
         return ax
+
+
+    def highlight_embedding(
+        adata,
+        basis,
+        target,
+        groupby=None,
+        dot_size=10,
+        circle_size_factor=1,
+        linewidth=2,
+        ax=None,
+        show=True,
+        palette='Reds',
+        use_raw=True,
+        **kwargs
+    ):
+        """
+        Highlight the densest region of a given target on a low-dimensional embedding.
+
+        Computes a kernel density estimate (KDE) over the coordinates of cells
+        associated with `target` — either expressing a gene or belonging to a
+        categorical group — identifies the peak-density coordinate, and overlays
+        an auto-scaled circle on the embedding plot.
+
+        Parameters
+        ----------
+        adata : AnnData
+            Annotated data matrix.
+        basis : str
+            Embedding basis key. Coordinates are read from ``adata.obsm['X_' + basis]``.
+        target : str
+            Either a gene name (present in ``adata.var_names`` or ``adata.raw.var_names``)
+            or a single category within ``adata.obs[groupby]``.
+            - Gene mode: KDE is weighted by expression values; only cells with
+              expression > 0 are included.
+            - Category mode: unweighted KDE over all cells belonging to the category.
+        groupby : str, optional
+            Column in ``adata.obs`` to use for categorical targeting. Required when
+            ``target`` is not a gene.
+        dot_size : int, default 10
+            Dot size passed to ``sc.pl.embedding``.
+        circle_size_factor : float, default 1
+            Scalar multiplier applied to the auto-computed circle radius, allowing
+            manual fine-tuning without changing the density-based anchor.
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw on. If None, a new (6, 6) figure is created.
+        show : bool, default True
+            If True, calls ``plt.show()``. If False, returns the Axes object —
+            consistent with scanpy's ``show`` convention.
+        palette : str or list, default 'Reds'
+            Color palette passed to ``sc.pl.embedding``.
+        use_raw : bool, default True
+            Whether to use ``adata.raw`` for gene expression lookup (gene mode only).
+        **kwargs
+            Additional keyword arguments forwarded to ``sc.pl.embedding``
+            (e.g., ``title``, ``na_color``, ``legend_loc``).
+
+        Returns
+        -------
+        matplotlib.axes.Axes or None
+            Returns the Axes if ``show=False``, otherwise None.
+
+        Raises
+        ------
+        ValueError
+            If the embedding key is missing, ``target`` cannot be resolved,
+            ``groupby`` is missing when required, or too few cells are found.
+        """
+        obsm_key = f"X_{basis}"
+        if obsm_key not in adata.obsm:
+            raise ValueError(f"'{obsm_key}' not found in adata.obsm.")
+
+        all_coords = adata.obsm[obsm_key]
+
+        # ------------------------------------------------------------------ #
+        # Resolve target: gene or categorical                                  #
+        # ------------------------------------------------------------------ #
+        raw_var_names = adata.raw.var_names if (use_raw and adata.raw is not None) else None
+
+        if target in adata.var_names:
+            is_gene = True
+            expr = adata[:, target].X
+            expr = expr.toarray().flatten() if hasattr(expr, 'toarray') else np.array(expr).flatten()
+
+        elif raw_var_names is not None and target in raw_var_names:
+            is_gene = True
+            expr = adata.raw[:, target].X
+            expr = expr.toarray().flatten() if hasattr(expr, 'toarray') else np.array(expr).flatten()
+
+        else:
+            is_gene = False
+            if groupby is None:
+                raise ValueError(f"'{target}' is not a gene. Provide `groupby` to treat it as a categorical target.")
+            if groupby not in adata.obs.columns:
+                raise ValueError(f"'{groupby}' not found in adata.obs.")
+            if target not in adata.obs[groupby].cat.categories:
+                raise ValueError(f"'{target}' not found in adata.obs['{groupby}'].")
+
+        # ------------------------------------------------------------------ #
+        # Extract coordinates and optional weights for KDE                    #
+        # ------------------------------------------------------------------ #
+        if is_gene:
+            mask = expr > 0
+            coords = all_coords[mask]
+            weights = expr[mask]
+            color_key, groups_arg = target, None
+        else:
+            mask = (adata.obs[groupby] == target).values
+            coords = all_coords[mask]
+            weights = None
+            color_key, groups_arg = groupby, [target]
+
+        if coords.shape[0] < 2:
+            raise ValueError(f"Fewer than 2 cells found for target '{target}'. Cannot compute KDE.")
+
+        # ------------------------------------------------------------------ #
+        # KDE: find peak-density coordinate                                   #
+        # ------------------------------------------------------------------ #
+        kde = gaussian_kde(coords.T, weights=weights)
+        densities = kde(coords.T)
+        cx, cy = coords[densities.argmax()]
+
+        # Auto-radius: 50th percentile of distances from peak among target cells,
+        # scaled by circle_size_factor for manual adjustment
+        dists = np.hypot(coords[:, 0] - cx, coords[:, 1] - cy)
+        radius = np.percentile(dists, 50) * circle_size_factor
+
+        # ------------------------------------------------------------------ #
+        # Plot                                                                 #
+        # ------------------------------------------------------------------ #
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+        kwargs.setdefault('na_color', '#BEBEBE')
+        kwargs.setdefault('legend_loc', None)
+        kwargs.setdefault('frameon', False)
+        kwargs.setdefault('title', '')
+
+        sc.pl.embedding(
+            adata,
+            basis=basis,
+            color=color_key,
+            groups=groups_arg,
+            size=dot_size,
+            palette=palette,
+            ax=ax,
+            show=False,
+            use_raw=use_raw if is_gene else False,
+            **kwargs
+        )
+
+        circle = plt.Circle((cx, cy), radius, color='k', fill=False,
+                             linewidth=linewidth, clip_on=False)
+        ax.add_patch(circle)
+
+        if show:
+            plt.show()
+        else:
+            return ax

@@ -42,7 +42,10 @@ from sklearn.neighbors import KDTree
 from sklearn.neighbors import NearestNeighbors
 from topo.base import ann
 from topo.base import dists as dist
-from topo.spectral.umap_layouts import optimize_layout_euclidean, optimize_layout_generic, optimize_layout_inverse
+from topo.spectral.umap_layouts import (
+    optimize_layout_euclidean, optimize_layout_generic, optimize_layout_inverse,
+    _optimize_layout_euclidean_single_epoch,
+)
 from topo.spectral.eigen import spectral_layout
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.utils.umap_utils import ts, fast_knn_indices
@@ -267,68 +270,84 @@ def simplicial_set_embedding(
     if include_init_snapshot:
         _maybe_store(epoch=0, Y=embedding)
 
-    # Try to use optimizer-level callback if available; otherwise fall back to chunked loop
-    def _run_optimizer_chunk(Y, chunk_epochs, epochs_per_sample):
-        """Run one chunk of optimization and return updated Y."""
+    epochs_per_sample = make_epochs_per_sample(weight, n_epochs)
+
+    # If no checkpointing requested, run once (original behavior — fast path)
+    if not save_every or int(save_every) <= 0:
         if euclidean_output:
-            return optimize_layout_euclidean(
-                Y,
-                Y,
-                head,
-                tail,
-                chunk_epochs,
-                n_vertices,
-                epochs_per_sample,
-                a,
-                b,
-                rng_state,
-                gamma,
-                initial_alpha,
-                negative_sample_rate,
-                parallel=parallel,
-                verbose=verbose,
-                densmap=densmap,
-                densmap_kwds=densmap_kwds,
+            embedding = optimize_layout_euclidean(
+                embedding, embedding, head, tail, n_epochs, n_vertices,
+                epochs_per_sample, a, b, rng_state, gamma, initial_alpha,
+                negative_sample_rate, parallel=parallel, verbose=verbose,
+                densmap=densmap, densmap_kwds=densmap_kwds,
             )
         else:
-            return optimize_layout_generic(
-                Y,
-                Y,
-                head,
-                tail,
-                chunk_epochs,
-                n_vertices,
-                epochs_per_sample,
-                a,
-                b,
-                rng_state,
-                gamma,
-                initial_alpha,
-                negative_sample_rate,
-                output_metric,
-                tuple(output_metric_kwds.values()),
-                verbose=verbose,
+            embedding = optimize_layout_generic(
+                embedding, embedding, head, tail, n_epochs, n_vertices,
+                epochs_per_sample, a, b, rng_state, gamma, initial_alpha,
+                negative_sample_rate, output_metric,
+                tuple(output_metric_kwds.values()), verbose=verbose,
             )
 
-    # If no checkpointing requested, run once (original behavior)
-    if not save_every or int(save_every) <= 0:
-        epochs_per_sample = make_epochs_per_sample(weight, n_epochs)
-        embedding = _run_optimizer_chunk(embedding, n_epochs, epochs_per_sample)
-
     else:
-        # Chunked optimization loop, taking snapshots every `save_every` epochs.
+        # Checkpointed path: run the epoch loop at the Python level so that
+        # `epoch_of_next_sample` is kept alive across the whole run.
+        # Calling the optimizer once per chunk resets that state and causes
+        # cells with only weak edges (high epochs_per_sample) to never fire —
+        # they appear frozen in the GIF.  Running epoch-by-epoch avoids this.
         save_every = int(save_every)
         total_epochs = int(n_epochs)
-        epochs_done = 0
-        while epochs_done < total_epochs:
-            chunk = min(save_every, total_epochs - epochs_done)
-            # IMPORTANT: epochs_per_sample is defined relative to *this chunk*.
-            # This approximate schedule yields good practical results and allows checkpointing
-            # without modifying the low-level optimizer.
-            epochs_per_sample = make_epochs_per_sample(weight, chunk)
-            embedding = _run_optimizer_chunk(embedding, chunk, epochs_per_sample)
-            epochs_done += chunk
-            _maybe_store(epoch=epochs_done, Y=embedding)
+
+        dim = embedding.shape[1]
+        move_other = True  # head and tail are the same array
+
+        epochs_per_neg_sample = epochs_per_sample / negative_sample_rate
+        epoch_of_next_neg_sample = epochs_per_neg_sample.copy()
+        epoch_of_next_sample    = epochs_per_sample.copy()
+
+        # Compile the single-epoch kernel once (warm-up on first call)
+        import numba
+        _opt_epoch = numba.njit(
+            _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
+        )
+
+        # Densmap not supported in the checkpointed path (uncommon; fall back gracefully)
+        _densmap_active = bool(densmap) and densmap_kwds.get("lambda", 0) > 0
+
+        # Dummy densmap arrays (used when densmap is off)
+        _dens_phi_sum = np.zeros(1, dtype=np.float32)
+        _dens_re_sum  = np.zeros(1, dtype=np.float32)
+
+        for n in range(total_epochs):
+            alpha = initial_alpha * (1.0 - float(n) / float(total_epochs))
+
+            _opt_epoch(
+                embedding, embedding,
+                head, tail,
+                n_vertices,
+                epochs_per_sample,
+                a, b,
+                rng_state,
+                gamma,
+                dim,
+                move_other,
+                alpha,
+                epochs_per_neg_sample,
+                epoch_of_next_neg_sample,
+                epoch_of_next_sample,
+                n,
+                False,          # densmap_flag — not supported here
+                _dens_phi_sum,
+                _dens_re_sum,
+                0.0, 0.0, 0.0,  # dens_re_cov, dens_re_std, dens_re_mean
+                0.0,            # dens_lambda
+                np.zeros(1, dtype=np.float32),  # dens_R
+                np.zeros(1, dtype=np.float32),  # dens_mu
+                0.0,            # dens_mu_tot
+            )
+
+            if (n + 1) % save_every == 0:
+                _maybe_store(epoch=n + 1, Y=embedding)
 
     # ----- (unchanged) optional embedding densities -----
     if output_dens:

@@ -2225,6 +2225,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         n = snapshots[-1]["embedding"].shape[0]
 
+        # Sort by epoch so frames are in the correct temporal order
+        snapshots = sorted(snapshots, key=lambda s: int(s.get("epoch", 0)))
+
         def _to_rgba_array(c, n):
             if c is None:
                 return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
@@ -2251,9 +2254,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         point_colors = _to_rgba_array(color, n)
 
-        Y_final = snapshots[-1]["embedding"]
-        x_min, x_max = np.min(Y_final[:, 0]), np.max(Y_final[:, 0])
-        y_min, y_max = np.min(Y_final[:, 1]), np.max(Y_final[:, 1])
+        # Compute axis limits from the union of ALL snapshots so the initial
+        # spectral layout (epoch=0) and the final layout share a consistent frame.
+        all_coords = np.concatenate([s["embedding"] for s in snapshots], axis=0)
+        x_min, x_max = np.min(all_coords[:, 0]), np.max(all_coords[:, 0])
+        y_min, y_max = np.min(all_coords[:, 1]), np.max(all_coords[:, 1])
         pad_x = 0.05 * (x_max - x_min + 1e-9)
         pad_y = 0.05 * (y_max - y_min + 1e-9)
         xlim = (x_min - pad_x, x_max + pad_x)

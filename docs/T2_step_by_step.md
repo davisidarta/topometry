@@ -4,28 +4,32 @@ Single-cell RNA-seq measures thousands of transcripts per cell, yielding high-di
 
 **TopoMetry** addresses this by learning a **spectral scaffold**—a diffusion/Laplacian eigenbasis that encodes latent geometry across scales—and a **refined graph** that better captures cell–cell relationships. From this scaffold and graph, TopoMetry derives layouts (e.g., TopoMAP, TopoPaCMAP), clustering, denoising/imputation, and diagnostics, together with **operator-native metrics** and **Riemannian distortion maps** that let you audit geometry explicitly.
 
-In this tutorial, we’ll perform a **step-by-step** TopoMetry analysis on the PBMC68k dataset (~68k human peripheral blood mononuclear cells), but you could use the demo pbmc3k dataset from Scanpy to keep the run lightweight for a laptop CPU. You will learn how:
+In this tutorial, we’ll perform a **step-by-step** TopoMetry analysis on the PBMC68k dataset (~68k human peripheral blood mononuclear cells), but you could use the demo pbmc3k dataset from Scanpy to keep the run lightweight for a laptop CPU. 
+
+You will learn how to:
 
 
-1) **Set up & load data** (PBMC68k) and apply **adequate preprocessing** (HVG selection + Z-score scaling).
+* **Set up & load data** (PBMC68k) and apply **adequate preprocessing** (HVG selection + Z-score scaling).
 
-2) **Run TopoMetry** to learn the spectral scaffold (fixed-time and multiscale) and the refined graph, with namespaced outputs that do not mutate `adata.X`.
+* **Run TopoMetry** to learn the spectral scaffold (fixed-time and multiscale), their refined graphs, and associated clusterings and projections.
 
-3) **Inspect the eigenspectrum** with `tg.eigenspectrum()` and interpret **eigengaps** for automated scaffold sizing.
+* **Inspect the eigenspectrum** with `tg.eigenspectrum()` and interpret **eigengaps** for automated scaffold sizing.
 
-4) **Estimate intrinsic dimensionality** (global/local) and assess **spectral selectivity** of scaffold axes to labels.
+* **Estimate intrinsic dimensionality** (global/local) and assess **spectral selectivity** of scaffold axes to labels.
 
-5) **Visualize** with geometry-aware 2-D layouts (TopoMAP / TopoPaCMAP) and **recompute** layouts.
+* **Visualize** with geometry-aware 2-D layouts (TopoMAP / TopoPaCMAP) and **recompute** layouts.
 
-6) **Diagnose distortions** using **Riemannian metrics** to see where maps contract or expand the manifold.
+* **Diagnose distortions** using **Riemannian metrics** to see where maps contract or expand the manifold.
 
-7) **Quantify geometry preservation** across representations with operator-native metrics and a compact report.
+* **Quantify geometry preservation** across representations with operator-native metrics and a compact report.
 
-8) **Impute/denoise** expression via diffusion on the learned operator and compare marker patterns.
+* **Directly interpret geometry** by assessing the contribution of each gene to the spectral scaffold.
 
-9) **Illustrate graph-signal filtering** with a minimal simulated “disease state” smoothed on the multiscale graph.
+* **Impute/denoise** expression via diffusion on the learned operator and compare marker patterns.
 
-10) **Compute and visualize non-euclidean layouts**: spherical, toroidal, hyperboloid and gaussian-energy embeddings with MAP.
+* **Illustrate graph-signal filtering** with a minimal simulated “disease state” smoothed on the multiscale graph.
+
+* **Compute and visualize non-euclidean layouts**: spherical, toroidal, hyperboloid and gaussian-energy embeddings with MAP.
 
 
 ---
@@ -37,6 +41,7 @@ Besides topometry and standard python libraries (`numpy`, `pandas`, `matplotlib`
 ```python
 import numpy as np, pandas as pd, scanpy as sc, topo as tp
 import matplotlib.pyplot as plt
+
 np.random.seed(7)
 sc.settings.verbosity = 0
 sc.set_figure_params(dpi=80, facecolor='white')
@@ -61,30 +66,27 @@ palette=cycler(color=mpl_cm.tab20.colors)
 ---
 ## Load data
 
-We'll use the PBMC3k dataset (available directly via `sc.datasets.pbmc3k_processed()`), which provides 2,638 PBMCs already preprocessed with log-normalization and HVG selection:
+We'll use the PBMC68k dataset — a benchmark comprising 68,000 peripheral blood mononuclear cells (PBMCs) from a single healthy donor, sequenced with the 10x Genomics Chromium platform. The raw data can be downloaded from the [10X Genomics website](https://www.10xgenomics.com/datasets/fresh-68-k-pbm-cs-donor-a-1-standard-1-1-0).
+
+Once the data is saved to our working directory, we can read it:
 
 
 
 ```python
-# Using sc.datasets.pbmc3k_processed() for testing — no file extraction needed.
-```
-
-
-```python
-adata = sc.datasets.pbmc3k_processed()
+adata = sc.read_10x_mtx(
+    'filtered_matrices_mex/hg19/',
+    var_names='gene_symbols',
+    cache=True,
+)
+adata.var_names_make_unique()
 adata
 ```
 
 
 
 
-    AnnData object with n_obs × n_vars = 2638 × 1838
-        obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
-        var: 'n_cells'
-        uns: 'draw_graph', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
-        obsm: 'X_pca', 'X_tsne', 'X_umap', 'X_draw_graph_fr'
-        varm: 'PCs'
-        obsp: 'distances', 'connectivities'
+    AnnData object with n_obs × n_vars = 68579 × 32738
+        var: 'gene_ids'
 
 
 
@@ -97,29 +99,46 @@ Before proceeding with the analysis, we perform some basic quality control:
 
 
 ```python
-# QC annotation skipped — pbmc3k_processed is already filtered and annotated.
+adata.var['mt'] = adata.var_names.str.startswith('MT-')
+sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
 ```
 
 Plot QC metrics:
 
 
 ```python
-# Pre-QC violin plots skipped — dataset already clean.
+sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts', 'pct_counts_mt'],
+             jitter=0.4, multi_panel=True)
 ```
+
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_11_0.png)
+    
+
 
 Filter low-quality cells:
 
 
 ```python
-# QC filtering skipped — pbmc3k_processed is already filtered.
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pp.filter_genes(adata, min_cells=3)
+adata = adata[adata.obs.pct_counts_mt < 5].copy()
 ```
 
 Plot filtered QC results:
 
 
 ```python
-# Post-QC violin plots skipped — dataset already clean.
+sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts', 'pct_counts_mt'],
+             jitter=0.4, multi_panel=True)
 ```
+
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_15_0.png)
+    
+
 
 ---
 ## Expected normalization
@@ -130,32 +149,18 @@ The automated wrapper `tp.sc.preprocess(adata)` performs exactly these preproces
 
 
 ```python
-import scipy.sparse as ssp
-
-# pbmc3k_processed is already log-normalized and HVG-selected.
-# Manually recreate the layers structure that tp.sc.preprocess() produces.
-
-# 'counts' layer: log-normalized expression (closest available)
-adata.layers['counts'] = adata.X.copy()
-
-# Scale expression for use with PCA and TopOGraph (z-score, max_value=10)
-sc.pp.scale(adata, max_value=10)
-adata.layers['scaled'] = adata.X.copy()  # adata.X is now scaled
-
+adata = tp.sc.preprocess(adata)  # prepares adata.X for base graph construction
 adata
 ```
 
 
 
 
-    AnnData object with n_obs × n_vars = 2638 × 1838
-        obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
-        var: 'n_cells', 'mean', 'std'
-        uns: 'draw_graph', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
-        obsm: 'X_pca', 'X_tsne', 'X_umap', 'X_draw_graph_fr'
-        varm: 'PCs'
+    AnnData object with n_obs × n_vars = 68265 × 3000
+        obs: 'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt', 'n_genes'
+        var: 'gene_ids', 'mt', 'n_cells_by_counts', 'mean_counts', 'pct_dropout_by_counts', 'total_counts', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
+        uns: 'log1p', 'hvg'
         layers: 'counts', 'scaled'
-        obsp: 'distances', 'connectivities'
 
 
 
@@ -178,34 +183,45 @@ After preprocessing, let's perform some minimal celltype annotation. We take adv
 
 
 ```python
-# pbmc3k_processed already has expert-curated louvain cell type annotations.
-# Use them directly as predicted_celltype.
-adata.obs['predicted_celltype'] = adata.obs['louvain'].copy()
-
-# Available marker genes in this HVG set for reference
 marker_dict = {
-    "CD14+ Mono":  ["FCN1"],
-    "CD16+ Mono":  ["FCGR3A"],
-    "cDC":         ["CST3", "FCER1A"],
-    "NK":          ["GNLY", "NKG7", "FCGR3A"],
-    "B cells":     ["MS4A1", "CD79A"],
-    "T cells":     ["IL32", "GZMK"],
-    "CD8+ T":      ["GZMB", "GZMK"],
-    "Megakaryocytes": ["PPBP"],
+    "CD14+ Mono": ["FCN1", "CD14"],
+    "CD16+ Mono": ["TCF7L2", "FCGR3A", "LYN"],
+    "cDC":        ["CST3", "COTL1", "LYZ", "CLEC10A", "FCER1A"],
+    "NK":         ["GNLY", "NKG7", "CD247", "FCER1G", "TYROBP", "KLRG1", "FCGR3A"],
+    "ILC":        ["ID2", "PLCG2", "GNLY", "SYNE1"],
+    "B cells":    ["MS4A1", "ITGB1", "COL4A4", "PRDM1", "IRF4", "PAX5", "BCL11A", "BLK"],
+    "CD4+ T":     ["CD4", "IL7R"],
+    "Treg":       ["FOXP3", "IL2RA", "IKZF2"],
+    "Tfh":        ["CXCR5", "PDCD1", "ICOS"],
+    "CD8+ T":     ["CD8A", "CD8B", "GZMK", "GZMA", "CCL5", "GZMB", "GZMH", "GZMA"],
+    "pDC":        ["GZMB", "IL3RA", "COBLL1", "TCF4"],
 }
 
-# Filter each list to only genes present in the HVG set
+def simple_classifier(adata, marker_dict, key_added='celltype'):
+    scores = {}
+    for celltype, genes in marker_dict.items():
+        valid_genes = [g for g in genes if g in adata.var_names]
+        if valid_genes:
+            scores[celltype] = np.array(adata[:, valid_genes].X.mean(axis=1)).flatten()
+    if not scores:
+        raise ValueError("None of the marker genes are present in the dataset.")
+    scores_matrix = np.vstack(list(scores.values())).T  # Shape: (n_cells, n_celltypes)
+    predicted_labels = np.array(list(scores.keys()))[np.argmax(scores_matrix, axis=1)]
+    adata.obs[key_added] = pd.Categorical(predicted_labels)
+
+simple_classifier(adata, marker_dict, key_added='predicted_celltype')
+
+# Filter marker_dict to only include genes present in the HVG set for dotplot
 marker_dict_valid = {ct: [g for g in genes if g in adata.var_names]
                      for ct, genes in marker_dict.items()
                      if any(g in adata.var_names for g in genes)}
 
-sc.pl.dotplot(adata, marker_dict_valid, groupby="predicted_celltype",
-              standard_scale="var", dendrogram=True)
+sc.pl.dotplot(adata, marker_dict_valid, groupby="predicted_celltype", standard_scale="var")
 ```
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_21_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_20_0.png)
     
 
 
@@ -231,7 +247,7 @@ sc.pl.pca_variance_ratio(adata, log=True, n_pcs=100)
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_23_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_22_0.png)
     
 
 
@@ -258,12 +274,12 @@ sc.pl.embedding(adata, basis='PCA_UMAP', color='predicted_celltype', ax=axes[1],
 fig.subplots_adjust(wspace=0.5); plt.show()
 ```
 
-    2026-03-10 09:18:42.815457: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+    2026-03-10 15:21:01.343970: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
 
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_25_1.png)
+![png](T2_step_by_step_files/T2_step_by_step_24_1.png)
     
 
 
@@ -277,7 +293,7 @@ tp.sc.pca_explained_variance_by_hvg(adata_raw)
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_27_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_26_0.png)
     
 
 
@@ -321,7 +337,7 @@ tg = tp.sc.fit_adata(
 adata
 ```
 
-    /home/davi/topometry/topo/single_cell.py:786: FutureWarning: In the future, the default backend for leiden will be igraph instead of leidenalg.
+    /home/davi/intelpython3/lib/python3.9/site-packages/topo/single_cell.py:786: FutureWarning: In the future, the default backend for leiden will be igraph instead of leidenalg.
     
      To achieve the future defaults please pass: flavor="igraph" and n_iterations=2.  directed must also be False to work with igraph's implementation.
       sc.tl.leiden(adata, resolution=res, adjacency=P, key_added=key)
@@ -330,14 +346,14 @@ adata
 
 
 
-    AnnData object with n_obs × n_vars = 2638 × 1838
-        obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain', 'predicted_celltype', 'pca_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms'
-        var: 'n_cells', 'mean', 'std'
-        uns: 'draw_graph', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups', 'dendrogram_predicted_celltype', 'pca_leiden', 'umap', 'pca_leiden_colors', 'predicted_celltype_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8'
-        obsm: 'X_pca', 'X_tsne', 'X_draw_graph_fr', 'X_PCA_UMAP', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP', 'X_msTopoPaCMAP', 'X_TopoPaCMAP'
+    AnnData object with n_obs × n_vars = 68265 × 3000
+        obs: 'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt', 'n_genes', 'predicted_celltype', 'pca_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms'
+        var: 'gene_ids', 'mt', 'n_cells_by_counts', 'mean_counts', 'pct_dropout_by_counts', 'total_counts', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
+        uns: 'log1p', 'hvg', 'pca', 'pca_leiden', 'umap', 'pca_leiden_colors', 'predicted_celltype_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8'
+        obsm: 'X_pca', 'X_PCA_UMAP', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP', 'X_msTopoPaCMAP', 'X_TopoPaCMAP'
         varm: 'PCs'
         layers: 'counts', 'scaled'
-        obsp: 'distances', 'connectivities', 'pca_distances', 'pca_connectivities', 'topometry_connectivities', 'topometry_distances', '_topo_tmp_dm_distances', '_topo_tmp_dm_connectivities', 'topometry_connectivities_ms', 'topometry_distances_ms', '_topo_tmp_ms_distances', '_topo_tmp_ms_connectivities'
+        obsp: 'pca_distances', 'pca_connectivities', 'topometry_connectivities', 'topometry_distances', '_topo_tmp_dm_distances', '_topo_tmp_dm_connectivities', 'topometry_connectivities_ms', 'topometry_distances_ms', '_topo_tmp_ms_distances', '_topo_tmp_ms_connectivities'
 
 
 
@@ -382,7 +398,7 @@ tp.sc.plot_id_histograms(adata, dpi=80)
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_33_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_32_0.png)
     
 
 
@@ -406,7 +422,7 @@ tg.eigenspectrum()
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_36_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_35_0.png)
     
 
 
@@ -442,7 +458,7 @@ fig.subplots_adjust(wspace=0.3, hspace=0.3); plt.show()
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_39_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_38_0.png)
     
 
 
@@ -459,195 +475,42 @@ tp.sc.repel_annotation_labels(adata, groupby='predicted_celltype', basis='TopoMA
 plt.show()
 ```
 
-    Looks like you are using a tranform that doesn't support FancyArrowPatch, using ax.annotate instead. The arrows might strike through texts. Increasing shrinkA in arrowprops might help.
-
-
 
     
-![png](T2_step_by_step_files/T2_step_by_step_41_1.png)
+![png](T2_step_by_step_files/T2_step_by_step_40_0.png)
     
 
 
-TopoMetry finds a surprisingly high number of T cell clusters. numerous T cell populations in this dataset. Interestingly, some of them was classified as "Tfh" (T folicular helper). 
+TopoMetry finds a surprisingly high number of T cell clusters in this dataset. Interestingly, some of them was classified as "Tfh" (T folicular helper). 
 
 Let's highlight them in a TopoMAP representation to see if "Tfh" (T folicular helper) cells correspond to one of these populations: 
 
 
 ```python
-fig, ax = plt.subplots(1, 1, figsize=(6,6))  
-
-ax = sc.pl.embedding(
-    adata,
-    basis="TopoMAP",
-    color="predicted_celltype",
-    groups=["Tfh"],
-    legend_loc=None,
-    title='',
-    na_color="#BEBEBE",
-    palette='Reds',
-    frameon=False,
-    size=10,
-    ax=ax,
-    show=False)
-
-# Find location on the plot where circle should be added
-location_cells = adata[adata.obs.predicted_celltype == "Tfh", :].obsm["X_TopoMAP"]
-x = location_cells[:, 0].mean() + 0.7
-y = location_cells[:, 1].mean() - 0.7
-size = 1  # Set circle size
-# Plot circle
-circle = plt.Circle((x, y), size, color="k", clip_on=False, fill=False)
-ax.add_patch(circle)
+tp.sc.highlight_embedding(adata, basis='TopoMAP', target='Tfh', groupby='predicted_celltype',
+                           title='Tfh-labelled Region Highlighted', circle_size_factor=1.5)
 ```
 
-    /tmp/ipykernel_493571/3503324268.py:19: RuntimeWarning: Mean of empty slice.
-      x = location_cells[:, 0].mean() + 0.7
-    /home/davi/intelpython3/lib/python3.9/site-packages/numpy/core/_methods.py:121: RuntimeWarning: invalid value encountered in divide
-      ret = um.true_divide(
-    /tmp/ipykernel_493571/3503324268.py:20: RuntimeWarning: Mean of empty slice.
-      y = location_cells[:, 1].mean() - 0.7
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_42_0.png)
+    
 
 
-
-
-
-    <matplotlib.patches.Circle at 0x76b6244f8160>
-
-
-
-
-    ---------------------------------------------------------------------------
-
-    ValueError                                Traceback (most recent call last)
-
-    File ~/intelpython3/lib/python3.9/site-packages/IPython/core/formatters.py:340, in BaseFormatter.__call__(self, obj)
-        338     pass
-        339 else:
-    --> 340     return printer(obj)
-        341 # Finally look for special method names
-        342 method = get_real_method(obj, self.print_method)
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/IPython/core/pylabtools.py:169, in retina_figure(fig, base64, **kwargs)
-        160 def retina_figure(fig, base64=False, **kwargs):
-        161     """format a figure as a pixel-doubled (retina) PNG
-        162 
-        163     If `base64` is True, return base64-encoded str instead of raw bytes
-       (...)
-        167         base64 argument
-        168     """
-    --> 169     pngdata = print_figure(fig, fmt="retina", base64=False, **kwargs)
-        170     # Make sure that retina_figure acts just like print_figure and returns
-        171     # None when the figure is empty.
-        172     if pngdata is None:
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/IPython/core/pylabtools.py:152, in print_figure(fig, fmt, bbox_inches, base64, **kwargs)
-        149     from matplotlib.backend_bases import FigureCanvasBase
-        150     FigureCanvasBase(fig)
-    --> 152 fig.canvas.print_figure(bytes_io, **kw)
-        153 data = bytes_io.getvalue()
-        154 if fmt == 'svg':
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/backend_bases.py:2178, in FigureCanvasBase.print_figure(self, filename, dpi, facecolor, edgecolor, orientation, format, bbox_inches, pad_inches, bbox_extra_artists, backend, **kwargs)
-       2176 if bbox_inches:
-       2177     if bbox_inches == "tight":
-    -> 2178         bbox_inches = self.figure.get_tightbbox(
-       2179             renderer, bbox_extra_artists=bbox_extra_artists)
-       2180         if (isinstance(layout_engine, ConstrainedLayoutEngine) and
-       2181                 pad_inches == "layout"):
-       2182             h_pad = layout_engine.get()["h_pad"]
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/_api/deprecation.py:457, in make_keyword_only.<locals>.wrapper(*args, **kwargs)
-        451 if len(args) > name_idx:
-        452     warn_deprecated(
-        453         since, message="Passing the %(name)s %(obj_type)s "
-        454         "positionally is deprecated since Matplotlib %(since)s; the "
-        455         "parameter will become keyword-only %(removal)s.",
-        456         name=name, obj_type=f"parameter of {func.__name__}()")
-    --> 457 return func(*args, **kwargs)
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/figure.py:1787, in FigureBase.get_tightbbox(self, renderer, bbox_extra_artists)
-       1783 if ax.get_visible():
-       1784     # some Axes don't take the bbox_extra_artists kwarg so we
-       1785     # need this conditional....
-       1786     try:
-    -> 1787         bbox = ax.get_tightbbox(
-       1788             renderer, bbox_extra_artists=bbox_extra_artists)
-       1789     except TypeError:
-       1790         bbox = ax.get_tightbbox(renderer)
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/_api/deprecation.py:457, in make_keyword_only.<locals>.wrapper(*args, **kwargs)
-        451 if len(args) > name_idx:
-        452     warn_deprecated(
-        453         since, message="Passing the %(name)s %(obj_type)s "
-        454         "positionally is deprecated since Matplotlib %(since)s; the "
-        455         "parameter will become keyword-only %(removal)s.",
-        456         name=name, obj_type=f"parameter of {func.__name__}()")
-    --> 457 return func(*args, **kwargs)
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/axes/_base.py:4499, in _AxesBase.get_tightbbox(self, renderer, call_axes_locator, bbox_extra_artists, for_layout_only)
-       4496     bbox_artists = self.get_default_bbox_extra_artists()
-       4498 for a in bbox_artists:
-    -> 4499     bbox = a.get_tightbbox(renderer)
-       4500     if (bbox is not None
-       4501             and 0 < bbox.width < np.inf
-       4502             and 0 < bbox.height < np.inf):
-       4503         bb.append(bbox)
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/artist.py:365, in Artist.get_tightbbox(self, renderer)
-        349 def get_tightbbox(self, renderer=None):
-        350     """
-        351     Like `.Artist.get_window_extent`, but includes any clipping.
-        352 
-       (...)
-        363         Returns None if clipping results in no intersection.
-        364     """
-    --> 365     bbox = self.get_window_extent(renderer)
-        366     if self.get_clip_on():
-        367         clip_box = self.get_clip_box()
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/patches.py:645, in Patch.get_window_extent(self, renderer)
-        644 def get_window_extent(self, renderer=None):
-    --> 645     return self.get_path().get_extents(self.get_transform())
-
-
-    File ~/intelpython3/lib/python3.9/site-packages/matplotlib/path.py:642, in Path.get_extents(self, transform, **kwargs)
-        640         # as can the ends of the curve
-        641         xys.append(curve([0, *dzeros, 1]))
-    --> 642     xys = np.concatenate(xys)
-        643 if len(xys):
-        644     return Bbox([xys.min(axis=0), xys.max(axis=0)])
-
-
-    ValueError: need at least one array to concatenate
-
-
-
-    <Figure size 480x480 with 1 Axes>
-
-
-As we can see, one of the populations identified by TopoMetry could correspond to Tfh-like cells. Let's check the expression of Tfh cells:
+As we can see, one of the populations identified by TopoMetry could correspond to cells labelled as 'Tfh' (T follicular helper). Let's check the expression of known Tfh marker genes:
 
 
 ```python
-sc.pl.embedding(adata, basis='TopoMAP', color=["PDCD1", "ICOS", "GNLY"], cmap='inferno', vmin=0, frameon=False)
+sc.pl.embedding(adata, basis='TopoMAP', color=["CXCR5", "PDCD1", "ICOS"], cmap='inferno', vmin=0, frameon=False, ncols=6)
 ```
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_45_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_44_0.png)
     
 
 
-As we can see, some cells present specific expression of PDCD1 and ICOS. These markers are associated with activated or exhausted T cells, as well as Tfh-like populations.
+As we can see, expression of PDCD1 (encoding a immune-inhibitory receptor expressed in activated T cells) was restricted to one of the T cell clusters uncovered with TopoMetry, which was labelled as a Tfh-like population by our simple classifier.
 
 ---
 ## Recomputing layouts
@@ -667,7 +530,7 @@ sc.pl.embedding(adata, basis='TopoPaCMAP', color="topo_clusters", legend_loc=Non
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_48_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_47_0.png)
     
 
 
@@ -681,15 +544,24 @@ TopoMetry includes a convenience function to visualize the process as an animate
 
 
 ```python
-tp.sc.visualize_optimization(adata, tg,
-                            num_iters=1000,  # number of iterations to visualize - adjust as needed
-                            multiscale=False) # visualize the single-scale optimization trajectory)
+# Generate and inspect GIF — should show visible movement across frames
+gif_path = tp.sc.visualize_optimization(
+    adata,
+    tg,
+    groupby='topo_clusters', # coloring by topo_clusters allows us to see how clusters move during optimization
+    num_iters=1000,  # increase number of iterations to see more movement in the GIF
+    save_every=10, # save a frame every 10 iterations to balance smoothness and file size
+    multiscale=True, # use multiscale spectral scaffold
+    fps=15, # frames per second for the GIF
+    point_size=4.0, # adjust point size for better visibility in the GIF
+    dpi=100, # increase DPI for better resolution in the GIF
+    filename='example_optimization.gif',
+)
+print('GIF saved to:', gif_path)
 ```
 
-
-
-
-    'TopoMAP_training_1773134615.gif'
+    GIF saved to: example_optimization.gif
+![Animated GIF: MAP optimization trajectory](example_optimization.gif)
 
 
 
@@ -719,7 +591,7 @@ tp.sc.plot_riemann_diagnostics(adata, tg, proj_key='X_TopoMAP', # specify any pr
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_52_1.png)
+![png](T2_step_by_step_files/T2_step_by_step_51_1.png)
     
 
 
@@ -751,7 +623,7 @@ sc.pl.embedding(adata, basis='PCA_UMAP', color='deformation_PCA_UMAP', cmap='bwr
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_55_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_54_0.png)
     
 
 
@@ -791,9 +663,13 @@ tp.sc.evaluate_representations(
 
 
     
-![png](T2_step_by_step_files/T2_step_by_step_57_0.png)
+![png](T2_step_by_step_files/T2_step_by_step_56_0.png)
     
 
+
+The resulting summary plots should be read as **operator-level evidence of geometric fidelity**. In this dataset, the TopoMetry scaffolds typically achieve higher **PF1**, **PJS**, and **SP** than PCA-derived spaces, indicating that their induced diffusion operators more closely match the reference operator on `adata.X` (i.e., neighborhoods, transition probabilities, and the global spectral organization are better preserved). 
+
+When interpreting the panels, keep the comparison **within the same dimensional regime**: evaluate **2-D layouts against other 2-D layouts** (e.g., `PCA_UMAP` vs `TopoMAP` vs `TopoPaCMAP`), and evaluate **latent spaces against latent spaces** (e.g., PCA vs spectral scaffold). Mixing these (latent vs 2-D) is an “apples-to-oranges” comparison, because any 2-D visualization necessarily compresses more information and will generally score lower than PCA or spectral scaffolds even when it is the best possible 2-D map.
 
 ---
 ## Spectral selectivity (axes ↔ labels)
@@ -808,7 +684,7 @@ The spectral scaffold is a set of eigenmodes; **spectral selectivity** asks whic
 
 - **Radius (spectral radius)** — ‖Z‖₂ of standardized scaffold coordinates; a proxy for distance from the origin in spectral space that often correlates with diffusion-time progression.
 
-Use these together to explore the geometrical structure of your data
+Use these together to explore the geometrical structure of your data:
 
 
 
@@ -820,17 +696,15 @@ spectral_selectivity_keys = ['spectral_EAS', 'spectral_RayScore', 'spectral_LAC'
 sc.pl.embedding(adata, basis="TopoMAP", color=spectral_selectivity_keys, ncols=4, cmap='inferno')
 ```
 
-    /home/davi/topometry/topo/topograph.py:2703: RuntimeWarning: invalid value encountered in log
-      H = -_np.sum(P * _np.log(P + eps), axis=1)
-
-
 
     
-![png](T2_step_by_step_files/T2_step_by_step_59_1.png)
+![png](T2_step_by_step_files/T2_step_by_step_59_0.png)
     
 
 
-High values of EAS, RayScore, and LAC co-localized on the map indicate regions where a single scaffold axis dominates (EAS), progression is radially coherent from the spectral origin (RayScore), and local geometry is effectively 1-D (LAC). These areas are prime candidates for axis-aware annotation (e.g., a differentiation ray) and for using that axis as an ordering variable (akin to pseudotime). In contrast, patches with low EAS/LAC suggest multi-axis mixing or locally 2-D/branching structure, where a single latent coordinate will not summarize biology. The spectral radius adds context: larger radius (brighter) often tracks later “diffusion time” or more advanced states along a trajectory, whereas smaller radius marks proximal/early regions near the scaffold origin. In practice, prioritize axes and neighborhoods where EAS/RayScore/LAC jointly peak, and treat low-selectivity, low-radius areas as candidate hubs, mixing zones, or early states requiring multi-axis interpretation.
+High values of EAS, RayScore, and LAC co-localized on the map indicate regions where a single scaffold axis dominates (EAS), progression is radially coherent from the spectral origin (RayScore), and local geometry is effectively 1-D (LAC). These areas are prime candidates for axis-aware annotation (e.g., a differentiation ray) and for using that axis as an ordering variable (akin to pseudotime). In contrast, patches with low EAS/LAC suggest multi-axis mixing or locally 2-D/branching structure, where a single latent coordinate will not summarize biology. The spectral radius adds context: larger radius (brighter) often tracks later “diffusion time” or more advanced states along a trajectory, whereas smaller radius marks proximal/early regions near the scaffold origin. 
+
+In practice, you can use this information to prioritize axes and neighborhoods where EAS/RayScore/LAC jointly peak, and treat low-selectivity, low-radius areas as candidate hubs, mixing zones, or early states requiring multi-axis interpretation.
 
 ---
 ## Explore scaffold feature modes
@@ -868,7 +742,7 @@ Use this when you want loadings you can explain and quantify.
 $z = \tanh^{-1}(r)$, then normalises each column by its maximum absolute value.
 Because $\tanh^{-1}$ diverges near $\pm 1$, it **amplifies strong associations**
 and compresses weak ones, making faint but consistent signals stand out.
-Use this for **pattern discovery**: revealing secondary gene programmes that are
+Use this for **enhanced pattern discovery**: revealing secondary gene programmes that are
 real but modest in raw correlation, e.g. cycling genes layered on top of a
 lineage axis. Note that the absolute magnitude is no longer directly interpretable
 after normalisation; rank and sign remain meaningful.
@@ -991,18 +865,17 @@ print(loadings['SC_0'].abs().nlargest(10).to_frame().join(loadings['SC_0'].renam
 ```
 
     Top 10 genes for SC_0 (by |corr|):
-                SC_0      corr
-    index                     
-    CST3    0.877551  0.877551
-    S100A8  0.828552  0.828552
-    FCN1    0.827702  0.827702
-    AIF1    0.825896  0.825896
-    LST1    0.823422  0.823422
-    TYROBP  0.803341  0.803341
-    LGALS2  0.780447  0.780447
-    TYMP    0.767044  0.767044
-    LGALS1  0.728653  0.728653
-    FCER1G  0.714550  0.714550
+                  SC_0      corr
+    CST3      0.906831 -0.906831
+    LYZ       0.777585 -0.777585
+    LST1      0.766309 -0.766309
+    FCN1      0.744018 -0.744018
+    S100A9    0.721993 -0.721993
+    AIF1      0.715348 -0.715348
+    SPI1      0.712691 -0.712691
+    CFD       0.708454 -0.708454
+    TYMP      0.704225 -0.704225
+    SERPINA1  0.679776 -0.679776
 
 
 ---
@@ -1019,14 +892,14 @@ tp.sc.impute_adata(
     adata,
     tg=tg,
     impute_t_grid=(2, 4, 8), # diffusion times for imputation; adjust as needed - using multiple times can provide more robust imputation but increases runtime
-    null_K=1000, # default, number of K permutations for null distribution to score against 
+    null_K=100, # default 1000, number of K permutations for null distribution to score against - we lower this for demonstration purposes, but for real analyses we recommend using a larger number (e.g. 1000) for more robust scoring
     raw=False, # whether to impute  adata.X (if False, default) or adata.raw.X (if True - massively increases runtime). 
 )
 ```
 
 
 ```python
-sc.pl.embedding(adata, basis='TopoMAP', color=['IL32', 'GZMB', 'NKG7', 'FCER1A'], cmap='inferno', layer='scaled', vmin=0)
+sc.pl.embedding(adata, basis='TopoMAP', color=['IL7R', 'CD8A', 'PDCD1', 'CD79A'], cmap='inferno', layer='scaled', vmin=0, size=10)
 ```
 
 
@@ -1037,7 +910,7 @@ sc.pl.embedding(adata, basis='TopoMAP', color=['IL32', 'GZMB', 'NKG7', 'FCER1A']
 
 
 ```python
-sc.pl.embedding(adata, basis='TopoMAP', color=['IL32', 'GZMB', 'NKG7', 'FCER1A'], cmap='inferno', layer='topo_imputation', vmin=0)
+sc.pl.embedding(adata, basis='TopoMAP', color=['IL7R', 'CD8A', 'PDCD1', 'CD79A'], cmap='inferno', layer='topo_imputation', vmin=0, size=10)
 ```
 
 
@@ -1054,7 +927,7 @@ As we can see, the imputation eliminates noisy non-specific signal across differ
 Graph signal filtering treats measurements defined on cells—such as gene expression, categorical annotations, or experimental readouts—as **signals living on a graph**, rather than as independent observations. In single-cell data, the graph encodes the manifold structure of the population through neighborhood relationships, so filtering corresponds to propagating information along biologically meaningful paths while respecting the underlying geometry. By applying diffusion operators to these signals, high-frequency noise that is inconsistent with the graph structure is attenuated, whereas coherent patterns that align with trajectories, branches, or neighborhoods are reinforced. This perspective provides a principled way to denoise, smooth, and interpret cell-level signals in a geometry-aware manner, closely analogous to low-pass filtering in classical signal processing but defined over a data-driven manifold instead of a regular grid.
 
 
-Because the example dataset (pbmc3k) consists of cells from a single healthy donor, it does not contain a naturally varying signal suitable for demonstrating graph-signal filtering. Instead, we simulate a binary disease-state label by randomly assigning half of the cells to a "disease" state:
+Because the example dataset (PBMC68k) consists of cells from a single healthy donor, it does not contain a naturally varying signal suitable for demonstrating graph-signal filtering. Instead, we simulate a binary disease-state label by randomly assigning half of the cells to a "disease" state:
 
 
 ```python
@@ -1123,472 +996,29 @@ Finally, we save a clean, portable `.h5ad` and write the fitted `TopOGraph` as a
 
 
 ```python
-adata.write_h5ad("pbmc3k_topometry.h5ad")
-tp.save_topograph(tg, "pbmc3k_topograph.pkl")
+adata.write_h5ad("pbmc68k_topometry.h5ad")
+tp.save_topograph(tg, "pbmc68k_topograph.pkl")
 ```
 
-    TopOGraph saved at pbmc3k_topograph.pkl
+    TopOGraph saved at pbmc68k_topograph.pkl
 
 
 
 ```python
 # Optional: re‑load to verify
-tg = tp.load_topograph("pbmc3k_topograph.pkl")
+tg = tp.load_topograph("pbmc68k_topograph.pkl")
 tg
 ```
 
-
-
-
-<style>#sk-container-id-1 {
-  /* Definition of color scheme common for light and dark mode */
-  --sklearn-color-text: #000;
-  --sklearn-color-text-muted: #666;
-  --sklearn-color-line: gray;
-  /* Definition of color scheme for unfitted estimators */
-  --sklearn-color-unfitted-level-0: #fff5e6;
-  --sklearn-color-unfitted-level-1: #f6e4d2;
-  --sklearn-color-unfitted-level-2: #ffe0b3;
-  --sklearn-color-unfitted-level-3: chocolate;
-  /* Definition of color scheme for fitted estimators */
-  --sklearn-color-fitted-level-0: #f0f8ff;
-  --sklearn-color-fitted-level-1: #d4ebff;
-  --sklearn-color-fitted-level-2: #b3dbfd;
-  --sklearn-color-fitted-level-3: cornflowerblue;
-
-  /* Specific color for light theme */
-  --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
-  --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, white)));
-  --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
-  --sklearn-color-icon: #696969;
-
-  @media (prefers-color-scheme: dark) {
-    /* Redefinition of color scheme for dark theme */
-    --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
-    --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, #111)));
-    --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
-    --sklearn-color-icon: #878787;
-  }
-}
-
-#sk-container-id-1 {
-  color: var(--sklearn-color-text);
-}
-
-#sk-container-id-1 pre {
-  padding: 0;
-}
-
-#sk-container-id-1 input.sk-hidden--visually {
-  border: 0;
-  clip: rect(1px 1px 1px 1px);
-  clip: rect(1px, 1px, 1px, 1px);
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  padding: 0;
-  position: absolute;
-  width: 1px;
-}
-
-#sk-container-id-1 div.sk-dashed-wrapped {
-  border: 1px dashed var(--sklearn-color-line);
-  margin: 0 0.4em 0.5em 0.4em;
-  box-sizing: border-box;
-  padding-bottom: 0.4em;
-  background-color: var(--sklearn-color-background);
-}
-
-#sk-container-id-1 div.sk-container {
-  /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
-     but bootstrap.min.css set `[hidden] { display: none !important; }`
-     so we also need the `!important` here to be able to override the
-     default hidden behavior on the sphinx rendered scikit-learn.org.
-     See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
-  display: inline-block !important;
-  position: relative;
-}
-
-#sk-container-id-1 div.sk-text-repr-fallback {
-  display: none;
-}
-
-div.sk-parallel-item,
-div.sk-serial,
-div.sk-item {
-  /* draw centered vertical line to link estimators */
-  background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
-  background-size: 2px 100%;
-  background-repeat: no-repeat;
-  background-position: center center;
-}
-
-/* Parallel-specific style estimator block */
-
-#sk-container-id-1 div.sk-parallel-item::after {
-  content: "";
-  width: 100%;
-  border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
-  flex-grow: 1;
-}
-
-#sk-container-id-1 div.sk-parallel {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  background-color: var(--sklearn-color-background);
-  position: relative;
-}
-
-#sk-container-id-1 div.sk-parallel-item {
-  display: flex;
-  flex-direction: column;
-}
-
-#sk-container-id-1 div.sk-parallel-item:first-child::after {
-  align-self: flex-end;
-  width: 50%;
-}
-
-#sk-container-id-1 div.sk-parallel-item:last-child::after {
-  align-self: flex-start;
-  width: 50%;
-}
-
-#sk-container-id-1 div.sk-parallel-item:only-child::after {
-  width: 0;
-}
-
-/* Serial-specific style estimator block */
-
-#sk-container-id-1 div.sk-serial {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background-color: var(--sklearn-color-background);
-  padding-right: 1em;
-  padding-left: 1em;
-}
-
-
-/* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
-clickable and can be expanded/collapsed.
-- Pipeline and ColumnTransformer use this feature and define the default style
-- Estimators will overwrite some part of the style using the `sk-estimator` class
-*/
-
-/* Pipeline and ColumnTransformer style (default) */
-
-#sk-container-id-1 div.sk-toggleable {
-  /* Default theme specific background. It is overwritten whether we have a
-  specific estimator or a Pipeline/ColumnTransformer */
-  background-color: var(--sklearn-color-background);
-}
-
-/* Toggleable label */
-#sk-container-id-1 label.sk-toggleable__label {
-  cursor: pointer;
-  display: flex;
-  width: 100%;
-  margin-bottom: 0;
-  padding: 0.5em;
-  box-sizing: border-box;
-  text-align: center;
-  align-items: start;
-  justify-content: space-between;
-  gap: 0.5em;
-}
-
-#sk-container-id-1 label.sk-toggleable__label .caption {
-  font-size: 0.6rem;
-  font-weight: lighter;
-  color: var(--sklearn-color-text-muted);
-}
-
-#sk-container-id-1 label.sk-toggleable__label-arrow:before {
-  /* Arrow on the left of the label */
-  content: "▸";
-  float: left;
-  margin-right: 0.25em;
-  color: var(--sklearn-color-icon);
-}
-
-#sk-container-id-1 label.sk-toggleable__label-arrow:hover:before {
-  color: var(--sklearn-color-text);
-}
-
-/* Toggleable content - dropdown */
-
-#sk-container-id-1 div.sk-toggleable__content {
-  max-height: 0;
-  max-width: 0;
-  overflow: hidden;
-  text-align: left;
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-0);
-}
-
-#sk-container-id-1 div.sk-toggleable__content.fitted {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-0);
-}
-
-#sk-container-id-1 div.sk-toggleable__content pre {
-  margin: 0.2em;
-  border-radius: 0.25em;
-  color: var(--sklearn-color-text);
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-0);
-}
-
-#sk-container-id-1 div.sk-toggleable__content.fitted pre {
-  /* unfitted */
-  background-color: var(--sklearn-color-fitted-level-0);
-}
-
-#sk-container-id-1 input.sk-toggleable__control:checked~div.sk-toggleable__content {
-  /* Expand drop-down */
-  max-height: 200px;
-  max-width: 100%;
-  overflow: auto;
-}
-
-#sk-container-id-1 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
-  content: "▾";
-}
-
-/* Pipeline/ColumnTransformer-specific style */
-
-#sk-container-id-1 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
-  color: var(--sklearn-color-text);
-  background-color: var(--sklearn-color-unfitted-level-2);
-}
-
-#sk-container-id-1 div.sk-label.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
-  background-color: var(--sklearn-color-fitted-level-2);
-}
-
-/* Estimator-specific style */
-
-/* Colorize estimator box */
-#sk-container-id-1 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-2);
-}
-
-#sk-container-id-1 div.sk-estimator.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-2);
-}
-
-#sk-container-id-1 div.sk-label label.sk-toggleable__label,
-#sk-container-id-1 div.sk-label label {
-  /* The background is the default theme color */
-  color: var(--sklearn-color-text-on-default-background);
-}
-
-/* On hover, darken the color of the background */
-#sk-container-id-1 div.sk-label:hover label.sk-toggleable__label {
-  color: var(--sklearn-color-text);
-  background-color: var(--sklearn-color-unfitted-level-2);
-}
-
-/* Label box, darken color on hover, fitted */
-#sk-container-id-1 div.sk-label.fitted:hover label.sk-toggleable__label.fitted {
-  color: var(--sklearn-color-text);
-  background-color: var(--sklearn-color-fitted-level-2);
-}
-
-/* Estimator label */
-
-#sk-container-id-1 div.sk-label label {
-  font-family: monospace;
-  font-weight: bold;
-  display: inline-block;
-  line-height: 1.2em;
-}
-
-#sk-container-id-1 div.sk-label-container {
-  text-align: center;
-}
-
-/* Estimator-specific */
-#sk-container-id-1 div.sk-estimator {
-  font-family: monospace;
-  border: 1px dotted var(--sklearn-color-border-box);
-  border-radius: 0.25em;
-  box-sizing: border-box;
-  margin-bottom: 0.5em;
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-0);
-}
-
-#sk-container-id-1 div.sk-estimator.fitted {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-0);
-}
-
-/* on hover */
-#sk-container-id-1 div.sk-estimator:hover {
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-2);
-}
-
-#sk-container-id-1 div.sk-estimator.fitted:hover {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-2);
-}
-
-/* Specification for estimator info (e.g. "i" and "?") */
-
-/* Common style for "i" and "?" */
-
-.sk-estimator-doc-link,
-a:link.sk-estimator-doc-link,
-a:visited.sk-estimator-doc-link {
-  float: right;
-  font-size: smaller;
-  line-height: 1em;
-  font-family: monospace;
-  background-color: var(--sklearn-color-background);
-  border-radius: 1em;
-  height: 1em;
-  width: 1em;
-  text-decoration: none !important;
-  margin-left: 0.5em;
-  text-align: center;
-  /* unfitted */
-  border: var(--sklearn-color-unfitted-level-1) 1pt solid;
-  color: var(--sklearn-color-unfitted-level-1);
-}
-
-.sk-estimator-doc-link.fitted,
-a:link.sk-estimator-doc-link.fitted,
-a:visited.sk-estimator-doc-link.fitted {
-  /* fitted */
-  border: var(--sklearn-color-fitted-level-1) 1pt solid;
-  color: var(--sklearn-color-fitted-level-1);
-}
-
-/* On hover */
-div.sk-estimator:hover .sk-estimator-doc-link:hover,
-.sk-estimator-doc-link:hover,
-div.sk-label-container:hover .sk-estimator-doc-link:hover,
-.sk-estimator-doc-link:hover {
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-3);
-  color: var(--sklearn-color-background);
-  text-decoration: none;
-}
-
-div.sk-estimator.fitted:hover .sk-estimator-doc-link.fitted:hover,
-.sk-estimator-doc-link.fitted:hover,
-div.sk-label-container:hover .sk-estimator-doc-link.fitted:hover,
-.sk-estimator-doc-link.fitted:hover {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-3);
-  color: var(--sklearn-color-background);
-  text-decoration: none;
-}
-
-/* Span, style for the box shown on hovering the info icon */
-.sk-estimator-doc-link span {
-  display: none;
-  z-index: 9999;
-  position: relative;
-  font-weight: normal;
-  right: .2ex;
-  padding: .5ex;
-  margin: .5ex;
-  width: min-content;
-  min-width: 20ex;
-  max-width: 50ex;
-  color: var(--sklearn-color-text);
-  box-shadow: 2pt 2pt 4pt #999;
-  /* unfitted */
-  background: var(--sklearn-color-unfitted-level-0);
-  border: .5pt solid var(--sklearn-color-unfitted-level-3);
-}
-
-.sk-estimator-doc-link.fitted span {
-  /* fitted */
-  background: var(--sklearn-color-fitted-level-0);
-  border: var(--sklearn-color-fitted-level-3);
-}
-
-.sk-estimator-doc-link:hover span {
-  display: block;
-}
-
-/* "?"-specific style due to the `<a>` HTML tag */
-
-#sk-container-id-1 a.estimator_doc_link {
-  float: right;
-  font-size: 1rem;
-  line-height: 1em;
-  font-family: monospace;
-  background-color: var(--sklearn-color-background);
-  border-radius: 1rem;
-  height: 1rem;
-  width: 1rem;
-  text-decoration: none;
-  /* unfitted */
-  color: var(--sklearn-color-unfitted-level-1);
-  border: var(--sklearn-color-unfitted-level-1) 1pt solid;
-}
-
-#sk-container-id-1 a.estimator_doc_link.fitted {
-  /* fitted */
-  border: var(--sklearn-color-fitted-level-1) 1pt solid;
-  color: var(--sklearn-color-fitted-level-1);
-}
-
-/* On hover */
-#sk-container-id-1 a.estimator_doc_link:hover {
-  /* unfitted */
-  background-color: var(--sklearn-color-unfitted-level-3);
-  color: var(--sklearn-color-background);
-  text-decoration: none;
-}
-
-#sk-container-id-1 a.estimator_doc_link.fitted:hover {
-  /* fitted */
-  background-color: var(--sklearn-color-fitted-level-3);
-}
-</style><div id="sk-container-id-1" class="sk-top-container"><div class="sk-text-repr-fallback"><pre>TopOGraph object with 2638 samples and 1838 observations and:
- . Base Kernels: 
-    bw_adaptive - .BaseKernelDict[&#x27;bw_adaptive&#x27;]
- . Eigenbases: 
-    DM with bw_adaptive - .EigenbasisDict[&#x27;DM with bw_adaptive&#x27;] 
-    msDM with bw_adaptive - .EigenbasisDict[&#x27;msDM with bw_adaptive&#x27;]
- . Graph Kernels: 
-    bw_adaptive from msDM with bw_adaptive - .GraphKernelDict[&#x27;bw_adaptive from msDM with bw_adaptive&#x27;] 
-    bw_adaptive from DM with bw_adaptive - .GraphKernelDict[&#x27;bw_adaptive from DM with bw_adaptive&#x27;]
- . Projections: 
-    MAP of bw_adaptive from msDM with bw_adaptive - .ProjectionDict[&#x27;MAP of bw_adaptive from msDM with bw_adaptive&#x27;] 
-    MAP of bw_adaptive from DM with bw_adaptive - .ProjectionDict[&#x27;MAP of bw_adaptive from DM with bw_adaptive&#x27;] 
-    PaCMAP of msDM with bw_adaptive - .ProjectionDict[&#x27;PaCMAP of msDM with bw_adaptive&#x27;] 
-    PaCMAP of DM with bw_adaptive - .ProjectionDict[&#x27;PaCMAP of DM with bw_adaptive&#x27;] 
- Active base kernel  -  .base_kernel 
- Active eigenbasis  -  .eigenbasis 
- Active graph kernel  -  .graph_kernel</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class="sk-container" hidden><div class="sk-item sk-dashed-wrapped"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually" id="sk-estimator-id-1" type="checkbox" ><label for="sk-estimator-id-1" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>TopOGraph</div></div><div><span class="sk-estimator-doc-link fitted">i<span>Fitted</span></span></div></label><div class="sk-toggleable__content fitted"><pre>TopOGraph object with 2638 samples and 1838 observations and:
- . Base Kernels: 
-    bw_adaptive - .BaseKernelDict[&#x27;bw_adaptive&#x27;]
- . Eigenbases: 
-    DM with bw_adaptive - .EigenbasisDict[&#x27;DM with bw_adaptive&#x27;] 
-    msDM with bw_adaptive - .EigenbasisDict[&#x27;msDM with bw_adaptive&#x27;]
- . Graph Kernels: 
-    bw_adaptive from msDM with bw_adaptive - .GraphKernelDict[&#x27;bw_adaptive from msDM with bw_adaptive&#x27;] 
-    bw_adaptive from DM with bw_adaptive - .GraphKernelDict[&#x27;bw_adaptive from DM with bw_adaptive&#x27;]
- . Projections: 
-    MAP of bw_adaptive from msDM with bw_adaptive - .ProjectionDict[&#x27;MAP of bw_adaptive from msDM with bw_adaptive&#x27;] 
-    MAP of bw_adaptive from DM with bw_adaptive - .ProjectionDict[&#x27;MAP of bw_adaptive from DM with bw_adaptive&#x27;] 
-    PaCMAP of msDM with bw_adaptive - .ProjectionDict[&#x27;PaCMAP of msDM with bw_adaptive&#x27;] 
-    PaCMAP of DM with bw_adaptive - .ProjectionDict[&#x27;PaCMAP of DM with bw_adaptive&#x27;] 
- Active base kernel  -  .base_kernel 
- Active eigenbasis  -  .eigenbasis 
- Active graph kernel  -  .graph_kernel</pre></div> </div></div><div class="sk-parallel"><div class="sk-parallel-item"><div class="sk-item"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually" id="sk-estimator-id-2" type="checkbox" ><label for="sk-estimator-id-2" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>base_kernel: Kernel</div></div></label><div class="sk-toggleable__content fitted"><pre>Kernel() estimator fitted with precomputed distance matrix using a kernel with adaptive bandwidth </pre></div> </div></div><div class="sk-serial"><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually" id="sk-estimator-id-3" type="checkbox" ><label for="sk-estimator-id-3" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>Kernel</div></div></label><div class="sk-toggleable__content fitted"><pre>Kernel() estimator fitted with precomputed distance matrix using a kernel with adaptive bandwidth </pre></div> </div></div></div></div></div></div></div></div></div>
-
-
-
 That's it for this tutorial! I hope TopoMetry is useful for your research.
+
+
+```python
+adata = sc.read_h5ad("pbmc68k_topometry.h5ad")
+tg = tp.load_topograph("pbmc68k_topograph.pkl")
+```
+
+
+```python
+
+```

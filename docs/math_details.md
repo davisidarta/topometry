@@ -95,7 +95,7 @@ $$
 \frac{1}{nh^{d/2+1}} L f(x_i) \;\xrightarrow{n\to\infty}\; C_d\!\left[\Delta_\mathcal{M} f + g(\nabla \log p,\, \nabla f)\right]
 $$
 
-The extra term $g(\nabla \log p, \nabla f)$ is a **drift towards high-density regions**: the random walk is pulled toward wherever there are more cells, regardless of geometry. In single-cell data, $p(x)$ reflects both true biology and artefacts (sequencing depth, cell cycle, donor variation). The standard pipeline — kNN graph without density correction — therefore encodes a mixture of geometry and sampling statistics rather than pure manifold structure.
+The extra term $g(\nabla \log p, \nabla f)$ is a **drift towards high-density regions**: the random walk is pulled toward wherever there are more cells, regardless of geometry. In single-cell data, $p(x)$ reflects both true biology and artefacts (sequencing depth, cell cycle, donor variation). The standard pipeline — kNN graph without density correction — therefore encodes a mixture of geometry and sampling statistics rather than pure manifold structure (in addition to the distortions introduced by PCA).
 
 ---
 
@@ -119,11 +119,11 @@ $$
 
 and normalise rows to obtain a Markov (row-stochastic) transition matrix $T$. The limiting operator depends on $\alpha$:
 
-| $\alpha$ | Limiting operator | Meaning |
-|----------|------------------|---------|
-| $0$ | $\Delta_\mathcal{M} + 2g(\nabla\!\log p, \nabla)$ | Density maximally distorts geometry |
-| $1/2$ | $\Delta_\mathcal{M} + g(\nabla\!\log p, \nabla)$ | Partial correction |
-| $1$ | $\Delta_\mathcal{M}$ | **Pure geometry — density fully removed** |
+| $\alpha$ | Limiting operator                                   | Meaning                                          |
+| ---------- | --------------------------------------------------- | ------------------------------------------------ |
+| $0$      | $\Delta_\mathcal{M} + 2g(\nabla\!\log p, \nabla)$ | Density maximally distorts geometry              |
+| $1/2$    | $\Delta_\mathcal{M} + g(\nabla\!\log p, \nabla)$  | Partial correction                               |
+| $1$      | $\Delta_\mathcal{M}$                              | **Pure geometry — density fully removed** |
 
 Setting $\alpha = 1$ completely cancels the drift term. TopoMetry's default `bw_adaptive` kernel applies an adaptive local bandwidth (estimated from $k$-NN distances) *before* the $\alpha = 1$ renormalisation — a double correction that removes both global and local density effects.
 
@@ -261,7 +261,7 @@ Raw expression matrix (n cells × D genes)
   6. Graph-layout optimisation (MAP / PaCMAP) → 2D visualisation
         │
         ▼
-  7. Distortion quantification via Riemannian metric
+  7. Evaluation: geometry-preservation scores and distortion quantification via Riemannian metric
 ```
 
 **Step 1 (kNN in HVG space, not PC space)** avoids the metric distortion introduced by PCA. After variance-stabilising normalisation, Euclidean distances in HVG space are already a reasonable proxy for geodesic distances — unlike distances in PCA space, which are distorted by curvature and by directions discarded by the projection.
@@ -276,15 +276,15 @@ Raw expression matrix (n cells × D genes)
 
 ## 11. Summary: Why This Is Better
 
-| Property | PCA-based pipelines (Seurat, Scanpy default) | TopoMetry |
-|----------|----------------------------------------------|-----------|
-| Geometry model | Global linear (flat) | Local nonlinear (curved manifold) |
-| Density bias | Present ($\alpha=0$ → converges to $\Delta_p \neq \Delta_\mathcal{M}$) | Removed ($\alpha=1$ or CkNN) |
-| Eigenvalue type | Variance fractions (no diffusion time) | Diffusion operator: $1 \geq \lambda_1 \geq \cdots \geq 0$ |
-| Scale sensitivity | Single scale (fixed $k$ PCs) | Multi-scale (msDM: $\lambda/(1-\lambda)$ sums over all $t$) |
-| Rare-cell detection | May miss low-variance subtypes | Preserved (no global variance filter) |
-| Distortion visible? | No | Yes (Riemannian metric diagnostics) |
-| Theoretical guarantee | None (heuristic) | Convergence to LBO eigenfunctions |
+| Property              | PCA-based pipelines (Seurat, Scanpy default)                                | TopoMetry                                                      |
+| --------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Geometry model        | Global linear (flat)                                                        | Local nonlinear (curved manifold)                              |
+| Density bias          | Present ($\alpha=0$ → converges to $\Delta_p \neq \Delta_\mathcal{M}$) | Removed ($\alpha=1$ or CkNN)                                 |
+| Eigenvalue type       | Variance fractions (no diffusion time)                                      | Diffusion operator:$1 \geq \lambda_1 \geq \cdots \geq 0$     |
+| Scale sensitivity     | Single scale (fixed$k$ PCs)                                               | Multi-scale (msDM:$\lambda/(1-\lambda)$ sums over all $t$) |
+| Rare-cell detection   | May miss low-variance subtypes                                              | Preserved (no global variance filter)                          |
+| Distortion visible?   | No                                                                          | Yes (Riemannian metric diagnostics)                            |
+| Theoretical guarantee | None (heuristic)                                                            | Convergence to LBO eigenfunctions                              |
 
 In brief: TopoMetry replaces a heuristic pipeline built for computational convenience with one that is mathematically justified to recover the intrinsic geometry of the cell-state manifold. The practical consequence is better separation of rare populations, more faithful trajectories, and visualisations where distortion is explicit rather than hidden.
 
