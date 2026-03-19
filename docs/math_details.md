@@ -22,9 +22,9 @@ The challenge for any analysis method is to *respect this intrinsic geometry* ra
 
 The standard approach — PCA followed by kNN graph construction — projects data onto the directions of maximum *global* variance in gene space. This is mathematically equivalent to finding the best-fitting flat (hyperplane) subspace.
 
-The problem: **curved manifolds cannot be faithfully represented by flat subspaces**. A spiral cannot be unrolled by projecting onto a plane without distorting distances along the spiral. More precisely:
+The problem: **curved manifolds cannot be faithfully represented by flat subspaces**. A spiral cannot be unrolled by projecting onto a plane without distorting distances along the spiral. 
 
-For PCA to preserve the geometry of $\mathcal{M}$, the tangent plane to $\mathcal{M}$ at *every* data point would need to point in the same direction — but on a curved manifold, tangent planes rotate as you move along the surface. A single global projection cannot align with all of them simultaneously.
+More precisely: for PCA to preserve the geometry of $\mathcal{M}$, the tangent plane to $\mathcal{M}$ at *every* data point would need to point in the same direction — but on a curved manifold, tangent planes rotate as you move along the surface. A single global projection cannot align with all of them simultaneously.
 
 This creates two compounding problems:
 

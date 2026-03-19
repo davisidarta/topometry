@@ -47,6 +47,14 @@ docs/*.pdf
 # --- LLM / AI tool configuration ---
 .claude/
 
+# --- Integration module (WIP) ---
+topo/integration/
+topo/integration_tests/
+
+# --- Claude blueprints (not for public Git) ---
+api_notes.md
+topometry_integration_blueprint.md
+
 # --- IDE and OS ---
 .vscode/
 .idea/
