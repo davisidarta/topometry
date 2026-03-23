@@ -6817,12 +6817,8 @@ if _HAVE_SCANPY:
             kw = _estimate_k_weight(ka, len(anc_a), k_weight)
             log_k_weight.append(kw)
 
-            # Capture reference fields for query mapping
+            # Capture U_k for query mapping (mu/sigma/cc_ref computed after correction)
             last_U_k = U_k
-            last_cc_ref = np.vstack([cc_a, cc_b])
-            last_mu_ref = X_a_ln.mean(axis=0).astype(np.float32)
-            last_sigma_ref = X_a_ln.std(axis=0, ddof=1).astype(np.float32)
-            last_sigma_ref = np.where(last_sigma_ref < 1e-8, 1.0, last_sigma_ref)
 
             # Symmetric correction
             corr_b, corr_a, sd_used = _compute_correction_vectors(
@@ -6836,6 +6832,19 @@ if _HAVE_SCANPY:
 
             X_merged_ln = np.vstack([X_a_ln_c, X_b_ln_c])
             X_merged_sc = _rescale_merged(X_merged_ln)
+
+            # Capture reference fields for query mapping:
+            # Use FULL merged statistics and re-project ALL cells through U_k.
+            # This ensures cc_ref and future query projections use the same
+            # z-scoring and the same gene-loading path.
+            last_mu_ref = X_merged_ln.mean(axis=0).astype(np.float32)
+            last_sigma_ref = X_merged_ln.std(axis=0, ddof=1).astype(np.float32)
+            last_sigma_ref = np.where(last_sigma_ref < 1e-8, 1.0, last_sigma_ref)
+            # Re-project all merged cells through U_k (same path query will use)
+            last_cc_ref = (X_merged_sc @ last_U_k).astype(np.float32)
+            row_norms = np.linalg.norm(last_cc_ref, axis=1, keepdims=True)
+            last_cc_ref /= np.where(row_norms < 1e-12, 1.0, row_norms)
+            last_cc_ref = np.ascontiguousarray(last_cc_ref)
 
             nodes[next_node] = (
                 X_merged_ln, X_merged_sc, X_orig_merged,
@@ -7364,7 +7373,7 @@ if _HAVE_SCANPY:
         label_key: str = "cell_type",
         embedding_key: str | None = None,
         k: int = 30,
-        n_threads: int = 2,
+        n_jobs: int = 2,
         seed: int = 0,
     ) -> float:
         """kNN purity: fraction of each cell's k nearest neighbors sharing its label.
@@ -7381,7 +7390,7 @@ if _HAVE_SCANPY:
             Key in .obsm. If None, uses .X (densified if sparse).
         k : int
             Number of neighbors.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib.
         seed : int
             Random seed.
@@ -7392,7 +7401,7 @@ if _HAVE_SCANPY:
         """
         Z = _get_embedding(adata, embedding_key)
         labels = np.asarray(adata.obs[label_key].values)
-        idx = _knn_indices(Z, k, n_threads, seed)
+        idx = _knn_indices(Z, k, n_jobs, seed)
         nbr_labels = labels[idx]
         purity = (nbr_labels == labels[:, None]).mean(axis=1)
         return float(purity.mean())
@@ -7402,7 +7411,7 @@ if _HAVE_SCANPY:
         batch_key: str = "batch",
         embedding_key: str | None = None,
         k: int = 30,
-        n_threads: int = 2,
+        n_jobs: int = 2,
         seed: int = 0,
     ) -> float:
         """kNN mixing: fraction of each cell's k nearest neighbors from a different batch.
@@ -7419,7 +7428,7 @@ if _HAVE_SCANPY:
             Key in .obsm. If None, uses .X.
         k : int
             Number of neighbors.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib.
         seed : int
             Random seed.
@@ -7430,7 +7439,7 @@ if _HAVE_SCANPY:
         """
         Z = _get_embedding(adata, embedding_key)
         batches = np.asarray(adata.obs[batch_key].values)
-        idx = _knn_indices(Z, k, n_threads, seed)
+        idx = _knn_indices(Z, k, n_jobs, seed)
         nbr_batches = batches[idx]
         mixing = (nbr_batches != batches[:, None]).mean(axis=1)
         return float(mixing.mean())
@@ -7440,7 +7449,7 @@ if _HAVE_SCANPY:
         batch_key: str = "batch",
         embedding_key: str | None = None,
         k: int = 30,
-        n_threads: int = 2,
+        n_jobs: int = 2,
         seed: int = 0,
         return_per_cell: bool = False,
     ):
@@ -7457,7 +7466,7 @@ if _HAVE_SCANPY:
             Key in .obsm. If None, uses .X.
         k : int
             Number of neighbors.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib.
         seed : int
             Random seed.
@@ -7470,7 +7479,7 @@ if _HAVE_SCANPY:
         """
         Z = _get_embedding(adata, embedding_key)
         labels = np.asarray(adata.obs[batch_key].values)
-        vals = _compute_lisi_values(Z, labels, k, n_threads, seed)
+        vals = _compute_lisi_values(Z, labels, k, n_jobs, seed)
         if return_per_cell:
             return vals
         return float(np.median(vals))
@@ -7480,7 +7489,7 @@ if _HAVE_SCANPY:
         label_key: str = "cell_type",
         embedding_key: str | None = None,
         k: int = 30,
-        n_threads: int = 2,
+        n_jobs: int = 2,
         seed: int = 0,
         return_per_cell: bool = False,
     ):
@@ -7497,7 +7506,7 @@ if _HAVE_SCANPY:
             Key in .obsm. If None, uses .X.
         k : int
             Number of neighbors.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib.
         seed : int
             Random seed.
@@ -7510,7 +7519,7 @@ if _HAVE_SCANPY:
         """
         Z = _get_embedding(adata, embedding_key)
         labels = np.asarray(adata.obs[label_key].values)
-        vals = _compute_lisi_values(Z, labels, k, n_threads, seed)
+        vals = _compute_lisi_values(Z, labels, k, n_jobs, seed)
         if return_per_cell:
             return vals
         return float(np.median(vals))
@@ -7551,7 +7560,7 @@ if _HAVE_SCANPY:
         cluster_key: str = "topo_clusters",
         embedding_key: str | None = None,
         k: int = 30,
-        n_threads: int = 2,
+        n_jobs: int = 2,
         seed: int = 0,
     ) -> dict:
         """Compute a suite of integration quality metrics.
@@ -7579,7 +7588,7 @@ if _HAVE_SCANPY:
             by default for corrected data.
         k : int
             Number of neighbors for kNN-based metrics.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib.
         seed : int
             Random seed.
@@ -7609,19 +7618,19 @@ if _HAVE_SCANPY:
             if 'knn_purity' in metrics and cell_type_key is not None:
                 result['knn_purity'] = knn_purity(
                     ad, label_key=cell_type_key, embedding_key=ek,
-                    k=k, n_threads=n_threads, seed=seed)
+                    k=k, n_jobs=n_jobs, seed=seed)
             if 'knn_mixing' in metrics:
                 result['knn_mixing'] = knn_mixing(
                     ad, batch_key=batch_key, embedding_key=ek,
-                    k=k, n_threads=n_threads, seed=seed)
+                    k=k, n_jobs=n_jobs, seed=seed)
             if 'ilisi' in metrics:
                 result['ilisi'] = ilisi(
                     ad, batch_key=batch_key, embedding_key=ek,
-                    k=k, n_threads=n_threads, seed=seed)
+                    k=k, n_jobs=n_jobs, seed=seed)
             if 'clisi' in metrics and cell_type_key is not None:
                 result['clisi'] = clisi(
                     ad, label_key=cell_type_key, embedding_key=ek,
-                    k=k, n_threads=n_threads, seed=seed)
+                    k=k, n_jobs=n_jobs, seed=seed)
             if 'ari' in metrics and cell_type_key is not None and cluster_key in ad.obs.columns:
                 result['ari'] = cluster_agreement(
                     ad, label_key=cell_type_key, cluster_key=cluster_key)['ari']
@@ -7659,20 +7668,20 @@ if _HAVE_SCANPY:
             Z = np.asarray(Z, dtype=np.float32)
         return np.ascontiguousarray(Z)
 
-    def _knn_indices(Z, k, n_threads, seed):
+    def _knn_indices(Z, k, n_jobs, seed):
         """Build hnswlib index on Z, return (n, k) neighbor indices (excluding self)."""
         n = Z.shape[0]
         k_eff = min(k, n - 1)
-        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_threads, seed=seed)
-        labels, _ = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_threads)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_jobs, seed=seed)
+        labels, _ = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_jobs)
         return labels[:, 1:k_eff + 1]
 
-    def _compute_lisi_values(Z, labels, k, n_threads, seed):
+    def _compute_lisi_values(Z, labels, k, n_jobs, seed):
         """Compute per-cell LISI values with Gaussian kernel weighting."""
         n = Z.shape[0]
         k_eff = min(k, n - 1)
-        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_threads, seed=seed)
-        labels_nn, dists = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_threads)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_jobs, seed=seed)
+        labels_nn, dists = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_jobs)
         labels_nn = labels_nn[:, 1:k_eff + 1]
         dists = dists[:, 1:k_eff + 1]
 
