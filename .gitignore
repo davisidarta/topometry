@@ -54,6 +54,9 @@ topo/integration_tests/
 # --- Claude blueprints (not for public Git) ---
 api_notes.md
 topometry_integration_blueprint.md
+cca_integration_blueprint.md
+cca_integration_blueprint_final.md
+cca_implementation_report.md
 
 # --- IDE and OS ---
 .vscode/

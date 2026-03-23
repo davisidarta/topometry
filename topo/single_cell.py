@@ -5976,4 +5976,1724 @@ if _HAVE_SCANPY:
         if show:
             plt.show()
         else:
-            return ax
+            return ax    # =======================================================================
+    # CCA-Anchor Batch Integration (Seurat v3-style)
+    # =======================================================================
+    #
+    # Python implementation of the Seurat v3 integration workflow
+    # (Stuart et al., 2019, Cell), without PCA.  CCA replaces PCA as the
+    # shared low-dimensional space for anchor finding.  Correction is
+    # applied symmetrically in log-normalised expression space (both
+    # datasets move to a midpoint).  Corrected values are clamped >= 0.
+    #
+    # No PCA anywhere.  No sklearn.neighbors.  hnswlib for all kNN.
+    # All new code: private helpers + one public function.
+    # =======================================================================
+
+    # ── hnswlib helpers ────────────────────────────────────────────────────
+
+    def _build_hnsw_index(
+        data: np.ndarray,
+        space: str = "l2",
+        M: int = 60,
+        ef_construction: int = 200,
+        n_threads: int = 1,
+        seed: int = 0,
+    ):
+        """Build an HNSW index. *data* must be C-contiguous float32."""
+        import hnswlib
+        n, d = data.shape
+        idx = hnswlib.Index(space=space, dim=d)
+        idx.init_index(max_elements=n, ef_construction=ef_construction,
+                       M=M, random_seed=seed)
+        idx.set_num_threads(n_threads)
+        idx.add_items(np.ascontiguousarray(data.astype(np.float32)))
+        return idx
+
+    def _query_hnsw(
+        index,
+        queries: np.ndarray,
+        k: int,
+        ef: int | None = None,
+        n_threads: int = 1,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Query HNSW index.  Returns (labels, distances), shape (m, k)."""
+        if ef is None:
+            ef = max(k * 2, 50)
+        index.set_ef(ef)
+        index.set_num_threads(n_threads)
+        labels, dists = index.knn_query(
+            np.ascontiguousarray(queries.astype(np.float32)), k=k)
+        return labels.astype(np.int32), dists.astype(np.float32)
+
+    # ── Hyperparameter estimators ──────────────────────────────────────────
+
+    def _estimate_n_features(adatas: list, n_features):
+        shared = set(adatas[0].var_names)
+        for a in adatas[1:]:
+            shared &= set(a.var_names)
+        n_shared = len(shared)
+        if n_features is not None:
+            assert n_features > 0
+            return min(n_features, n_shared)
+        return max(200, min(3000, n_shared))
+
+    def _estimate_k_anchor(n_a: int, n_b: int, k_anchor):
+        if k_anchor is not None:
+            return max(2, min(20, k_anchor))
+        k = int(round(np.sqrt(min(n_a, n_b)) / 2))
+        return max(2, min(20, k))
+
+    def _estimate_k_filter(n_a: int, n_b: int, k_filter):
+        if k_filter is not None:
+            return k_filter  # 0 = disabled
+        k = int(round(0.2 * min(n_a, n_b)))
+        return max(50, min(500, k))
+
+    def _estimate_k_score(k_anchor: int, k_score):
+        if k_score is not None:
+            return max(k_anchor, min(100, k_score))
+        return max(k_anchor, min(100, k_anchor * 6))
+
+    def _estimate_k_weight(k_anchor: int, n_anchors: int, k_weight):
+        if k_weight is not None:
+            return min(k_weight, n_anchors)
+        return min(max(k_anchor * 20, 100), n_anchors)
+
+    def _estimate_sd_bandwidth(raw_w_b: np.ndarray, sd_bandwidth):
+        import warnings as _w
+        if sd_bandwidth is not None:
+            return float(sd_bandwidth)
+        pos = raw_w_b[raw_w_b > 0]
+        if pos.size == 0 or np.median(pos) < 1e-4:
+            _w.warn("Degenerate raw_w; using sd_bandwidth=1.0")
+            return 1.0
+        median_rw = float(np.median(pos))
+        return float(2.0 * np.sqrt(np.log(2.0) / median_rw))
+
+    # ── Raw-count heuristic ────────────────────────────────────────────────
+
+    def _is_raw_counts(X: np.ndarray) -> bool:
+        """Return True if X appears to be raw integer count data."""
+        if X.max() <= 20:
+            return False
+        if np.issubdtype(X.dtype, np.integer):
+            return True
+        nz = X[X > 0]
+        if nz.size > 10_000:
+            rng = np.random.default_rng(0)
+            nz = rng.choice(nz, size=10_000, replace=False)
+        return bool(np.all(nz == np.floor(nz)))
+
+    # ── Feature selection ──────────────────────────────────────────────────
+
+    def _select_integration_features(
+        adatas: list,
+        n_features: int,
+    ) -> list[str]:
+        """Select integration genes via Seurat v3-style ranked HVG union."""
+        import warnings as _w
+
+        shared = set(adatas[0].var_names)
+        for a in adatas[1:]:
+            shared &= set(a.var_names)
+        shared = sorted(shared)
+        if len(shared) < 50:
+            raise ValueError(
+                f"Datasets share only {len(shared)} genes (minimum 50).")
+
+        hvg_per = []
+        disp_per = []
+        for a in adatas:
+            a_copy = a[:, shared].copy()
+            X_check = a_copy.X
+            if sp.issparse(X_check):
+                X_check = X_check.toarray()
+            if _is_raw_counts(X_check):
+                flavor = "seurat_v3"
+                disp_col = "variances_norm"
+            else:
+                flavor = "seurat"
+                disp_col = "dispersions_norm"
+                if "log1p" not in a.uns:
+                    _w.warn(
+                        "Input does not appear to be raw counts or scanpy-logged; "
+                        "using flavor='seurat'. For best results, provide raw counts.",
+                        UserWarning, stacklevel=3)
+            try:
+                sc.pp.highly_variable_genes(
+                    a_copy, flavor=flavor,
+                    n_top_genes=min(n_features, len(shared)),
+                    inplace=True)
+            except Exception:
+                sc.pp.highly_variable_genes(
+                    a_copy, flavor="seurat",
+                    n_top_genes=min(n_features, len(shared)),
+                    inplace=True)
+                disp_col = "dispersions_norm"
+
+            hvg_set = set(a_copy.var_names[a_copy.var["highly_variable"]])
+            hvg_per.append(hvg_set)
+            if disp_col in a_copy.var.columns:
+                disp = dict(zip(a_copy.var_names, a_copy.var[disp_col]))
+            elif "dispersions" in a_copy.var.columns:
+                disp = dict(zip(a_copy.var_names, a_copy.var["dispersions"]))
+            else:
+                disp = {g: 0.0 for g in shared}
+            disp_per.append(disp)
+
+        gene_counts = {}
+        gene_disp = {}
+        for g in shared:
+            gene_counts[g] = sum(1 for s in hvg_per if g in s)
+            gene_disp[g] = np.mean([d.get(g, 0.0) for d in disp_per])
+        ranked = sorted(shared,
+                        key=lambda g: (-gene_counts[g], -gene_disp[g], g))
+        result = ranked[:min(n_features, len(shared))]
+        assert all(g in set(a.var_names) for a in adatas for g in result)
+        return result
+
+    # ── Matrix preparation ─────────────────────────────────────────────────
+
+    def _prepare_matrices(
+        adata,
+        features: list[str],
+        batch_name: str = "",
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return (X_lognorm, X_scaled) for one dataset."""
+        import warnings as _w
+        X_sub = adata[:, features].X
+        if sp.issparse(X_sub):
+            X_sub = X_sub.toarray()
+        X_sub = np.asarray(X_sub, dtype=np.float32)
+
+        if _is_raw_counts(X_sub):
+            row_sums = X_sub.sum(axis=1, keepdims=True)
+            row_sums = np.where(row_sums == 0, 1.0, row_sums)
+            X_lognorm = np.log1p(X_sub / row_sums * 1e4).astype(np.float32)
+            _w.warn(
+                f"Batch '{batch_name}': raw counts detected; "
+                "applying log1p(CPM/1e4).",
+                UserWarning, stacklevel=3)
+        else:
+            X_lognorm = X_sub.astype(np.float32)
+        X_lognorm = np.ascontiguousarray(X_lognorm)
+
+        mu = X_lognorm.mean(axis=0)
+        sigma = X_lognorm.std(axis=0, ddof=1)
+        sigma = np.where(sigma < 1e-8, 1.0, sigma)
+        X_scaled = np.clip((X_lognorm - mu) / sigma, -10.0, 10.0)
+        X_scaled = np.ascontiguousarray(X_scaled.astype(np.float32))
+        return X_lognorm, X_scaled
+
+    def _rescale_merged(X_lognorm: np.ndarray) -> np.ndarray:
+        """Z-score a merged lognorm matrix for the next CCA step."""
+        mu = X_lognorm.mean(axis=0)
+        sigma = X_lognorm.std(axis=0, ddof=1)
+        sigma = np.where(sigma < 1e-8, 1.0, sigma)
+        return np.ascontiguousarray(
+            np.clip((X_lognorm - mu) / sigma, -10.0, 10.0).astype(np.float32))
+
+    # ── CCA ────────────────────────────────────────────────────────────────
+
+    def _compute_cca(
+        X_a_scaled: np.ndarray,
+        X_b_scaled: np.ndarray,
+        n_components: int,
+        seed: int = 0,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Diagonalised CCA via truncated SVD of the cell-cell cross-product.
+
+        CCA formulation (Python cells x genes convention):
+            C = X_a_scaled @ X_b_scaled.T    shape (n_a, n_b)
+        Works for any n_a, n_b (no requirement that batch sizes match).
+
+        Gene loadings are recovered by back-projection from the RAW
+        (un-normalised) left singular vectors BEFORE row-normalisation is
+        applied to cc_a.  Computing U_k after normalisation distorts the
+        loading magnitudes.
+
+        Returns
+        -------
+        cc_a : (n_a, k) L2-normalised CCA coordinates for A
+        cc_b : (n_b, k) L2-normalised CCA coordinates for B
+        U_k  : (p, k)   gene loadings, column-normalised.
+               Computed from raw U BEFORE row-normalising cc_a.
+               Passed to _filter_anchors_hd and stored for query mapping.
+
+        where k = min(n_components, min(n_a, n_b) - 1).
+        """
+        from sklearn.utils.extmath import randomized_svd
+        n_a, p = X_a_scaled.shape
+        n_b = X_b_scaled.shape[0]
+        k = min(n_components, min(n_a, n_b) - 1)
+        if k < 1:
+            raise ValueError(
+                f"Cannot compute CCA: min(n_a={n_a}, n_b={n_b}) - 1 < 1.")
+
+        # Cell-cell cross-product — valid for any n_a, n_b
+        C = X_a_scaled @ X_b_scaled.T
+        U_raw, _, Vt_raw = randomized_svd(
+            C, n_components=k, n_iter=4, random_state=seed)
+
+        # Step 1: gene loadings from RAW singular vectors (before row-norm)
+        U_k = X_a_scaled.T @ U_raw                          # (p, k)
+        col_norms = np.linalg.norm(U_k, axis=0, keepdims=True)
+        U_k /= np.where(col_norms < 1e-12, 1.0, col_norms)
+        U_k = np.ascontiguousarray(U_k.astype(np.float32))
+
+        # Step 2: row-normalise CCA cell coordinates
+        cc_a = U_raw.astype(np.float32)
+        cc_b = Vt_raw.T.astype(np.float32)
+        cc_a /= (np.linalg.norm(cc_a, axis=1, keepdims=True) + 1e-12)
+        cc_b /= (np.linalg.norm(cc_b, axis=1, keepdims=True) + 1e-12)
+
+        return (np.ascontiguousarray(cc_a),
+                np.ascontiguousarray(cc_b),
+                U_k)
+
+    # ── MNN anchors ────────────────────────────────────────────────────────
+
+    def _find_mnn_in_cca(
+        cc_a: np.ndarray,
+        cc_b: np.ndarray,
+        k: int,
+        n_threads: int = 1,
+        seed: int = 0,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Mutual nearest neighbours in CCA space via hnswlib."""
+        n_a, n_b = len(cc_a), len(cc_b)
+        k_a = min(k, n_b - 1)
+        k_b = min(k, n_a - 1)
+        if k_a < 1 or k_b < 1:
+            return np.array([], dtype=np.int32), np.array([], dtype=np.int32)
+
+        if n_threads > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                fut_b = ex.submit(_build_hnsw_index, cc_b, "l2", 60, 200, 1, seed)
+                fut_a = ex.submit(_build_hnsw_index, cc_a, "l2", 60, 200, 1, seed)
+                idx_b_hnsw = fut_b.result()
+                idx_a_hnsw = fut_a.result()
+        else:
+            idx_b_hnsw = _build_hnsw_index(cc_b, "l2", 60, 200, 1, seed)
+            idx_a_hnsw = _build_hnsw_index(cc_a, "l2", 60, 200, 1, seed)
+
+        idx_a2b, _ = _query_hnsw(idx_b_hnsw, cc_a, k=k_a, n_threads=n_threads)
+        idx_b2a, _ = _query_hnsw(idx_a_hnsw, cc_b, k=k_b, n_threads=n_threads)
+
+        # Vectorised MNN via sparse boolean AND
+        rows_a = np.repeat(np.arange(n_a, dtype=np.int32), k_a)
+        cols_a = idx_a2b.ravel().astype(np.int32)
+        A2B = sp.csr_matrix(
+            (np.ones(len(rows_a), dtype=np.bool_), (rows_a, cols_a)),
+            shape=(n_a, n_b))
+
+        rows_b = np.repeat(np.arange(n_b, dtype=np.int32), k_b)
+        cols_b = idx_b2a.ravel().astype(np.int32)
+        B2A = sp.csr_matrix(
+            (np.ones(len(rows_b), dtype=np.bool_), (rows_b, cols_b)),
+            shape=(n_b, n_a))
+
+        mnn = A2B.multiply(B2A.T)
+        anchor_a, anchor_b = mnn.nonzero()
+        return np.asarray(anchor_a, dtype=np.int32), np.asarray(anchor_b, dtype=np.int32)
+
+    # ── HD filter ──────────────────────────────────────────────────────────
+
+    def _filter_anchors_hd(
+        anchor_a: np.ndarray,
+        anchor_b: np.ndarray,
+        X_a_scaled: np.ndarray,
+        X_b_scaled: np.ndarray,
+        U_k: np.ndarray,
+        k_filter: int,
+        n_threads: int = 1,
+        seed: int = 0,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Discard CCA anchors not supported in CCA-loading-weighted feature space."""
+        if k_filter == 0 or len(anchor_a) == 0:
+            return anchor_a, anchor_b
+
+        p = X_a_scaled.shape[1]
+        weights = np.abs(U_k).sum(axis=1)
+        weights /= (weights.sum() + 1e-12)
+
+        max_feat = min(200, p)
+        top_idx = np.argsort(weights)[-max_feat:]
+
+        X_a_top = X_a_scaled[:, top_idx] * weights[top_idx][None, :]
+        X_b_top = X_b_scaled[:, top_idx] * weights[top_idx][None, :]
+
+        norms_a = np.linalg.norm(X_a_top, axis=1, keepdims=True)
+        norms_b = np.linalg.norm(X_b_top, axis=1, keepdims=True)
+        X_a_top = X_a_top / np.where(norms_a < 1e-12, 1.0, norms_a)
+        X_b_top = X_b_top / np.where(norms_b < 1e-12, 1.0, norms_b)
+        X_a_top = np.ascontiguousarray(X_a_top.astype(np.float32))
+        X_b_top = np.ascontiguousarray(X_b_top.astype(np.float32))
+
+        k_filter = min(k_filter, X_a_top.shape[0] - 1)
+        if k_filter < 1:
+            return anchor_a, anchor_b
+
+        unique_b, inv = np.unique(anchor_b, return_inverse=True)
+        idx_a_hnsw = _build_hnsw_index(X_a_top, "l2", 60, 200, n_threads, seed)
+        labels, _ = _query_hnsw(idx_a_hnsw, X_b_top[unique_b],
+                                 k=k_filter, n_threads=n_threads)
+        labels_per_anchor = labels[inv]
+        keep = (labels_per_anchor == anchor_a[:, None]).any(axis=1)
+        return anchor_a[keep], anchor_b[keep]
+
+    # ── SNN scoring ────────────────────────────────────────────────────────
+
+    def _score_anchors(
+        anchor_a: np.ndarray,
+        anchor_b: np.ndarray,
+        cc_a: np.ndarray,
+        cc_b: np.ndarray,
+        k_score: int,
+        n_threads: int = 1,
+        seed: int = 0,
+    ) -> np.ndarray:
+        """SNN-overlap scores rescaled to [0, 1]."""
+        n_a, n_b = len(cc_a), len(cc_b)
+        k_a = min(k_score, n_a - 1)
+        k_b = min(k_score, n_b - 1)
+        if k_a < 1 or k_b < 1 or len(anchor_a) == 0:
+            return np.ones(len(anchor_a), dtype=np.float32)
+
+        # Within-dataset kNN
+        if n_threads > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                fut_a = ex.submit(_build_hnsw_index, cc_a, "l2", 60, 200, 1, seed)
+                fut_b = ex.submit(_build_hnsw_index, cc_b, "l2", 60, 200, 1, seed)
+                idx_a_h = fut_a.result()
+                idx_b_h = fut_b.result()
+        else:
+            idx_a_h = _build_hnsw_index(cc_a, "l2", 60, 200, 1, seed)
+            idx_b_h = _build_hnsw_index(cc_b, "l2", 60, 200, 1, seed)
+
+        N_a_idx, _ = _query_hnsw(idx_a_h, cc_a, k=k_a, n_threads=n_threads)
+        N_b_idx, _ = _query_hnsw(idx_b_h, cc_b, k=k_b, n_threads=n_threads)
+
+        # Sparse neighbourhood matrices
+        SNN_A = sp.csr_matrix(
+            (np.ones(n_a * k_a, dtype=np.float32),
+             (np.repeat(np.arange(n_a, dtype=np.int32), k_a),
+              N_a_idx.ravel().astype(np.int32))),
+            shape=(n_a, n_a))
+
+        SNN_B = sp.csr_matrix(
+            (np.ones(n_b * k_b, dtype=np.float32),
+             (np.repeat(np.arange(n_b, dtype=np.int32), k_b),
+              N_b_idx.ravel().astype(np.int32))),
+            shape=(n_b, n_b))
+
+        ANC_B2A = sp.csr_matrix(
+            (np.ones(len(anchor_a), dtype=np.float32),
+             (anchor_b.astype(np.int32), anchor_a.astype(np.int32))),
+            shape=(n_b, n_a))
+
+        # REACH via unique anchor_b rows
+        unique_anc_b, inv_anc_b = np.unique(anchor_b, return_inverse=True)
+        REACH_rows = SNN_B[unique_anc_b] @ ANC_B2A
+        REACH_at_anchors = REACH_rows[inv_anc_b]
+
+        # Chunked overlap
+        chunk_size = min(10_000, len(anchor_a))
+        raw_scores = np.zeros(len(anchor_a), dtype=np.float32)
+        for s in range(0, len(anchor_a), chunk_size):
+            e = min(s + chunk_size, len(anchor_a))
+            ov = SNN_A[anchor_a[s:e]].multiply(REACH_at_anchors[s:e])
+            raw_scores[s:e] = np.asarray(ov.sum(axis=1)).ravel()
+        raw_scores /= (2.0 * k_score)
+
+        # Rescale
+        q01 = float(np.quantile(raw_scores, 0.01))
+        q90 = float(np.quantile(raw_scores, 0.90))
+        if q90 > q01:
+            scores = np.clip((raw_scores - q01) / (q90 - q01), 0.0, 1.0)
+        else:
+            scores = np.ones(len(raw_scores), dtype=np.float32)
+        return scores.astype(np.float32)
+
+    # ── Symmetric correction ───────────────────────────────────────────────
+
+    def _compute_correction_vectors(
+        X_a_lognorm: np.ndarray,
+        X_b_lognorm: np.ndarray,
+        anchor_a: np.ndarray,
+        anchor_b: np.ndarray,
+        scores: np.ndarray,
+        cc_a: np.ndarray,
+        cc_b: np.ndarray,
+        k_weight: int,
+        sd_bandwidth,
+        n_threads: int = 1,
+        seed: int = 0,
+    ) -> tuple[np.ndarray, np.ndarray, float]:
+        """Symmetric per-cell correction in log-normalised expression space."""
+        n_a = X_a_lognorm.shape[0]
+        n_b = X_b_lognorm.shape[0]
+        p = X_a_lognorm.shape[1]
+        n_anc = len(anchor_a)
+
+        # Midpoint batch vectors
+        midpoint_vecs = (X_a_lognorm[anchor_a] - X_b_lognorm[anchor_b]) / 2.0
+
+        # Anchor positions in CCA space
+        anchor_pos_b = np.ascontiguousarray(cc_b[anchor_b].astype(np.float32))
+        anchor_pos_a = np.ascontiguousarray(cc_a[anchor_a].astype(np.float32))
+
+        k_eff = min(k_weight, n_anc)
+
+        # Build HNSW on anchor positions
+        if n_threads > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                fut_b = ex.submit(_build_hnsw_index, anchor_pos_b, "l2", 60, 200, 1, seed)
+                fut_a = ex.submit(_build_hnsw_index, anchor_pos_a, "l2", 60, 200, 1, seed)
+                idx_anc_b = fut_b.result()
+                idx_anc_a = fut_a.result()
+        else:
+            idx_anc_b = _build_hnsw_index(anchor_pos_b, "l2", 60, 200, 1, seed)
+            idx_anc_a = _build_hnsw_index(anchor_pos_a, "l2", 60, 200, 1, seed)
+
+        idx_b, dist_b = _query_hnsw(idx_anc_b, cc_b, k=k_eff, n_threads=n_threads)
+        idx_a, dist_a = _query_hnsw(idx_anc_a, cc_a, k=k_eff, n_threads=n_threads)
+
+        # Raw weights
+        d_k_b = dist_b[:, -1:] + 1e-10
+        raw_w_b = np.clip(1.0 - dist_b / d_k_b, 0.0, 1.0) * scores[idx_b]
+
+        d_k_a = dist_a[:, -1:] + 1e-10
+        raw_w_a = np.clip(1.0 - dist_a / d_k_a, 0.0, 1.0) * scores[idx_a]
+
+        # Estimate sd
+        sd = _estimate_sd_bandwidth(raw_w_b, sd_bandwidth)
+
+        # Gaussian kernel
+        sd_val = 2.0 / sd
+        kernel_b = 1.0 - np.exp(-raw_w_b / sd_val**2)
+        kernel_a = 1.0 - np.exp(-raw_w_a / sd_val**2)
+
+        # Row-normalise
+        kernel_b /= (kernel_b.sum(axis=1, keepdims=True) + 1e-12)
+        kernel_a /= (kernel_a.sum(axis=1, keepdims=True) + 1e-12)
+
+        # Weighted correction (chunked einsum)
+        corr_b = np.zeros((n_b, p), dtype=np.float32)
+        chunk = max(500, n_b // max(1, n_threads))
+        for s in range(0, n_b, chunk):
+            e = min(s + chunk, n_b)
+            corr_b[s:e] = np.einsum(
+                'ck,ckp->cp',
+                kernel_b[s:e],
+                midpoint_vecs[idx_b[s:e]])
+
+        corr_a = np.zeros((n_a, p), dtype=np.float32)
+        chunk = max(500, n_a // max(1, n_threads))
+        for s in range(0, n_a, chunk):
+            e = min(s + chunk, n_a)
+            corr_a[s:e] = np.einsum(
+                'ck,ckp->cp',
+                kernel_a[s:e],
+                -midpoint_vecs[idx_a[s:e]])
+
+        return corr_b, corr_a, sd
+
+    # ── Guide tree ─────────────────────────────────────────────────────────
+
+    def _build_guide_tree(
+        adatas: list,
+        features: list[str],
+        n_components: int,
+        n_threads: int,
+        seed: int,
+    ) -> list[tuple[int, int]]:
+        """Data-driven pairwise merge order for N > 2 datasets."""
+        from scipy.cluster.hierarchy import linkage
+        from scipy.spatial.distance import squareform
+
+        N = len(adatas)
+        features_low = features[:min(500, len(features))]
+
+        def _pair_sim(i, j):
+            Xi_ln, Xi_sc = _prepare_matrices(adatas[i], features_low)
+            Xj_ln, Xj_sc = _prepare_matrices(adatas[j], features_low)
+            nc = min(10, n_components)
+            try:
+                cc_i, cc_j, _ = _compute_cca(Xi_sc, Xj_sc, nc, seed)
+                anc_i, anc_j = _find_mnn_in_cca(cc_i, cc_j, k=3,
+                                                   n_threads=1, seed=seed)
+                return len(anc_i) / max(1, min(len(Xi_sc), len(Xj_sc)))
+            except Exception:
+                return 0.0
+
+        pairs = [(i, j) for i in range(N) for j in range(i + 1, N)]
+        if n_threads > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=n_threads) as ex:
+                sim_values = list(ex.map(lambda p: _pair_sim(*p), pairs))
+        else:
+            sim_values = [_pair_sim(i, j) for i, j in pairs]
+
+        D = np.zeros((N, N), dtype=np.float64)
+        for (i, j), sim in zip(pairs, sim_values):
+            d = 1.0 / (sim + 1e-6)
+            D[i, j] = d
+            D[j, i] = d
+
+        Z = linkage(squareform(D), method="average")
+        return [(int(Z[i, 0]), int(Z[i, 1])) for i in range(len(Z))]
+
+    def _node_name(node_id: int, batch_names: list[str]) -> str:
+        if node_id < len(batch_names):
+            return batch_names[node_id]
+        return f"merged_node_{node_id}"
+
+    # ── Public API ─────────────────────────────────────────────────────────
+
+    def run_cca_integration(
+        data,
+        batch_key: str | None = None,
+        n_features: int | None = None,
+        n_components: int = 30,
+        k_anchor: int | None = None,
+        k_filter: int | None = None,
+        k_score: int | None = None,
+        k_weight: int | None = None,
+        sd_bandwidth: float | None = None,
+        scale_output: bool = True,
+        n_threads: int = 1,
+        layer: str | None = None,
+        seed: int = 0,
+        _fixed_features: list | None = None,
+    ):
+        """CCA-anchor batch correction for scRNA-seq data.
+
+        Python implementation of the Seurat v3 integration workflow
+        (Stuart et al., 2019, Cell), without PCA. CCA replaces PCA as the
+        shared low-dimensional space for anchor finding. Correction is
+        applied in log-normalised expression space.
+
+        Symmetric correction: both datasets move to a shared midpoint at
+        each merge step, so no single dataset acts as a fixed reference.
+        Corrected values are clamped to >= 0 (log-normalised values cannot
+        be negative).
+
+        Known approximation: z-scoring is applied per dataset independently
+        before CCA, approximating the global cross-dataset covariance. This
+        matches Seurat's behaviour.
+
+        Parameters
+        ----------
+        data : AnnData or list[AnnData]
+            Single AnnData (requires batch_key) or list of per-batch AnnData.
+        batch_key : str, optional
+            .obs column identifying batches. Required for single AnnData input.
+        n_features : int, optional
+            Number of integration genes. Default None -> max(200, min(3000,
+            n_shared_genes)).
+        n_components : int
+            CCA dimensions. Default 30 (same as Seurat).
+        k_anchor : int, optional
+            k for MNN search. Default None -> sqrt(n_min)/2, clamped [2, 20].
+        k_filter : int, optional
+            HD-support filter k. Set 0 to disable. Default None ->
+            0.2 * n_min, clamped [50, 500].
+        k_score : int, optional
+            SNN-scoring k. Default None -> clamp(k_anchor*6, k_anchor, 100).
+        k_weight : int, optional
+            Correction smoothing k. Default None -> min(max(k_anchor*20, 100),
+            n_anchors).
+        sd_bandwidth : float, optional
+            Gaussian kernel bandwidth. Default None -> calibrated from raw_w.
+        n_threads : int
+            Threads for hnswlib. Default 1.
+        scale_output : bool
+            If True (default), z-score the corrected expression and store it
+            in .X (ready for TopOGraph / tp.sc.fit_adata). The corrected
+            log-normalised expression is preserved in .layers["corrected"].
+            If False, .X contains the corrected log-normalised expression
+            directly.
+        layer : str, optional
+            Use adata.layers[layer] instead of adata.X.
+        seed : int
+            Random seed.
+
+        Returns
+        -------
+        AnnData
+            .X : z-scored corrected expression if scale_output=True,
+                 otherwise corrected log-normalised (CSR float32, >= 0)
+            .layers["corrected"] : corrected log-normalised (if scale_output)
+            .layers["original"] : uncorrected log-normalised (CSR float32)
+            .obs["batch"] : batch labels
+            .var_names : n_features integration genes only
+            .uns["cca_integration"] : run log
+
+        Notes
+        -----
+        Output covers ONLY the n_features integration genes. Use
+        layers["original"] for uncorrected values.
+        No PCA. No TopoMetry graph required. Same-modality only.
+        """
+        import anndata as ad
+        import warnings
+
+        # ── 0. Coerce input ────────────────────────────────────────────
+        if isinstance(data, AnnData):
+            if batch_key is None:
+                raise ValueError("batch_key required for single AnnData input.")
+            if batch_key not in data.obs.columns:
+                raise ValueError(f"'{batch_key}' not found in adata.obs.")
+            if layer is not None:
+                data_copy = data.copy()
+                data_copy.X = data_copy.layers[layer]
+                data = data_copy
+            batch_cats = sorted(data.obs[batch_key].astype(str).unique())
+            adatas = [data[data.obs[batch_key].astype(str) == b].copy()
+                      for b in batch_cats]
+            batch_names = batch_cats
+        else:
+            adatas = []
+            batch_names = []
+            for i, a in enumerate(data):
+                a2 = a.copy()
+                if layer is not None:
+                    a2.X = a2.layers[layer]
+                adatas.append(a2)
+                if "batch" in a2.obs.columns and a2.obs["batch"].nunique() == 1:
+                    batch_names.append(str(a2.obs["batch"].iloc[0]))
+                else:
+                    batch_names.append(f"batch_{i}")
+
+        N = len(adatas)
+        if N < 2:
+            raise ValueError("Need at least 2 batches; got 1.")
+
+        # ── Guardrails ─────────────────────────────────────────────────
+        for i, a in enumerate(adatas):
+            if a.n_obs < 20:
+                raise ValueError(
+                    f"Batch '{batch_names[i]}' has {a.n_obs} cells (minimum 20).")
+
+        all_obs = [name for a in adatas for name in a.obs_names]
+        if len(set(all_obs)) < len(all_obs):
+            warnings.warn(
+                "Non-unique obs_names across batches. Appending '_{batch}' suffix.",
+                UserWarning)
+            new_adatas = []
+            for a, bname in zip(adatas, batch_names):
+                a2 = a.copy()
+                a2.obs_names = [f"{n}_{bname}" for n in a2.obs_names]
+                new_adatas.append(a2)
+            adatas = new_adatas
+
+        # ── 1. Feature selection ───────────────────────────────────────
+        if _fixed_features is not None:
+            features = list(_fixed_features)
+            # Validate all genes present in all datasets
+            for i, a in enumerate(adatas):
+                missing = [g for g in features if g not in set(a.var_names)]
+                if missing:
+                    raise ValueError(
+                        f"Batch '{batch_names[i]}' is missing {len(missing)} "
+                        f"of the {len(features)} fixed features.")
+        else:
+            n_feat = _estimate_n_features(adatas, n_features)
+            features = _select_integration_features(adatas, n_feat)
+        n_feat = len(features)
+
+        # ── 2. Prepare matrices ────────────────────────────────────────
+        Xs_lognorm = []
+        Xs_scaled = []
+        for i, (a, bname) in enumerate(zip(adatas, batch_names)):
+            ln, sc_m = _prepare_matrices(a, features, batch_name=bname)
+            Xs_lognorm.append(ln)
+            Xs_scaled.append(sc_m)
+
+        # ── 3. Guide tree or trivial order ─────────────────────────────
+        if N == 2:
+            merge_order = [(0, 1)]
+        else:
+            merge_order = _build_guide_tree(adatas, features, n_components,
+                                            n_threads, seed)
+
+        # ── 4. Merge loop ──────────────────────────────────────────────
+        log_raw_anchors = []
+        log_filt_anchors = []
+        log_k_anchor = []
+        log_k_filter = []
+        log_k_score = []
+        log_k_weight = []
+        log_sd = []
+
+        # Reference fields for query mapping (captured in success path)
+        last_U_k = None
+        last_cc_ref = None
+        last_mu_ref = None
+        last_sigma_ref = None
+
+        nodes = {
+            i: (Xs_lognorm[i],
+                Xs_scaled[i],
+                Xs_lognorm[i].copy(),
+                [batch_names[i]] * adatas[i].n_obs,
+                adatas[i])
+            for i in range(N)
+        }
+        next_node = N
+
+        for left_id, right_id in merge_order:
+            X_a_ln, X_a_sc, X_a_orig, labels_a, adata_a = nodes[left_id]
+            X_b_ln, X_b_sc, X_b_orig, labels_b, adata_b = nodes[right_id]
+            n_a, n_b = len(X_a_ln), len(X_b_ln)
+
+            ka = _estimate_k_anchor(n_a, n_b, k_anchor)
+            kf = _estimate_k_filter(n_a, n_b, k_filter)
+            ks = _estimate_k_score(ka, k_score)
+            log_k_anchor.append(ka)
+            log_k_filter.append(kf)
+            log_k_score.append(ks)
+
+            # CCA
+            cc_a, cc_b, U_k = _compute_cca(X_a_sc, X_b_sc, n_components, seed)
+
+            # MNN
+            anc_a, anc_b = _find_mnn_in_cca(cc_a, cc_b, ka, n_threads, seed)
+            log_raw_anchors.append(len(anc_a))
+
+            X_orig_merged = np.vstack([X_a_orig, X_b_orig])
+
+            # Zero-anchor fallback (before HD filter)
+            if len(anc_a) == 0:
+                warnings.warn(
+                    f"No anchors found between '{_node_name(left_id, batch_names)}'"
+                    f" and '{_node_name(right_id, batch_names)}'. "
+                    "Concatenating without correction.",
+                    UserWarning, stacklevel=2)
+                log_filt_anchors.append(0)
+                log_k_weight.append(0)
+                log_sd.append(float("nan"))
+                X_merged_ln = np.vstack([X_a_ln, X_b_ln])
+                X_merged_sc = _rescale_merged(X_merged_ln)
+                nodes[next_node] = (X_merged_ln, X_merged_sc, X_orig_merged,
+                                    labels_a + labels_b,
+                                    ad.concat([adata_a, adata_b]))
+                next_node += 1
+                continue
+
+            # HD filter
+            anc_a, anc_b = _filter_anchors_hd(
+                anc_a, anc_b, X_a_sc, X_b_sc, U_k, kf, n_threads, seed)
+            log_filt_anchors.append(len(anc_a))
+
+            # Zero-anchor fallback (after HD filter)
+            if len(anc_a) == 0:
+                warnings.warn(
+                    "All anchors removed by HD filter between "
+                    f"'{_node_name(left_id, batch_names)}' and "
+                    f"'{_node_name(right_id, batch_names)}'. "
+                    "Concatenating without correction.",
+                    UserWarning, stacklevel=2)
+                log_k_weight.append(0)
+                log_sd.append(float("nan"))
+                X_merged_ln = np.vstack([X_a_ln, X_b_ln])
+                X_merged_sc = _rescale_merged(X_merged_ln)
+                nodes[next_node] = (X_merged_ln, X_merged_sc, X_orig_merged,
+                                    labels_a + labels_b,
+                                    ad.concat([adata_a, adata_b]))
+                next_node += 1
+                continue
+
+            # Score
+            scores = _score_anchors(anc_a, anc_b, cc_a, cc_b, ks,
+                                    n_threads, seed)
+
+            # k_weight
+            kw = _estimate_k_weight(ka, len(anc_a), k_weight)
+            log_k_weight.append(kw)
+
+            # Capture reference fields for query mapping
+            last_U_k = U_k
+            last_cc_ref = np.vstack([cc_a, cc_b])
+            last_mu_ref = X_a_ln.mean(axis=0).astype(np.float32)
+            last_sigma_ref = X_a_ln.std(axis=0, ddof=1).astype(np.float32)
+            last_sigma_ref = np.where(last_sigma_ref < 1e-8, 1.0, last_sigma_ref)
+
+            # Symmetric correction
+            corr_b, corr_a, sd_used = _compute_correction_vectors(
+                X_a_ln, X_b_ln, anc_a, anc_b, scores,
+                cc_a, cc_b, kw, sd_bandwidth, n_threads, seed)
+            log_sd.append(sd_used)
+
+            # Apply and clamp
+            X_a_ln_c = np.maximum(X_a_ln + corr_a, 0.0)
+            X_b_ln_c = np.maximum(X_b_ln + corr_b, 0.0)
+
+            X_merged_ln = np.vstack([X_a_ln_c, X_b_ln_c])
+            X_merged_sc = _rescale_merged(X_merged_ln)
+
+            nodes[next_node] = (
+                X_merged_ln, X_merged_sc, X_orig_merged,
+                labels_a + labels_b,
+                ad.concat([adata_a, adata_b]))
+            next_node += 1
+
+        # ── 5. Assemble output ─────────────────────────────────────────
+        root_id = next_node - 1
+        X_final, _, X_original, all_labels, adt_final = nodes[root_id]
+
+        adata_out = adt_final[:, features].copy()
+        adata_out.X = sp.csr_matrix(X_final.astype(np.float32))
+        adata_out.obs["batch"] = all_labels
+        adata_out.layers["original"] = sp.csr_matrix(
+            X_original.astype(np.float32))
+
+        # ── Store reference fields for query mapping ──────────────────
+        if last_U_k is not None:
+            adata_out.varm["cca_loadings"] = last_U_k
+            adata_out.obsm["X_cca"] = last_cc_ref.astype(np.float32)
+        else:
+            import warnings
+            warnings.warn(
+                "No successful merge step found anchors; reference fields "
+                "(varm['cca_loadings'], obsm['X_cca'], ref_mu, ref_sigma) "
+                "were not stored. Query mapping will not be available.",
+                UserWarning, stacklevel=2)
+
+        # ── 6. Run log ─────────────────────────────────────────────────
+        adata_out.uns["cca_integration"] = {
+            "n_datasets": N,
+            "n_features": n_feat,
+            "features": features,
+            "n_components": n_components,
+            "merge_order": merge_order,
+            "batch_names": batch_names,
+            "correction_mode": "symmetric",
+            "seed": seed,
+            "n_threads": n_threads,
+            "k_anchor_per_merge": log_k_anchor,
+            "k_filter_per_merge": log_k_filter,
+            "k_score_per_merge": log_k_score,
+            "k_weight_per_merge": log_k_weight,
+            "sd_bandwidth_per_merge": log_sd,
+            "n_anchors_raw_per_merge": log_raw_anchors,
+            "n_anchors_filt_per_merge": log_filt_anchors,
+            "user_n_features": n_features,
+            "user_k_anchor": k_anchor,
+            "user_k_filter": k_filter,
+            "user_k_score": k_score,
+            "user_k_weight": k_weight,
+            "user_sd_bandwidth": sd_bandwidth,
+        }
+        if last_mu_ref is not None:
+            adata_out.uns["cca_integration"]["ref_mu"] = last_mu_ref
+            adata_out.uns["cca_integration"]["ref_sigma"] = last_sigma_ref
+
+        # ── 7. Optional z-score scaling ────────────────────────────────
+        if scale_output:
+            X_ln = adata_out.X
+            if sp.issparse(X_ln):
+                X_ln = X_ln.toarray()
+            X_ln = np.asarray(X_ln, dtype=np.float32)
+            adata_out.layers["corrected"] = sp.csr_matrix(X_ln)
+            mu_s = X_ln.mean(axis=0)
+            sigma_s = X_ln.std(axis=0, ddof=1)
+            sigma_s = np.where(sigma_s < 1e-8, 1.0, sigma_s)
+            X_sc = np.clip((X_ln - mu_s) / sigma_s, -10.0, 10.0).astype(np.float32)
+            adata_out.X = X_sc
+
+        return adata_out
+    # =======================================================================
+    # CCA Query Mapping — save/load reference + map new queries
+    # =======================================================================
+
+    def _validate_reference_fields(adata_ref) -> None:
+        """Raise ValueError if required reference fields are absent."""
+        missing = []
+        for key in ["cca_loadings"]:
+            if key not in adata_ref.varm:
+                missing.append(f"varm['{key}']")
+        for key in ["X_cca"]:
+            if key not in adata_ref.obsm:
+                missing.append(f"obsm['{key}']")
+        for key in ["ref_mu", "ref_sigma"]:
+            if key not in adata_ref.uns.get("cca_integration", {}):
+                missing.append(f"uns['cca_integration']['{key}']")
+        if missing:
+            raise ValueError(
+                f"Reference AnnData is missing required fields: {missing}. "
+                "Save and load via save_cca_reference / load_cca_reference.")
+
+    def save_cca_reference(
+        adata_int,
+        path,
+    ) -> None:
+        """Save a completed CCA integration result as a reusable mapping reference.
+
+        Parameters
+        ----------
+        adata_int : AnnData
+            Output of run_cca_integration().
+        path : str or Path
+            Output path (should end in '.h5ad').
+        """
+        from pathlib import Path as _Path
+        _validate_reference_fields(adata_int)
+        adata_int.write_h5ad(_Path(path))
+
+    def load_cca_reference(path):
+        """Load a saved CCA reference from an .h5ad file.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to a .h5ad file saved by save_cca_reference().
+
+        Returns
+        -------
+        AnnData with the reference fields validated.
+        """
+        from pathlib import Path as _Path
+        import anndata as ad
+        path = _Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Reference file not found: {path}")
+        adata_ref = ad.read_h5ad(path)
+        _validate_reference_fields(adata_ref)
+        return adata_ref
+
+    # ── Query correction helpers ───────────────────────────────────────────
+
+    def _compute_query_correction(
+        X_ref_lognorm: np.ndarray,
+        query_lognorm: np.ndarray,
+        anc_ref: np.ndarray,
+        anc_query: np.ndarray,
+        scores: np.ndarray,
+        cc_ref: np.ndarray,
+        cc_query: np.ndarray,
+        k_weight: int,
+        sd_bandwidth,
+        n_threads: int = 1,
+        seed: int = 0,
+    ) -> tuple[np.ndarray, float]:
+        """One-sided correction: compute correction vector for each query cell.
+
+        Batch vectors point from query toward reference (full step, not midpoint).
+        """
+        n_q, p = query_lognorm.shape
+
+        batch_vecs = (X_ref_lognorm[anc_ref] -
+                      query_lognorm[anc_query]).astype(np.float32)
+
+        anchor_pos_ref = np.ascontiguousarray(
+            cc_ref[anc_ref].astype(np.float32))
+        k_eff = min(k_weight, len(anc_ref))
+        idx_anchors = _build_hnsw_index(anchor_pos_ref, seed=seed)
+        idx_q, dist_q = _query_hnsw(
+            idx_anchors, cc_query, k=k_eff, n_threads=n_threads)
+
+        d_k_q = dist_q[:, -1:] + 1e-10
+        raw_w_q = np.clip(1.0 - dist_q / d_k_q, 0.0, 1.0) * scores[idx_q]
+
+        sd = _estimate_sd_bandwidth(raw_w_q, sd_bandwidth)
+        sd_val = 2.0 / sd
+        kernel_q = 1.0 - np.exp(-raw_w_q / sd_val**2)
+        kernel_q /= (kernel_q.sum(axis=1, keepdims=True) + 1e-12)
+
+        correction_query = np.zeros((n_q, p), dtype=np.float32)
+        chunk = max(500, n_q // max(1, n_threads))
+        for s in range(0, n_q, chunk):
+            e = min(s + chunk, n_q)
+            correction_query[s:e] = np.einsum(
+                'ck,ckp->cp',
+                kernel_q[s:e],
+                batch_vecs[idx_q[s:e]])
+
+        return correction_query, sd
+
+    def _align_query_to_features(query_adata, features: list) -> "AnnData":
+        """Return a copy of query_adata aligned to `features`, zero-imputing missing genes."""
+        import anndata as ad
+        n_q = query_adata.n_obs
+        p = len(features)
+        X_aligned = np.zeros((n_q, p), dtype=np.float32)
+        query_gene_index = {g: i for i, g in enumerate(query_adata.var_names)}
+        for ref_idx, gene in enumerate(features):
+            if gene in query_gene_index:
+                q_idx = query_gene_index[gene]
+                col = query_adata.X[:, q_idx]
+                if sp.issparse(col):
+                    col = col.toarray().ravel()
+                X_aligned[:, ref_idx] = np.asarray(col, dtype=np.float32)
+
+        out = ad.AnnData(
+            X=sp.csr_matrix(X_aligned),
+            obs=query_adata.obs.copy(),
+            var=pd.DataFrame(index=features))
+        if "batch" not in out.obs.columns:
+            out.obs["batch"] = "query"
+        return out
+
+    def _assemble_query_output(
+        query_adata,
+        X_corrected: np.ndarray,
+        X_original: np.ndarray,
+        features: list,
+        n_anchors_raw: int,
+        n_anchors_filt: int,
+        ka: int, kf: int, ks: int, kw: int,
+        sd_used: float,
+        mode: str,
+        reference,
+    ):
+        """Build the output AnnData for mode='query_only'."""
+        import anndata as ad
+
+        obs = query_adata.obs.copy()
+        if "batch" not in obs.columns:
+            obs["batch"] = "query"
+
+        out = ad.AnnData(
+            X=sp.csr_matrix(X_corrected.astype(np.float32)),
+            obs=obs,
+            var=pd.DataFrame(index=features))
+        out.layers["original"] = sp.csr_matrix(X_original.astype(np.float32))
+        out.uns["cca_mapping"] = {
+            "mode": mode,
+            "n_ref_cells": reference.n_obs,
+            "n_query_cells": query_adata.n_obs,
+            "n_features": len(features),
+            "features": features,
+            "n_anchors_raw": n_anchors_raw,
+            "n_anchors_filt": n_anchors_filt,
+            "k_anchor_used": ka,
+            "k_filter_used": kf,
+            "k_score_used": ks,
+            "k_weight_used": kw,
+            "sd_bandwidth_used": sd_used,
+            "ref_batch_names": list(reference.uns.get(
+                "cca_integration", {}).get("batch_names", [])),
+            "projection_method": "back_projected_U_k",
+        }
+        return out
+
+    # ── Map query only ─────────────────────────────────────────────────────
+
+    def _map_query_only(
+        query_adata,
+        query_lognorm,
+        query_scaled_perquery,
+        query_scaled_refnorm,
+        X_ref_lognorm,
+        cc_ref,
+        U_k,
+        mu_ref,
+        sigma_ref,
+        features,
+        reference,
+        k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+        n_threads, seed,
+    ):
+        """One-sided correction: only query cells move toward the reference."""
+        import warnings
+        n_q = query_lognorm.shape[0]
+        n_ref = X_ref_lognorm.shape[0]
+
+        # Project query into reference CCA space via U_k
+        cc_query = (query_scaled_refnorm @ U_k).astype(np.float32)
+        norms_q = np.linalg.norm(cc_query, axis=1, keepdims=True)
+        cc_query /= np.where(norms_q < 1e-12, 1.0, norms_q)
+        cc_query = np.ascontiguousarray(cc_query)
+
+        ka = _estimate_k_anchor(n_q, n_ref, k_anchor)
+        kf = _estimate_k_filter(n_q, n_ref, k_filter)
+        ks = _estimate_k_score(ka, k_score)
+
+        # MNN anchors in CCA space (ref=A, query=B)
+        anc_ref, anc_query = _find_mnn_in_cca(
+            cc_ref, cc_query, ka, n_threads, seed)
+        n_anchors_raw = len(anc_ref)
+
+        # HD filter
+        X_ref_scaled = np.ascontiguousarray(
+            np.clip((X_ref_lognorm - mu_ref) / sigma_ref, -10.0, 10.0
+                    ).astype(np.float32))
+        if n_anchors_raw > 0 and kf > 0:
+            anc_ref, anc_query = _filter_anchors_hd(
+                anc_ref, anc_query,
+                X_ref_scaled, query_scaled_perquery,
+                U_k, kf, n_threads, seed)
+        n_anchors_filt = len(anc_ref)
+
+        # Zero-anchor fallback
+        if n_anchors_filt == 0:
+            warnings.warn(
+                "No anchors found between query and reference. "
+                "Returning query with no correction applied.",
+                UserWarning, stacklevel=3)
+            return _assemble_query_output(
+                query_adata, query_lognorm, query_lognorm,
+                features, n_anchors_raw, n_anchors_filt,
+                ka, kf, ks, 0, float("nan"), mode="query_only",
+                reference=reference)
+
+        # Score
+        scores = _score_anchors(
+            anc_ref, anc_query, cc_ref, cc_query, ks, n_threads, seed)
+
+        kw = _estimate_k_weight(ka, n_anchors_filt, k_weight)
+
+        # One-sided correction
+        correction_query, sd_used = _compute_query_correction(
+            X_ref_lognorm, query_lognorm,
+            anc_ref, anc_query, scores,
+            cc_ref, cc_query,
+            kw, sd_bandwidth, n_threads, seed)
+
+        query_corrected = np.maximum(query_lognorm + correction_query, 0.0)
+
+        return _assemble_query_output(
+            query_adata, query_corrected, query_lognorm,
+            features, n_anchors_raw, n_anchors_filt,
+            ka, kf, ks, kw, sd_used, mode="query_only",
+            reference=reference)
+
+    # ── Full reintegration ─────────────────────────────────────────────────
+
+    def _map_full_reintegration(
+        query_adata,
+        reference,
+        features: list,
+        n_components: int,
+        k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+        n_threads, seed,
+    ):
+        """Full symmetric re-integration of reference + query."""
+        import anndata as ad
+
+        ref_sub = reference[:, features].copy()
+        # Ensure ref_sub.X is lognorm (not z-scored)
+        if "corrected" in reference.layers:
+            ref_sub.X = reference[:, features].layers["corrected"].copy()
+        ref_sub.obs["batch"] = reference.obs.get("batch",
+            pd.Series(["reference"] * reference.n_obs,
+                       index=reference.obs_names))
+
+        query_sub = _align_query_to_features(query_adata, features)
+
+        result = run_cca_integration(
+            [ref_sub, query_sub],
+            n_features=len(features),
+            n_components=n_components,
+            k_anchor=k_anchor,
+            k_filter=k_filter,
+            k_score=k_score,
+            k_weight=k_weight,
+            sd_bandwidth=sd_bandwidth,
+            scale_output=True,
+            n_threads=n_threads,
+            seed=seed,
+            _fixed_features=features,
+        )
+        result.uns["cca_integration"]["mapping_mode"] = "full_reintegration"
+        return result
+
+    # ── Main public function ───────────────────────────────────────────────
+
+    def map_to_cca_reference(
+        query,
+        reference,
+        mode: str = "query_only",
+        min_shared_features: float = 0.8,
+        k_anchor: int | None = None,
+        k_filter: int | None = None,
+        k_score: int | None = None,
+        k_weight: int | None = None,
+        sd_bandwidth: float | None = None,
+        n_threads: int = 1,
+        seed: int = 0,
+    ):
+        """Correct a query dataset against a saved CCA reference.
+
+        Parameters
+        ----------
+        query : AnnData
+            The new dataset to map.
+        reference : AnnData or str or Path
+            A completed integration result from run_cca_integration().
+        mode : str
+            'query_only': only query cells are corrected (reference frozen).
+            'full_reintegration': both re-corrected symmetrically.
+        min_shared_features : float
+            Minimum fraction of reference genes present in query. Default 0.8.
+        k_anchor, k_filter, k_score, k_weight, sd_bandwidth
+            Override adaptive estimates. Default None (auto).
+        n_threads : int
+            Threads for hnswlib. Default 1.
+        seed : int
+            Random seed. Default 0.
+
+        Returns
+        -------
+        AnnData with corrected expression.
+
+        Notes
+        -----
+        Gene loadings (U_k) are a data-dependent back-projection into gene
+        space.  The projection quality depends on the reference cell type
+        composition.  For queries with novel cell populations very different
+        from the reference, the projection is less accurate, though anchor
+        finding via kNN/MNN is relatively robust to small projection errors.
+        """
+        from pathlib import Path as _Path
+        import warnings
+
+        # Step 0: load reference if path
+        if isinstance(reference, (str, _Path)):
+            reference = load_cca_reference(reference)
+        else:
+            _validate_reference_fields(reference)
+
+        # Step 1: extract reference components
+        features = list(reference.var_names)
+        n_features = len(features)
+        n_components = reference.uns["cca_integration"]["n_components"]
+        U_k = np.asarray(reference.varm["cca_loadings"], dtype=np.float32)
+        cc_ref = np.asarray(reference.obsm["X_cca"], dtype=np.float32)
+        mu_ref = np.asarray(
+            reference.uns["cca_integration"]["ref_mu"], dtype=np.float32)
+        sigma_ref = np.asarray(
+            reference.uns["cca_integration"]["ref_sigma"], dtype=np.float32)
+        sigma_ref = np.where(sigma_ref < 1e-8, 1.0, sigma_ref)
+
+        # Use corrected lognorm layer if available (when scale_output=True,
+        # .X is z-scored and lognorm is in layers["corrected"])
+        if "corrected" in reference.layers:
+            _ref_src = reference.layers["corrected"]
+        else:
+            _ref_src = reference.X
+        X_ref_lognorm = (_ref_src.toarray()
+                         if sp.issparse(_ref_src)
+                         else np.asarray(_ref_src, dtype=np.float32))
+
+        # Step 2: validate mode
+        if mode not in ("query_only", "full_reintegration"):
+            raise ValueError(
+                f"mode must be 'query_only' or 'full_reintegration', "
+                f"got '{mode}'.")
+
+        # Step 3: feature alignment
+        query_genes = set(query.var_names)
+        shared = [g for g in features if g in query_genes]
+        coverage = len(shared) / len(features)
+
+        if coverage < min_shared_features:
+            raise ValueError(
+                f"Query covers only {coverage:.1%} of reference integration "
+                f"genes ({len(shared)}/{len(features)}). Minimum is "
+                f"{min_shared_features:.1%}.")
+
+        missing_in_query = [g for g in features if g not in query_genes]
+        if missing_in_query:
+            warnings.warn(
+                f"Query is missing {len(missing_in_query)}/{len(features)} "
+                f"reference genes. Missing genes will be zero-imputed. "
+                f"Coverage: {coverage:.1%}.",
+                UserWarning, stacklevel=2)
+
+        # Build aligned query expression matrix
+        X_sub = np.zeros((query.n_obs, n_features), dtype=np.float32)
+        query_gene_index = {g: i for i, g in enumerate(query.var_names)}
+        for ref_idx, gene in enumerate(features):
+            if gene in query_gene_index:
+                q_idx = query_gene_index[gene]
+                col = query.X[:, q_idx]
+                if sp.issparse(col):
+                    col = col.toarray().ravel()
+                X_sub[:, ref_idx] = np.asarray(col, dtype=np.float32)
+
+        # Step 4: prepare query matrices
+        if _is_raw_counts(X_sub):
+            row_sums = X_sub.sum(axis=1, keepdims=True)
+            row_sums = np.where(row_sums == 0, 1.0, row_sums)
+            query_lognorm = np.log1p(X_sub / row_sums * 1e4).astype(np.float32)
+            warnings.warn("Query: raw counts detected; applying log1p(CPM/1e4).",
+                          UserWarning, stacklevel=2)
+        else:
+            query_lognorm = X_sub.astype(np.float32)
+        query_lognorm = np.ascontiguousarray(query_lognorm)
+
+        # Per-query z-score (for HD filter)
+        mu_q = query_lognorm.mean(axis=0)
+        sigma_q = query_lognorm.std(axis=0, ddof=1)
+        sigma_q = np.where(sigma_q < 1e-8, 1.0, sigma_q)
+        query_scaled_perquery = np.ascontiguousarray(
+            np.clip((query_lognorm - mu_q) / sigma_q, -10.0, 10.0
+                    ).astype(np.float32))
+
+        # Ref-normed z-score (for CCA projection)
+        query_scaled_refnorm = np.ascontiguousarray(
+            np.clip((query_lognorm - mu_ref) / sigma_ref, -10.0, 10.0
+                    ).astype(np.float32))
+
+        # Step 5: dispatch
+        if mode == "query_only":
+            return _map_query_only(
+                query, query_lognorm, query_scaled_perquery,
+                query_scaled_refnorm,
+                X_ref_lognorm, cc_ref, U_k, mu_ref, sigma_ref, features,
+                reference, k_anchor, k_filter, k_score, k_weight,
+                sd_bandwidth, n_threads, seed)
+        else:
+            return _map_full_reintegration(
+                query, reference, features, n_components,
+                k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+                n_threads, seed)
+    # =======================================================================
+    # Integration Quality Metrics
+    # =======================================================================
+
+    def knn_purity(
+        adata,
+        label_key: str = "cell_type",
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_threads: int = 2,
+        seed: int = 0,
+    ) -> float:
+        """kNN purity: fraction of each cell's k nearest neighbors sharing its label.
+
+        Higher = better biological preservation (max = 1.0).
+
+        Parameters
+        ----------
+        adata : AnnData
+            Must contain the embedding in .obsm[embedding_key] or .X.
+        label_key : str
+            Column in .obs for the label (e.g. cell type).
+        embedding_key : str or None
+            Key in .obsm. If None, uses .X (densified if sparse).
+        k : int
+            Number of neighbors.
+        n_threads : int
+            Threads for hnswlib.
+        seed : int
+            Random seed.
+
+        Returns
+        -------
+        float : mean kNN purity across all cells.
+        """
+        Z = _get_embedding(adata, embedding_key)
+        labels = np.asarray(adata.obs[label_key].values)
+        idx = _knn_indices(Z, k, n_threads, seed)
+        nbr_labels = labels[idx]
+        purity = (nbr_labels == labels[:, None]).mean(axis=1)
+        return float(purity.mean())
+
+    def knn_mixing(
+        adata,
+        batch_key: str = "batch",
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_threads: int = 2,
+        seed: int = 0,
+    ) -> float:
+        """kNN mixing: fraction of each cell's k nearest neighbors from a different batch.
+
+        Higher = better batch mixing (max = 1.0).
+
+        Parameters
+        ----------
+        adata : AnnData
+            Must contain the embedding in .obsm[embedding_key] or .X.
+        batch_key : str
+            Column in .obs identifying batches.
+        embedding_key : str or None
+            Key in .obsm. If None, uses .X.
+        k : int
+            Number of neighbors.
+        n_threads : int
+            Threads for hnswlib.
+        seed : int
+            Random seed.
+
+        Returns
+        -------
+        float : mean kNN mixing across all cells.
+        """
+        Z = _get_embedding(adata, embedding_key)
+        batches = np.asarray(adata.obs[batch_key].values)
+        idx = _knn_indices(Z, k, n_threads, seed)
+        nbr_batches = batches[idx]
+        mixing = (nbr_batches != batches[:, None]).mean(axis=1)
+        return float(mixing.mean())
+
+    def ilisi(
+        adata,
+        batch_key: str = "batch",
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_threads: int = 2,
+        seed: int = 0,
+        return_per_cell: bool = False,
+    ):
+        """Integration LISI (iLISI): local inverse Simpson's index on batch labels.
+
+        Higher = better batch mixing (max = number of batches).
+
+        Parameters
+        ----------
+        adata : AnnData
+        batch_key : str
+            Column in .obs identifying batches.
+        embedding_key : str or None
+            Key in .obsm. If None, uses .X.
+        k : int
+            Number of neighbors.
+        n_threads : int
+            Threads for hnswlib.
+        seed : int
+            Random seed.
+        return_per_cell : bool
+            If True, return the full per-cell array instead of the median.
+
+        Returns
+        -------
+        float (median iLISI) or np.ndarray (per-cell) if return_per_cell.
+        """
+        Z = _get_embedding(adata, embedding_key)
+        labels = np.asarray(adata.obs[batch_key].values)
+        vals = _compute_lisi_values(Z, labels, k, n_threads, seed)
+        if return_per_cell:
+            return vals
+        return float(np.median(vals))
+
+    def clisi(
+        adata,
+        label_key: str = "cell_type",
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_threads: int = 2,
+        seed: int = 0,
+        return_per_cell: bool = False,
+    ):
+        """Cell-type LISI (cLISI): local inverse Simpson's index on cell-type labels.
+
+        Lower = better cell-type preservation (min = 1.0).
+
+        Parameters
+        ----------
+        adata : AnnData
+        label_key : str
+            Column in .obs for cell-type labels.
+        embedding_key : str or None
+            Key in .obsm. If None, uses .X.
+        k : int
+            Number of neighbors.
+        n_threads : int
+            Threads for hnswlib.
+        seed : int
+            Random seed.
+        return_per_cell : bool
+            If True, return the full per-cell array instead of the median.
+
+        Returns
+        -------
+        float (median cLISI) or np.ndarray (per-cell) if return_per_cell.
+        """
+        Z = _get_embedding(adata, embedding_key)
+        labels = np.asarray(adata.obs[label_key].values)
+        vals = _compute_lisi_values(Z, labels, k, n_threads, seed)
+        if return_per_cell:
+            return vals
+        return float(np.median(vals))
+
+    def cluster_agreement(
+        adata,
+        label_key: str = "cell_type",
+        cluster_key: str = "topo_clusters",
+    ) -> dict:
+        """Compute ARI and NMI between cluster assignments and ground-truth labels.
+
+        Parameters
+        ----------
+        adata : AnnData
+        label_key : str
+            Ground-truth label column in .obs.
+        cluster_key : str
+            Cluster assignment column in .obs.
+
+        Returns
+        -------
+        dict with keys 'ari' and 'nmi'.
+        """
+        from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+        labels = adata.obs[label_key].values
+        clusters = adata.obs[cluster_key].values
+        return {
+            "ari": float(adjusted_rand_score(labels, clusters)),
+            "nmi": float(normalized_mutual_info_score(labels, clusters)),
+        }
+
+    def compute_integration_metrics(
+        adata_corrected,
+        adata_uncorrected = None,
+        metrics: list | None = None,
+        batch_key: str = "batch",
+        cell_type_key: str | None = None,
+        cluster_key: str = "topo_clusters",
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_threads: int = 2,
+        seed: int = 0,
+    ) -> dict:
+        """Compute a suite of integration quality metrics.
+
+        Parameters
+        ----------
+        adata_corrected : AnnData
+            The integrated/corrected AnnData.
+        adata_uncorrected : AnnData, optional
+            If provided, also compute metrics on the uncorrected data and
+            return a side-by-side comparison.
+        metrics : list of str, optional
+            Which metrics to compute. Default: all available.
+            Options: 'knn_purity', 'knn_mixing', 'ilisi', 'clisi', 'ari', 'nmi'.
+        batch_key : str
+            Column in .obs identifying batches.
+        cell_type_key : str or None
+            Column in .obs for cell-type labels. If None, cell-type-dependent
+            metrics (knn_purity, clisi, ari, nmi) are skipped.
+        cluster_key : str
+            Column in .obs for cluster assignments (used by ari/nmi).
+        embedding_key : str or None
+            Key in .obsm for the embedding. If None, uses .X.
+            If the key 'X_ms_spectral_scaffold' exists in .obsm, it is used
+            by default for corrected data.
+        k : int
+            Number of neighbors for kNN-based metrics.
+        n_threads : int
+            Threads for hnswlib.
+        seed : int
+            Random seed.
+
+        Returns
+        -------
+        dict : keys are metric names, values are floats.
+            If adata_uncorrected is provided, keys are prefixed with
+            'corrected_' and 'uncorrected_', plus 'delta_' for differences.
+        """
+        all_metrics = ['knn_purity', 'knn_mixing', 'ilisi', 'clisi', 'ari', 'nmi']
+        if metrics is None:
+            metrics = all_metrics
+        metrics = [m for m in metrics if m in all_metrics]
+
+        ct_metrics = {'knn_purity', 'clisi', 'ari', 'nmi'}
+
+        def _compute_for(ad, emb_key):
+            # Auto-detect scaffold if no explicit key
+            ek = emb_key
+            if ek is None and 'X_ms_spectral_scaffold' in ad.obsm:
+                ek = 'X_ms_spectral_scaffold'
+            elif ek is None and 'X_spectral_scaffold' in ad.obsm:
+                ek = 'X_spectral_scaffold'
+
+            result = {}
+            if 'knn_purity' in metrics and cell_type_key is not None:
+                result['knn_purity'] = knn_purity(
+                    ad, label_key=cell_type_key, embedding_key=ek,
+                    k=k, n_threads=n_threads, seed=seed)
+            if 'knn_mixing' in metrics:
+                result['knn_mixing'] = knn_mixing(
+                    ad, batch_key=batch_key, embedding_key=ek,
+                    k=k, n_threads=n_threads, seed=seed)
+            if 'ilisi' in metrics:
+                result['ilisi'] = ilisi(
+                    ad, batch_key=batch_key, embedding_key=ek,
+                    k=k, n_threads=n_threads, seed=seed)
+            if 'clisi' in metrics and cell_type_key is not None:
+                result['clisi'] = clisi(
+                    ad, label_key=cell_type_key, embedding_key=ek,
+                    k=k, n_threads=n_threads, seed=seed)
+            if 'ari' in metrics and cell_type_key is not None and cluster_key in ad.obs.columns:
+                result['ari'] = cluster_agreement(
+                    ad, label_key=cell_type_key, cluster_key=cluster_key)['ari']
+            if 'nmi' in metrics and cell_type_key is not None and cluster_key in ad.obs.columns:
+                result['nmi'] = cluster_agreement(
+                    ad, label_key=cell_type_key, cluster_key=cluster_key)['nmi']
+            return result
+
+        corr_results = _compute_for(adata_corrected, embedding_key)
+
+        if adata_uncorrected is None:
+            return corr_results
+
+        uncorr_results = _compute_for(adata_uncorrected, embedding_key)
+
+        combined = {}
+        for m in corr_results:
+            combined[f"corrected_{m}"] = corr_results[m]
+        for m in uncorr_results:
+            combined[f"uncorrected_{m}"] = uncorr_results[m]
+        for m in set(corr_results) & set(uncorr_results):
+            combined[f"delta_{m}"] = corr_results[m] - uncorr_results[m]
+        return combined
+
+    # ── Metrics internals ──────────────────────────────────────────────────
+
+    def _get_embedding(adata, embedding_key):
+        """Extract dense float32 embedding from adata."""
+        if embedding_key is not None:
+            Z = np.asarray(adata.obsm[embedding_key], dtype=np.float32)
+        else:
+            Z = adata.X
+            if sp.issparse(Z):
+                Z = Z.toarray()
+            Z = np.asarray(Z, dtype=np.float32)
+        return np.ascontiguousarray(Z)
+
+    def _knn_indices(Z, k, n_threads, seed):
+        """Build hnswlib index on Z, return (n, k) neighbor indices (excluding self)."""
+        n = Z.shape[0]
+        k_eff = min(k, n - 1)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_threads, seed=seed)
+        labels, _ = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_threads)
+        return labels[:, 1:k_eff + 1]
+
+    def _compute_lisi_values(Z, labels, k, n_threads, seed):
+        """Compute per-cell LISI values with Gaussian kernel weighting."""
+        n = Z.shape[0]
+        k_eff = min(k, n - 1)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_threads, seed=seed)
+        labels_nn, dists = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_threads)
+        labels_nn = labels_nn[:, 1:k_eff + 1]
+        dists = dists[:, 1:k_eff + 1]
+
+        categories = np.unique(labels)
+        n_cats = len(categories)
+        cat_to_idx = {c: i for i, c in enumerate(categories)}
+        lab_idx = np.array([cat_to_idx[l] for l in labels], dtype=np.int32)
+
+        nbr_labels = lab_idx[labels_nn]
+
+        sigma = np.median(dists, axis=1, keepdims=True)
+        sigma = np.where(sigma < 1e-10, 1.0, sigma)
+        weights = np.exp(-dists / sigma)
+        weights /= weights.sum(axis=1, keepdims=True)
+
+        lisi_values = np.zeros(n, dtype=np.float64)
+        for i in range(n):
+            props = np.zeros(n_cats)
+            for j in range(k_eff):
+                props[nbr_labels[i, j]] += weights[i, j]
+            simpson = np.sum(props ** 2)
+            lisi_values[i] = 1.0 / max(simpson, 1e-12)
+
+        return lisi_values
