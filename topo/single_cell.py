@@ -7142,56 +7142,39 @@ if _HAVE_SCANPY:
     ):
         """One-sided correction: only query cells move toward the reference.
 
-        Anchor finding operates in z-scored EXPRESSION space (not CCA space).
-        Both reference and query are z-scored with reference statistics, making
-        them directly comparable.  This avoids the CCA projection approximation
-        which can distort cell-type structure when query batches differ from
-        the reference merge-tree subtrees.
-
-        The z-scored expression space (~2000 features) is used for:
-        - MNN anchor finding
-        - SNN anchor scoring
-        - Correction weight kNN
-
-        Correction vectors are computed in lognorm space (as before).
+        Query cells are projected into the reference CCA space via U_k
+        (gene loadings from the reference integration). Anchors, scoring,
+        and correction weights all operate in this shared CCA space.
+        Correction vectors are computed in lognorm expression space.
         """
         import warnings
         n_q = query_lognorm.shape[0]
         n_ref = X_ref_lognorm.shape[0]
 
-        # Z-score reference with its own statistics (same space as query)
-        X_ref_scaled = np.ascontiguousarray(
-            np.clip((X_ref_lognorm - mu_ref) / sigma_ref, -10.0, 10.0
-                    ).astype(np.float32))
+        # Project query into reference CCA space via U_k
+        cc_query = (query_scaled_refnorm @ U_k).astype(np.float32)
+        norms_q = np.linalg.norm(cc_query, axis=1, keepdims=True)
+        cc_query /= np.where(norms_q < 1e-12, 1.0, norms_q)
+        cc_query = np.ascontiguousarray(cc_query)
 
         ka = _estimate_k_anchor(n_q, n_ref, k_anchor)
         kf = _estimate_k_filter(n_q, n_ref, k_filter)
         ks = _estimate_k_score(ka, k_score)
 
-        # MNN anchors in z-scored EXPRESSION space (not CCA space)
+        # MNN anchors in CCA space (ref=A, query=B)
         anc_ref, anc_query = _find_mnn_in_cca(
-            X_ref_scaled, query_scaled_refnorm, ka, n_jobs, seed)
+            cc_ref, cc_query, ka, n_jobs, seed)
         n_anchors_raw = len(anc_ref)
 
-        # HD filter (skip CCA-loading weighting; use expression space directly)
-        # The HD filter checks if anchors are supported in a weighted feature
-        # space. For query mapping we use uniform weights (all features equal)
-        # since we're already in the full z-scored expression space.
+        # HD filter using CCA-loading-weighted feature space
+        X_ref_scaled = np.ascontiguousarray(
+            np.clip((X_ref_lognorm - mu_ref) / sigma_ref, -10.0, 10.0
+                    ).astype(np.float32))
         if n_anchors_raw > 0 and kf > 0:
-            # Simple HD support check: is ref anchor cell among query cell's
-            # k_filter nearest neighbors in expression space?
-            kf_eff = min(kf, n_ref - 1)
-            if kf_eff > 0:
-                unique_b, inv = np.unique(anc_query, return_inverse=True)
-                idx_ref_hnsw = _build_hnsw_index(
-                    X_ref_scaled, seed=seed)
-                labels, _ = _query_hnsw(
-                    idx_ref_hnsw, query_scaled_refnorm[unique_b],
-                    k=kf_eff, n_jobs=n_jobs)
-                labels_per_anchor = labels[inv]
-                keep = (labels_per_anchor == anc_ref[:, None]).any(axis=1)
-                anc_ref = anc_ref[keep]
-                anc_query = anc_query[keep]
+            anc_ref, anc_query = _filter_anchors_hd(
+                anc_ref, anc_query,
+                X_ref_scaled, query_scaled_perquery,
+                U_k, kf, n_jobs, seed)
         n_anchors_filt = len(anc_ref)
 
         # Zero-anchor fallback
@@ -7206,20 +7189,18 @@ if _HAVE_SCANPY:
                 ka, kf, ks, 0, float("nan"), mode="query_only",
                 reference=reference)
 
-        # SNN scoring in expression space
+        # SNN scoring in CCA space
         scores = _score_anchors(
-            anc_ref, anc_query,
-            X_ref_scaled, query_scaled_refnorm,
-            ks, n_jobs, seed)
+            anc_ref, anc_query, cc_ref, cc_query, ks, n_jobs, seed)
 
         kw = _estimate_k_weight(ka, n_anchors_filt, k_weight)
 
         # One-sided correction (batch vectors in lognorm space,
-        # weight kNN in expression space)
+        # weight kNN in CCA space)
         correction_query, sd_used = _compute_query_correction(
             X_ref_lognorm, query_lognorm,
             anc_ref, anc_query, scores,
-            X_ref_scaled, query_scaled_refnorm,
+            cc_ref, cc_query,
             kw, sd_bandwidth, n_jobs, seed)
 
         query_corrected = np.maximum(query_lognorm + correction_query, 0.0)
