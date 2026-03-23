@@ -6076,19 +6076,34 @@ if _HAVE_SCANPY:
         median_rw = float(np.median(pos))
         return float(2.0 * np.sqrt(np.log(2.0) / median_rw))
 
-    # ── Raw-count heuristic ────────────────────────────────────────────────
+    # ── Normalization heuristic ───────────────────────────────────────────
 
-    def _is_raw_counts(X: np.ndarray) -> bool:
-        """Return True if X appears to be raw integer count data."""
-        if X.max() <= 20:
-            return False
+    def _detect_normalization(X: np.ndarray) -> str:
+        """Classify expression matrix normalization state.
+
+        Returns
+        -------
+        'raw_counts'      : integer counts, needs CPM + log1p
+        'pre_normalized'  : non-integer large values (TPM/FPKM), needs log1p only
+        'lognorm'         : already log-normalized (max <= 20), pass through
+        """
+        xmax = float(X.max())
+        if xmax <= 20:
+            return 'lognorm'
         if np.issubdtype(X.dtype, np.integer):
-            return True
+            return 'raw_counts'
         nz = X[X > 0]
         if nz.size > 10_000:
             rng = np.random.default_rng(0)
             nz = rng.choice(nz, size=10_000, replace=False)
-        return bool(np.all(nz == np.floor(nz)))
+        if bool(np.all(nz == np.floor(nz))):
+            return 'raw_counts'
+        # Non-integer values with max > 20 → pre-normalized (TPM/FPKM)
+        return 'pre_normalized'
+
+    def _is_raw_counts(X: np.ndarray) -> bool:
+        """Return True if X appears to be raw integer count data."""
+        return _detect_normalization(X) == 'raw_counts'
 
     # ── Feature selection ──────────────────────────────────────────────────
 
@@ -6114,17 +6129,18 @@ if _HAVE_SCANPY:
             X_check = a_copy.X
             if sp.issparse(X_check):
                 X_check = X_check.toarray()
-            if _is_raw_counts(X_check):
+            norm_state = _detect_normalization(X_check)
+            if norm_state == 'raw_counts':
                 flavor = "seurat_v3"
                 disp_col = "variances_norm"
+            elif norm_state == 'pre_normalized':
+                # Pre-normalized (TPM/FPKM): apply log1p before HVG
+                a_copy.X = sp.csr_matrix(np.log1p(X_check).astype(np.float32))
+                flavor = "seurat"
+                disp_col = "dispersions_norm"
             else:
                 flavor = "seurat"
                 disp_col = "dispersions_norm"
-                if "log1p" not in a.uns:
-                    _w.warn(
-                        "Input does not appear to be raw counts or scanpy-logged; "
-                        "using flavor='seurat'. For best results, provide raw counts.",
-                        UserWarning, stacklevel=3)
             try:
                 sc.pp.highly_variable_genes(
                     a_copy, flavor=flavor,
@@ -6172,13 +6188,21 @@ if _HAVE_SCANPY:
             X_sub = X_sub.toarray()
         X_sub = np.asarray(X_sub, dtype=np.float32)
 
-        if _is_raw_counts(X_sub):
+        norm_state = _detect_normalization(X_sub)
+        if norm_state == 'raw_counts':
             row_sums = X_sub.sum(axis=1, keepdims=True)
             row_sums = np.where(row_sums == 0, 1.0, row_sums)
             X_lognorm = np.log1p(X_sub / row_sums * 1e4).astype(np.float32)
             _w.warn(
                 f"Batch '{batch_name}': raw counts detected; "
                 "applying log1p(CPM/1e4).",
+                UserWarning, stacklevel=3)
+        elif norm_state == 'pre_normalized':
+            # TPM/FPKM: already size-normalized, just needs log1p
+            X_lognorm = np.log1p(X_sub).astype(np.float32)
+            _w.warn(
+                f"Batch '{batch_name}': pre-normalized values detected "
+                "(max={float(X_sub.max()):.0f}, non-integer); applying log1p.",
                 UserWarning, stacklevel=3)
         else:
             X_lognorm = X_sub.astype(np.float32)
@@ -7361,12 +7385,19 @@ if _HAVE_SCANPY:
                 X_sub[:, ref_idx] = np.asarray(col, dtype=np.float32)
 
         # Step 4: prepare query matrices
-        if _is_raw_counts(X_sub):
+        norm_state = _detect_normalization(X_sub)
+        if norm_state == 'raw_counts':
             row_sums = X_sub.sum(axis=1, keepdims=True)
             row_sums = np.where(row_sums == 0, 1.0, row_sums)
             query_lognorm = np.log1p(X_sub / row_sums * 1e4).astype(np.float32)
             warnings.warn("Query: raw counts detected; applying log1p(CPM/1e4).",
                           UserWarning, stacklevel=2)
+        elif norm_state == 'pre_normalized':
+            query_lognorm = np.log1p(X_sub).astype(np.float32)
+            warnings.warn(
+                f"Query: pre-normalized values detected "
+                f"(max={float(X_sub.max()):.0f}); applying log1p.",
+                UserWarning, stacklevel=2)
         else:
             query_lognorm = X_sub.astype(np.float32)
         query_lognorm = np.ascontiguousarray(query_lognorm)
