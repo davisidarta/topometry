@@ -177,8 +177,8 @@ def test_corrected_values_nonnegative():
 def test_multithreaded_no_gross_divergence():
     a = _make_adata(200, 400, "A", seed=12)
     b = _make_adata(200, 400, "B", seed=13)
-    r1 = run_cca_integration([a.copy(), b.copy()], n_threads=1, seed=0, scale_output=False)
-    r2 = run_cca_integration([a.copy(), b.copy()], n_threads=2, seed=0, scale_output=False)
+    r1 = run_cca_integration([a.copy(), b.copy()], n_jobs=1, seed=0, scale_output=False)
+    r2 = run_cca_integration([a.copy(), b.copy()], n_jobs=2, seed=0, scale_output=False)
     diff = np.abs((r1.X - r2.X).toarray())
     assert diff.max() < 0.5, \
         f"Multithreaded result diverges too much: max diff = {diff.max():.4f}"
@@ -191,7 +191,7 @@ def test_pbmc3k_smoke():
     rng = np.random.default_rng(42)
     adata.obs["batch"] = rng.choice(["b1", "b2"], size=adata.n_obs)
 
-    result = run_cca_integration(adata, batch_key="batch", n_threads=2, scale_output=False)
+    result = run_cca_integration(adata, batch_key="batch", n_jobs=2, scale_output=False)
 
     assert result.n_obs == adata.n_obs
     assert sp.issparse(result.X)

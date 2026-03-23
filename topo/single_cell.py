@@ -5976,7 +5976,9 @@ if _HAVE_SCANPY:
         if show:
             plt.show()
         else:
-            return ax    # =======================================================================
+            return ax    
+            
+    # =======================================================================
     # CCA-Anchor Batch Integration (Seurat v3-style)
     # =======================================================================
     #
@@ -5997,7 +5999,7 @@ if _HAVE_SCANPY:
         space: str = "l2",
         M: int = 60,
         ef_construction: int = 200,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ):
         """Build an HNSW index. *data* must be C-contiguous float32."""
@@ -6006,7 +6008,7 @@ if _HAVE_SCANPY:
         idx = hnswlib.Index(space=space, dim=d)
         idx.init_index(max_elements=n, ef_construction=ef_construction,
                        M=M, random_seed=seed)
-        idx.set_num_threads(n_threads)
+        idx.set_num_threads(n_jobs)
         idx.add_items(np.ascontiguousarray(data.astype(np.float32)))
         return idx
 
@@ -6015,13 +6017,13 @@ if _HAVE_SCANPY:
         queries: np.ndarray,
         k: int,
         ef: int | None = None,
-        n_threads: int = 1,
+        n_jobs: int = 1,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Query HNSW index.  Returns (labels, distances), shape (m, k)."""
         if ef is None:
             ef = max(k * 2, 50)
         index.set_ef(ef)
-        index.set_num_threads(n_threads)
+        index.set_num_threads(n_jobs)
         labels, dists = index.knn_query(
             np.ascontiguousarray(queries.astype(np.float32)), k=k)
         return labels.astype(np.int32), dists.astype(np.float32)
@@ -6040,20 +6042,23 @@ if _HAVE_SCANPY:
 
     def _estimate_k_anchor(n_a: int, n_b: int, k_anchor):
         if k_anchor is not None:
-            return max(2, min(20, k_anchor))
+            return max(2, k_anchor)
+        # sqrt(n_min)/2 scales gracefully; cap at 200 (generous but bounded)
         k = int(round(np.sqrt(min(n_a, n_b)) / 2))
-        return max(2, min(20, k))
+        return max(3, min(200, k))
 
     def _estimate_k_filter(n_a: int, n_b: int, k_filter):
         if k_filter is not None:
             return k_filter  # 0 = disabled
+        # 20% of smaller batch; cap at 2000 for very large datasets
         k = int(round(0.2 * min(n_a, n_b)))
-        return max(50, min(500, k))
+        return max(30, min(2000, k))
 
     def _estimate_k_score(k_anchor: int, k_score):
         if k_score is not None:
-            return max(k_anchor, min(100, k_score))
-        return max(k_anchor, min(100, k_anchor * 6))
+            return max(k_anchor, k_score)
+        # 6× k_anchor for robust SNN overlap; cap at 200
+        return max(k_anchor, min(200, k_anchor * 6))
 
     def _estimate_k_weight(k_anchor: int, n_anchors: int, k_weight):
         if k_weight is not None:
@@ -6258,7 +6263,7 @@ if _HAVE_SCANPY:
         cc_a: np.ndarray,
         cc_b: np.ndarray,
         k: int,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Mutual nearest neighbours in CCA space via hnswlib."""
@@ -6268,7 +6273,7 @@ if _HAVE_SCANPY:
         if k_a < 1 or k_b < 1:
             return np.array([], dtype=np.int32), np.array([], dtype=np.int32)
 
-        if n_threads > 1:
+        if n_jobs > 1:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as ex:
                 fut_b = ex.submit(_build_hnsw_index, cc_b, "l2", 60, 200, 1, seed)
@@ -6279,8 +6284,8 @@ if _HAVE_SCANPY:
             idx_b_hnsw = _build_hnsw_index(cc_b, "l2", 60, 200, 1, seed)
             idx_a_hnsw = _build_hnsw_index(cc_a, "l2", 60, 200, 1, seed)
 
-        idx_a2b, _ = _query_hnsw(idx_b_hnsw, cc_a, k=k_a, n_threads=n_threads)
-        idx_b2a, _ = _query_hnsw(idx_a_hnsw, cc_b, k=k_b, n_threads=n_threads)
+        idx_a2b, _ = _query_hnsw(idx_b_hnsw, cc_a, k=k_a, n_jobs=n_jobs)
+        idx_b2a, _ = _query_hnsw(idx_a_hnsw, cc_b, k=k_b, n_jobs=n_jobs)
 
         # Vectorised MNN via sparse boolean AND
         rows_a = np.repeat(np.arange(n_a, dtype=np.int32), k_a)
@@ -6308,7 +6313,7 @@ if _HAVE_SCANPY:
         X_b_scaled: np.ndarray,
         U_k: np.ndarray,
         k_filter: int,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Discard CCA anchors not supported in CCA-loading-weighted feature space."""
@@ -6337,9 +6342,9 @@ if _HAVE_SCANPY:
             return anchor_a, anchor_b
 
         unique_b, inv = np.unique(anchor_b, return_inverse=True)
-        idx_a_hnsw = _build_hnsw_index(X_a_top, "l2", 60, 200, n_threads, seed)
+        idx_a_hnsw = _build_hnsw_index(X_a_top, "l2", 60, 200, n_jobs, seed)
         labels, _ = _query_hnsw(idx_a_hnsw, X_b_top[unique_b],
-                                 k=k_filter, n_threads=n_threads)
+                                 k=k_filter, n_jobs=n_jobs)
         labels_per_anchor = labels[inv]
         keep = (labels_per_anchor == anchor_a[:, None]).any(axis=1)
         return anchor_a[keep], anchor_b[keep]
@@ -6352,7 +6357,7 @@ if _HAVE_SCANPY:
         cc_a: np.ndarray,
         cc_b: np.ndarray,
         k_score: int,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ) -> np.ndarray:
         """SNN-overlap scores rescaled to [0, 1]."""
@@ -6363,7 +6368,7 @@ if _HAVE_SCANPY:
             return np.ones(len(anchor_a), dtype=np.float32)
 
         # Within-dataset kNN
-        if n_threads > 1:
+        if n_jobs > 1:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as ex:
                 fut_a = ex.submit(_build_hnsw_index, cc_a, "l2", 60, 200, 1, seed)
@@ -6374,8 +6379,8 @@ if _HAVE_SCANPY:
             idx_a_h = _build_hnsw_index(cc_a, "l2", 60, 200, 1, seed)
             idx_b_h = _build_hnsw_index(cc_b, "l2", 60, 200, 1, seed)
 
-        N_a_idx, _ = _query_hnsw(idx_a_h, cc_a, k=k_a, n_threads=n_threads)
-        N_b_idx, _ = _query_hnsw(idx_b_h, cc_b, k=k_b, n_threads=n_threads)
+        N_a_idx, _ = _query_hnsw(idx_a_h, cc_a, k=k_a, n_jobs=n_jobs)
+        N_b_idx, _ = _query_hnsw(idx_b_h, cc_b, k=k_b, n_jobs=n_jobs)
 
         # Sparse neighbourhood matrices
         SNN_A = sp.csr_matrix(
@@ -6430,7 +6435,7 @@ if _HAVE_SCANPY:
         cc_b: np.ndarray,
         k_weight: int,
         sd_bandwidth,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray, float]:
         """Symmetric per-cell correction in log-normalised expression space."""
@@ -6449,7 +6454,7 @@ if _HAVE_SCANPY:
         k_eff = min(k_weight, n_anc)
 
         # Build HNSW on anchor positions
-        if n_threads > 1:
+        if n_jobs > 1:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as ex:
                 fut_b = ex.submit(_build_hnsw_index, anchor_pos_b, "l2", 60, 200, 1, seed)
@@ -6460,8 +6465,8 @@ if _HAVE_SCANPY:
             idx_anc_b = _build_hnsw_index(anchor_pos_b, "l2", 60, 200, 1, seed)
             idx_anc_a = _build_hnsw_index(anchor_pos_a, "l2", 60, 200, 1, seed)
 
-        idx_b, dist_b = _query_hnsw(idx_anc_b, cc_b, k=k_eff, n_threads=n_threads)
-        idx_a, dist_a = _query_hnsw(idx_anc_a, cc_a, k=k_eff, n_threads=n_threads)
+        idx_b, dist_b = _query_hnsw(idx_anc_b, cc_b, k=k_eff, n_jobs=n_jobs)
+        idx_a, dist_a = _query_hnsw(idx_anc_a, cc_a, k=k_eff, n_jobs=n_jobs)
 
         # Raw weights
         d_k_b = dist_b[:, -1:] + 1e-10
@@ -6484,7 +6489,7 @@ if _HAVE_SCANPY:
 
         # Weighted correction (chunked einsum)
         corr_b = np.zeros((n_b, p), dtype=np.float32)
-        chunk = max(500, n_b // max(1, n_threads))
+        chunk = max(500, n_b // max(1, n_jobs))
         for s in range(0, n_b, chunk):
             e = min(s + chunk, n_b)
             corr_b[s:e] = np.einsum(
@@ -6493,7 +6498,7 @@ if _HAVE_SCANPY:
                 midpoint_vecs[idx_b[s:e]])
 
         corr_a = np.zeros((n_a, p), dtype=np.float32)
-        chunk = max(500, n_a // max(1, n_threads))
+        chunk = max(500, n_a // max(1, n_jobs))
         for s in range(0, n_a, chunk):
             e = min(s + chunk, n_a)
             corr_a[s:e] = np.einsum(
@@ -6509,7 +6514,7 @@ if _HAVE_SCANPY:
         adatas: list,
         features: list[str],
         n_components: int,
-        n_threads: int,
+        n_jobs: int,
         seed: int,
     ) -> list[tuple[int, int]]:
         """Data-driven pairwise merge order for N > 2 datasets."""
@@ -6526,15 +6531,15 @@ if _HAVE_SCANPY:
             try:
                 cc_i, cc_j, _ = _compute_cca(Xi_sc, Xj_sc, nc, seed)
                 anc_i, anc_j = _find_mnn_in_cca(cc_i, cc_j, k=3,
-                                                   n_threads=1, seed=seed)
+                                                   n_jobs=1, seed=seed)
                 return len(anc_i) / max(1, min(len(Xi_sc), len(Xj_sc)))
             except Exception:
                 return 0.0
 
         pairs = [(i, j) for i in range(N) for j in range(i + 1, N)]
-        if n_threads > 1:
+        if n_jobs > 1:
             from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=n_threads) as ex:
+            with ThreadPoolExecutor(max_workers=n_jobs) as ex:
                 sim_values = list(ex.map(lambda p: _pair_sim(*p), pairs))
         else:
             sim_values = [_pair_sim(i, j) for i, j in pairs]
@@ -6566,7 +6571,7 @@ if _HAVE_SCANPY:
         k_weight: int | None = None,
         sd_bandwidth: float | None = None,
         scale_output: bool = True,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         layer: str | None = None,
         seed: int = 0,
         _fixed_features: list | None = None,
@@ -6610,7 +6615,7 @@ if _HAVE_SCANPY:
             n_anchors).
         sd_bandwidth : float, optional
             Gaussian kernel bandwidth. Default None -> calibrated from raw_w.
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib. Default 1.
         scale_output : bool
             If True (default), z-score the corrected expression and store it
@@ -6720,7 +6725,7 @@ if _HAVE_SCANPY:
             merge_order = [(0, 1)]
         else:
             merge_order = _build_guide_tree(adatas, features, n_components,
-                                            n_threads, seed)
+                                            n_jobs, seed)
 
         # ── 4. Merge loop ──────────────────────────────────────────────
         log_raw_anchors = []
@@ -6763,7 +6768,7 @@ if _HAVE_SCANPY:
             cc_a, cc_b, U_k = _compute_cca(X_a_sc, X_b_sc, n_components, seed)
 
             # MNN
-            anc_a, anc_b = _find_mnn_in_cca(cc_a, cc_b, ka, n_threads, seed)
+            anc_a, anc_b = _find_mnn_in_cca(cc_a, cc_b, ka, n_jobs, seed)
             log_raw_anchors.append(len(anc_a))
 
             X_orig_merged = np.vstack([X_a_orig, X_b_orig])
@@ -6788,7 +6793,7 @@ if _HAVE_SCANPY:
 
             # HD filter
             anc_a, anc_b = _filter_anchors_hd(
-                anc_a, anc_b, X_a_sc, X_b_sc, U_k, kf, n_threads, seed)
+                anc_a, anc_b, X_a_sc, X_b_sc, U_k, kf, n_jobs, seed)
             log_filt_anchors.append(len(anc_a))
 
             # Zero-anchor fallback (after HD filter)
@@ -6811,7 +6816,7 @@ if _HAVE_SCANPY:
 
             # Score
             scores = _score_anchors(anc_a, anc_b, cc_a, cc_b, ks,
-                                    n_threads, seed)
+                                    n_jobs, seed)
 
             # k_weight
             kw = _estimate_k_weight(ka, len(anc_a), k_weight)
@@ -6823,7 +6828,7 @@ if _HAVE_SCANPY:
             # Symmetric correction
             corr_b, corr_a, sd_used = _compute_correction_vectors(
                 X_a_ln, X_b_ln, anc_a, anc_b, scores,
-                cc_a, cc_b, kw, sd_bandwidth, n_threads, seed)
+                cc_a, cc_b, kw, sd_bandwidth, n_jobs, seed)
             log_sd.append(sd_used)
 
             # Apply and clamp
@@ -6884,7 +6889,7 @@ if _HAVE_SCANPY:
             "batch_names": batch_names,
             "correction_mode": "symmetric",
             "seed": seed,
-            "n_threads": n_threads,
+            "n_jobs": n_jobs,
             "k_anchor_per_merge": log_k_anchor,
             "k_filter_per_merge": log_k_filter,
             "k_score_per_merge": log_k_score,
@@ -6988,7 +6993,7 @@ if _HAVE_SCANPY:
         cc_query: np.ndarray,
         k_weight: int,
         sd_bandwidth,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ) -> tuple[np.ndarray, float]:
         """One-sided correction: compute correction vector for each query cell.
@@ -7005,7 +7010,7 @@ if _HAVE_SCANPY:
         k_eff = min(k_weight, len(anc_ref))
         idx_anchors = _build_hnsw_index(anchor_pos_ref, seed=seed)
         idx_q, dist_q = _query_hnsw(
-            idx_anchors, cc_query, k=k_eff, n_threads=n_threads)
+            idx_anchors, cc_query, k=k_eff, n_jobs=n_jobs)
 
         d_k_q = dist_q[:, -1:] + 1e-10
         raw_w_q = np.clip(1.0 - dist_q / d_k_q, 0.0, 1.0) * scores[idx_q]
@@ -7016,7 +7021,7 @@ if _HAVE_SCANPY:
         kernel_q /= (kernel_q.sum(axis=1, keepdims=True) + 1e-12)
 
         correction_query = np.zeros((n_q, p), dtype=np.float32)
-        chunk = max(500, n_q // max(1, n_threads))
+        chunk = max(500, n_q // max(1, n_jobs))
         for s in range(0, n_q, chunk):
             e = min(s + chunk, n_q)
             correction_query[s:e] = np.einsum(
@@ -7107,7 +7112,7 @@ if _HAVE_SCANPY:
         features,
         reference,
         k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
-        n_threads, seed,
+        n_jobs, seed,
     ):
         """One-sided correction: only query cells move toward the reference."""
         import warnings
@@ -7126,7 +7131,7 @@ if _HAVE_SCANPY:
 
         # MNN anchors in CCA space (ref=A, query=B)
         anc_ref, anc_query = _find_mnn_in_cca(
-            cc_ref, cc_query, ka, n_threads, seed)
+            cc_ref, cc_query, ka, n_jobs, seed)
         n_anchors_raw = len(anc_ref)
 
         # HD filter
@@ -7137,7 +7142,7 @@ if _HAVE_SCANPY:
             anc_ref, anc_query = _filter_anchors_hd(
                 anc_ref, anc_query,
                 X_ref_scaled, query_scaled_perquery,
-                U_k, kf, n_threads, seed)
+                U_k, kf, n_jobs, seed)
         n_anchors_filt = len(anc_ref)
 
         # Zero-anchor fallback
@@ -7154,7 +7159,7 @@ if _HAVE_SCANPY:
 
         # Score
         scores = _score_anchors(
-            anc_ref, anc_query, cc_ref, cc_query, ks, n_threads, seed)
+            anc_ref, anc_query, cc_ref, cc_query, ks, n_jobs, seed)
 
         kw = _estimate_k_weight(ka, n_anchors_filt, k_weight)
 
@@ -7163,7 +7168,7 @@ if _HAVE_SCANPY:
             X_ref_lognorm, query_lognorm,
             anc_ref, anc_query, scores,
             cc_ref, cc_query,
-            kw, sd_bandwidth, n_threads, seed)
+            kw, sd_bandwidth, n_jobs, seed)
 
         query_corrected = np.maximum(query_lognorm + correction_query, 0.0)
 
@@ -7181,7 +7186,7 @@ if _HAVE_SCANPY:
         features: list,
         n_components: int,
         k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
-        n_threads, seed,
+        n_jobs, seed,
     ):
         """Full symmetric re-integration of reference + query."""
         import anndata as ad
@@ -7206,7 +7211,7 @@ if _HAVE_SCANPY:
             k_weight=k_weight,
             sd_bandwidth=sd_bandwidth,
             scale_output=True,
-            n_threads=n_threads,
+            n_jobs=n_jobs,
             seed=seed,
             _fixed_features=features,
         )
@@ -7225,7 +7230,7 @@ if _HAVE_SCANPY:
         k_score: int | None = None,
         k_weight: int | None = None,
         sd_bandwidth: float | None = None,
-        n_threads: int = 1,
+        n_jobs: int = 1,
         seed: int = 0,
     ):
         """Correct a query dataset against a saved CCA reference.
@@ -7243,7 +7248,7 @@ if _HAVE_SCANPY:
             Minimum fraction of reference genes present in query. Default 0.8.
         k_anchor, k_filter, k_score, k_weight, sd_bandwidth
             Override adaptive estimates. Default None (auto).
-        n_threads : int
+        n_jobs : int
             Threads for hnswlib. Default 1.
         seed : int
             Random seed. Default 0.
@@ -7358,12 +7363,12 @@ if _HAVE_SCANPY:
                 query_scaled_refnorm,
                 X_ref_lognorm, cc_ref, U_k, mu_ref, sigma_ref, features,
                 reference, k_anchor, k_filter, k_score, k_weight,
-                sd_bandwidth, n_threads, seed)
+                sd_bandwidth, n_jobs, seed)
         else:
             return _map_full_reintegration(
                 query, reference, features, n_components,
                 k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
-                n_threads, seed)
+                n_jobs, seed)
     # =======================================================================
     # Integration Quality Metrics
     # =======================================================================
@@ -7672,16 +7677,16 @@ if _HAVE_SCANPY:
         """Build hnswlib index on Z, return (n, k) neighbor indices (excluding self)."""
         n = Z.shape[0]
         k_eff = min(k, n - 1)
-        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_jobs, seed=seed)
-        labels, _ = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_jobs)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_jobs=n_jobs, seed=seed)
+        labels, _ = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_jobs=n_jobs)
         return labels[:, 1:k_eff + 1]
 
     def _compute_lisi_values(Z, labels, k, n_jobs, seed):
         """Compute per-cell LISI values with Gaussian kernel weighting."""
         n = Z.shape[0]
         k_eff = min(k, n - 1)
-        idx_hnsw = _build_hnsw_index(Z, space="l2", n_threads=n_jobs, seed=seed)
-        labels_nn, dists = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_threads=n_jobs)
+        idx_hnsw = _build_hnsw_index(Z, space="l2", n_jobs=n_jobs, seed=seed)
+        labels_nn, dists = _query_hnsw(idx_hnsw, Z, k=k_eff + 1, n_jobs=n_jobs)
         labels_nn = labels_nn[:, 1:k_eff + 1]
         dists = dists[:, 1:k_eff + 1]
 
