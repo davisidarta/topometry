@@ -6746,8 +6746,24 @@ if _HAVE_SCANPY:
                         f"Batch '{batch_names[i]}' is missing {len(missing)} "
                         f"of the {len(features)} fixed features.")
         else:
-            n_feat = _estimate_n_features(adatas, n_features)
-            features = _select_integration_features(adatas, n_feat)
+            # Check if prepare_for_integration pre-computed HVGs
+            pre_feats = adatas[0].uns.get("integration_features", None)
+            if pre_feats is not None:
+                # Validate all batches carry the same pre-computed feature list
+                ok = all(
+                    set(a.uns.get("integration_features", [])) == set(pre_feats)
+                    for a in adatas)
+                if ok:
+                    features = list(pre_feats)
+                else:
+                    warnings.warn(
+                        "Inconsistent 'integration_features' across batches; "
+                        "re-running HVG selection.", UserWarning, stacklevel=2)
+                    n_feat = _estimate_n_features(adatas, n_features)
+                    features = _select_integration_features(adatas, n_feat)
+            else:
+                n_feat = _estimate_n_features(adatas, n_features)
+                features = _select_integration_features(adatas, n_feat)
         n_feat = len(features)
 
         # ── 2. Prepare matrices ────────────────────────────────────────
@@ -7268,61 +7284,19 @@ if _HAVE_SCANPY:
 
     # ── Main public function ───────────────────────────────────────────────
 
-    def map_to_cca_reference(
+    def _map_single_query(
         query,
         reference,
-        mode: str = "query_only",
-        min_shared_features: float = 0.8,
-        k_anchor: int | None = None,
-        k_filter: int | None = None,
-        k_score: int | None = None,
-        k_weight: int | None = None,
-        sd_bandwidth: float | None = None,
-        n_jobs: int = 1,
-        seed: int = 0,
+        mode,
+        min_shared_features,
+        k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+        n_jobs, seed,
     ):
-        """Correct a query dataset against a saved CCA reference.
-
-        Parameters
-        ----------
-        query : AnnData
-            The new dataset to map.
-        reference : AnnData or str or Path
-            A completed integration result from run_cca_integration().
-        mode : str
-            'query_only': only query cells are corrected (reference frozen).
-            'full_reintegration': both re-corrected symmetrically.
-        min_shared_features : float
-            Minimum fraction of reference genes present in query. Default 0.8.
-        k_anchor, k_filter, k_score, k_weight, sd_bandwidth
-            Override adaptive estimates. Default None (auto).
-        n_jobs : int
-            Threads for hnswlib. Default 1.
-        seed : int
-            Random seed. Default 0.
-
-        Returns
-        -------
-        AnnData with corrected expression.
-
-        Notes
-        -----
-        Gene loadings (U_k) are a data-dependent back-projection into gene
-        space.  The projection quality depends on the reference cell type
-        composition.  For queries with novel cell populations very different
-        from the reference, the projection is less accurate, though anchor
-        finding via kNN/MNN is relatively robust to small projection errors.
-        """
+        """Map a single query AnnData against a reference. Internal helper."""
         from pathlib import Path as _Path
         import warnings
 
-        # Step 0: load reference if path
-        if isinstance(reference, (str, _Path)):
-            reference = load_cca_reference(reference)
-        else:
-            _validate_reference_fields(reference)
-
-        # Step 1: extract reference components
+        # Extract reference components
         features = list(reference.var_names)
         n_features = len(features)
         n_components = reference.uns["cca_integration"]["n_components"]
@@ -7334,8 +7308,6 @@ if _HAVE_SCANPY:
             reference.uns["cca_integration"]["ref_sigma"], dtype=np.float32)
         sigma_ref = np.where(sigma_ref < 1e-8, 1.0, sigma_ref)
 
-        # Use corrected lognorm layer if available (when scale_output=True,
-        # .X is z-scored and lognorm is in layers["corrected"])
         if "corrected" in reference.layers:
             _ref_src = reference.layers["corrected"]
         else:
@@ -7344,13 +7316,7 @@ if _HAVE_SCANPY:
                          if sp.issparse(_ref_src)
                          else np.asarray(_ref_src, dtype=np.float32))
 
-        # Step 2: validate mode
-        if mode not in ("query_only", "full_reintegration"):
-            raise ValueError(
-                f"mode must be 'query_only' or 'full_reintegration', "
-                f"got '{mode}'.")
-
-        # Step 3: feature alignment
+        # Feature alignment
         query_genes = set(query.var_names)
         shared = [g for g in features if g in query_genes]
         coverage = len(shared) / len(features)
@@ -7367,7 +7333,7 @@ if _HAVE_SCANPY:
                 f"Query is missing {len(missing_in_query)}/{len(features)} "
                 f"reference genes. Missing genes will be zero-imputed. "
                 f"Coverage: {coverage:.1%}.",
-                UserWarning, stacklevel=2)
+                UserWarning, stacklevel=3)
 
         # Build aligned query expression matrix
         X_sub = np.zeros((query.n_obs, n_features), dtype=np.float32)
@@ -7380,38 +7346,36 @@ if _HAVE_SCANPY:
                     col = col.toarray().ravel()
                 X_sub[:, ref_idx] = np.asarray(col, dtype=np.float32)
 
-        # Step 4: prepare query matrices
+        # Prepare query matrices
         norm_state = _detect_normalization(X_sub)
-        if norm_state == 'raw_counts':
+        if norm_state == "raw_counts":
             row_sums = X_sub.sum(axis=1, keepdims=True)
             row_sums = np.where(row_sums == 0, 1.0, row_sums)
-            query_lognorm = np.log1p(X_sub / row_sums * 1e4).astype(np.float32)
-            warnings.warn("Query: raw counts detected; applying log1p(CPM/1e4).",
-                          UserWarning, stacklevel=2)
-        elif norm_state == 'pre_normalized':
+            query_lognorm = np.log1p(
+                X_sub / row_sums * 1e4).astype(np.float32)
+            warnings.warn(
+                "Query: raw counts detected; applying log1p(CPM/1e4).",
+                UserWarning, stacklevel=3)
+        elif norm_state == "pre_normalized":
             query_lognorm = np.log1p(X_sub).astype(np.float32)
             warnings.warn(
-                f"Query: pre-normalized values detected "
+                f"Query: pre-normalised values detected "
                 f"(max={float(X_sub.max()):.0f}); applying log1p.",
-                UserWarning, stacklevel=2)
+                UserWarning, stacklevel=3)
         else:
             query_lognorm = X_sub.astype(np.float32)
         query_lognorm = np.ascontiguousarray(query_lognorm)
 
-        # Per-query z-score (for HD filter)
         mu_q = query_lognorm.mean(axis=0)
         sigma_q = query_lognorm.std(axis=0, ddof=1)
         sigma_q = np.where(sigma_q < 1e-8, 1.0, sigma_q)
         query_scaled_perquery = np.ascontiguousarray(
             np.clip((query_lognorm - mu_q) / sigma_q, -10.0, 10.0
                     ).astype(np.float32))
-
-        # Ref-normed z-score (for CCA projection)
         query_scaled_refnorm = np.ascontiguousarray(
             np.clip((query_lognorm - mu_ref) / sigma_ref, -10.0, 10.0
                     ).astype(np.float32))
 
-        # Step 5: dispatch
         if mode == "query_only":
             return _map_query_only(
                 query, query_lognorm, query_scaled_perquery,
@@ -7424,6 +7388,170 @@ if _HAVE_SCANPY:
                 query, reference, features, n_components,
                 k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
                 n_jobs, seed)
+
+    def map_to_cca_reference(
+        query,
+        reference,
+        mode: str = "query_only",
+        mapping_order: list | None = None,
+        min_shared_features: float = 0.8,
+        k_anchor: int | None = None,
+        k_filter: int | None = None,
+        k_score: int | None = None,
+        k_weight: int | None = None,
+        sd_bandwidth: float | None = None,
+        n_jobs: int = 1,
+        seed: int = 0,
+        sequential_topometry: bool = False,
+        topometry_kwargs: dict | None = None,
+        return_intermediates: bool = False,
+    ):
+        """Correct one or more query datasets against a saved CCA reference.
+
+        Parameters
+        ----------
+        query : AnnData or list[AnnData]
+            The new dataset(s) to map.  When a list is provided, queries are
+            mapped sequentially.
+        reference : AnnData or str or Path
+            A completed integration result from ``run_cca_integration()``.
+        mode : str
+            ``'query_only'``: only query cells are corrected (reference frozen).
+            ``'full_reintegration'``: both re-corrected symmetrically.
+        mapping_order : list of int, optional
+            Indices into ``query`` (when query is a list) specifying the
+            order in which to map datasets.  Use the output of
+            :func:`find_mapping_order`.  If None, uses the list order as-is.
+        min_shared_features : float
+            Minimum fraction of reference genes present in query.  Default 0.8.
+        k_anchor, k_filter, k_score, k_weight, sd_bandwidth
+            Override adaptive hyperparameter estimates.  Default None (auto).
+        n_jobs : int
+            Threads for hnswlib.  Default 1.
+        seed : int
+            Random seed.  Default 0.
+        sequential_topometry : bool
+            If True and query is a list, run :func:`fit_adata` on the growing
+            atlas after each query is mapped.  Stores TopoMetry scaffolds and
+            projections in the intermediate atlas objects.  Default False.
+        topometry_kwargs : dict, optional
+            Extra keyword arguments forwarded to :func:`fit_adata` when
+            ``sequential_topometry=True``.
+        return_intermediates : bool
+            If True, return a tuple ``(atlas, intermediates)`` where
+            *intermediates* is an ordered dict mapping step labels to the
+            atlas AnnData after each mapping step.  Default False.
+
+        Returns
+        -------
+        AnnData
+            Final atlas (reference + all corrected queries, concatenated).
+            If ``scale_output=True`` was used in ``run_cca_integration``, the
+            corrected expression values are z-scored.
+        tuple(AnnData, dict)
+            Only when ``return_intermediates=True``: ``(atlas, steps)`` where
+            *steps* is ``{'step_0': atlas_after_first_query, ...}``.
+
+        Notes
+        -----
+        When mapping multiple queries **always** maps against the original
+        *reference* (with CCA fields intact).  The growing atlas (reference +
+        previously mapped queries) is used only for z-scoring and for
+        :func:`fit_adata` when ``sequential_topometry=True``.
+        """
+        import anndata as ad
+        import warnings
+        from pathlib import Path as _Path
+
+        # ── Load / validate reference ──────────────────────────────────────
+        if isinstance(reference, (str, _Path)):
+            reference = load_cca_reference(reference)
+        else:
+            _validate_reference_fields(reference)
+
+        if mode not in ("query_only", "full_reintegration"):
+            raise ValueError(
+                f"mode must be 'query_only' or 'full_reintegration', "
+                f"got '{mode}'.")
+
+        # ── Single-query fast path ─────────────────────────────────────────
+        if isinstance(query, AnnData):
+            result = _map_single_query(
+                query, reference, mode, min_shared_features,
+                k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+                n_jobs, seed)
+            if return_intermediates:
+                return result, {"step_0": result}
+            return result
+
+        # ── Multi-query sequential path ────────────────────────────────────
+        queries = list(query)
+        if not queries:
+            raise ValueError("query list is empty.")
+
+        if mapping_order is not None:
+            if sorted(mapping_order) != list(range(len(queries))):
+                raise ValueError(
+                    "mapping_order must be a permutation of "
+                    f"range({len(queries)}).")
+            ordered = [queries[i] for i in mapping_order]
+        else:
+            ordered = queries
+            mapping_order = list(range(len(queries)))
+
+        if topometry_kwargs is None:
+            topometry_kwargs = {}
+
+        # The reference with CCA fields is kept frozen for all mapping steps
+        adata_ref_map = reference
+
+        # Start atlas as the reference (lognorm layer if available)
+        features = list(reference.var_names)
+        if "corrected" in reference.layers:
+            ref_X = reference.layers["corrected"]
+        else:
+            ref_X = reference.X
+        atlas_parts = [reference]   # growing list for concat (no CCA fields needed)
+
+        intermediates = {}
+        mapped_outputs = []
+
+        for step_idx, q in enumerate(ordered):
+            orig_idx = mapping_order[step_idx]
+            step_label = f"step_{step_idx}"
+
+            mapped = _map_single_query(
+                q, adata_ref_map, mode, min_shared_features,
+                k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
+                n_jobs, seed)
+            mapped_outputs.append(mapped)
+            atlas_parts.append(mapped)
+
+            # Build current atlas (reference + all mapped so far)
+            current_atlas = ad.concat(
+                atlas_parts,
+                join="inner",
+                label=None,
+                uns_merge="first",
+            )
+
+            if sequential_topometry:
+                fit_adata(current_atlas, **topometry_kwargs)
+
+            if return_intermediates:
+                intermediates[step_label] = current_atlas.copy()
+
+        # Final atlas is the last current_atlas
+        final_atlas = ad.concat(
+            atlas_parts,
+            join="inner",
+            label=None,
+            uns_merge="first",
+        )
+
+        if return_intermediates:
+            return final_atlas, intermediates
+        return final_atlas
     # =======================================================================
     # Integration Quality Metrics
     # =======================================================================
@@ -7766,3 +7894,431 @@ if _HAVE_SCANPY:
             lisi_values[i] = 1.0 / max(simpson, 1e-12)
 
         return lisi_values
+
+    # =======================================================================
+    # High-level integration API
+    # =======================================================================
+
+    def prepare_for_integration(
+        data,
+        batch_key: str | None = None,
+        input_type: str = "auto",
+        layer: str | None = None,
+        select_hvgs: bool = True,
+        n_hvgs: int = 3000,
+        hvg_flavor: str = "seurat_v3",
+        scale_max_val: float = 10.0,
+    ) -> None:
+        """Normalize and optionally select integration HVGs in-place.
+
+        Call this on your data **before** ``run_cca_integration`` to ensure
+        ``.X`` contains a clean log-normalised expression matrix.
+
+        Parameters
+        ----------
+        data : AnnData or list[AnnData]
+            Input data.  Modifications are applied in-place.
+        batch_key : str, optional
+            ``.obs`` column identifying batches.  Used for per-batch HVG
+            selection when *data* is a single AnnData.
+        input_type : {'auto', 'counts', 'lognorm'}
+            ``'auto'``: auto-detect normalisation state.
+            ``'counts'``: raw integer counts → CPM + log1p.
+            ``'lognorm'``: data is already log-normalised, no-op.
+        layer : str, optional
+            Use ``adata.layers[layer]`` as the expression source instead of
+            ``.X``.  After processing, ``.X`` will contain the lognorm matrix.
+        select_hvgs : bool
+            If True (default), run per-batch HVG selection and store the
+            selected gene list in ``adata.uns['integration_features']`` and a
+            boolean flag in ``adata.var['integration_hvg']``.
+        n_hvgs : int
+            Maximum number of integration HVGs.  Default 3000.
+        hvg_flavor : str
+            Scanpy HVG flavour used in ``_select_integration_features``.
+            Default ``'seurat_v3'``.
+        scale_max_val : float
+            Unused placeholder retained for API consistency.
+
+        Returns
+        -------
+        None  (modifies data in-place).
+
+        Notes
+        -----
+        * Raw counts are normalised to CPM/1e4 then log1p-transformed.
+        * Pre-normalised values (TPM/FPKM) receive log1p only.
+        * The original expression is preserved in ``adata.layers['counts']``
+          (if not already present).
+        * After this call, ``adata.X`` is the lognorm matrix and
+          ``adata.layers['lognorm']`` is a copy of it.
+        * If ``select_hvgs=True``, ``run_cca_integration`` will automatically
+          use the pre-computed ``uns['integration_features']`` instead of
+          running HVG selection again.
+        """
+        import warnings
+
+        # ── Coerce to list of AnnDatas ─────────────────────────────────────
+        if isinstance(data, AnnData):
+            adatas_main = [data]
+            if batch_key is not None and batch_key in data.obs.columns:
+                batch_cats = sorted(data.obs[batch_key].astype(str).unique())
+                batch_views = [data[data.obs[batch_key].astype(str) == b]
+                               for b in batch_cats]
+            else:
+                batch_views = [data]
+        elif isinstance(data, list):
+            adatas_main = data
+            batch_views = data
+        else:
+            raise TypeError("data must be AnnData or list[AnnData].")
+
+        # ── Normalize each AnnData inplace ─────────────────────────────────
+        def _norm_inplace(adata):
+            X = adata.layers[layer] if layer is not None else adata.X
+            if sp.issparse(X):
+                X = X.toarray()
+            X = np.asarray(X, dtype=np.float32)
+
+            if input_type == "auto":
+                norm_state = _detect_normalization(X)
+            elif input_type == "counts":
+                norm_state = "raw_counts"
+            elif input_type == "lognorm":
+                norm_state = "lognorm"
+            else:
+                raise ValueError(
+                    "input_type must be 'auto', 'counts', or 'lognorm'.")
+
+            if norm_state == "raw_counts":
+                if "counts" not in adata.layers:
+                    adata.layers["counts"] = adata.X.copy()
+                row_sums = X.sum(axis=1, keepdims=True)
+                row_sums = np.where(row_sums == 0, 1.0, row_sums)
+                X_ln = np.log1p(X / row_sums * 1e4).astype(np.float32)
+                adata.X = sp.csr_matrix(X_ln)
+                adata.layers["lognorm"] = sp.csr_matrix(X_ln)
+            elif norm_state == "pre_normalized":
+                warnings.warn(
+                    f"Pre-normalised values detected (max={float(X.max()):.0f},"
+                    " non-integer); applying log1p only.",
+                    UserWarning, stacklevel=3)
+                if "counts" not in adata.layers:
+                    adata.layers["counts"] = adata.X.copy()
+                X_ln = np.log1p(X).astype(np.float32)
+                adata.X = sp.csr_matrix(X_ln)
+                adata.layers["lognorm"] = sp.csr_matrix(X_ln)
+            else:
+                # Already lognorm — record a copy
+                adata.layers["lognorm"] = adata.X.copy()
+
+        for adata in adatas_main:
+            _norm_inplace(adata)
+
+        # ── HVG selection across batches ───────────────────────────────────
+        if select_hvgs:
+            n_feat = _estimate_n_features(batch_views, n_hvgs)
+            try:
+                features = _select_integration_features(batch_views, n_feat)
+            except Exception as e:
+                warnings.warn(
+                    f"HVG selection failed ({e}); skipping.", UserWarning)
+                return
+            for adata in adatas_main:
+                adata.uns["integration_features"] = features
+                adata.var["integration_hvg"] = adata.var_names.isin(
+                    set(features))
+
+    # ── compute_all_integration_metrics ────────────────────────────────────
+
+    def compute_all_integration_metrics(
+        adata_dict: dict,
+        batch_key: str = "batch",
+        cell_type_key: str | None = None,
+        cluster_key: str = "topo_clusters",
+        metrics: list | None = None,
+        embedding_key: str | None = None,
+        k: int = 30,
+        n_jobs: int = -1,
+        seed: int = 0,
+    ):
+        """Compute integration quality metrics for multiple AnnData objects.
+
+        Convenience wrapper around individual metric functions that accepts a
+        labelled dictionary of AnnData objects and returns a
+        :class:`pandas.DataFrame`.
+
+        Parameters
+        ----------
+        adata_dict : dict[str, AnnData]
+            Mapping of ``{label: AnnData}``.  Each value is scored
+            independently.  Example::
+
+                {
+                    "uncorrected": adata_raw,
+                    "integrated":  adata_int,
+                    "step_1":      adata_step1,
+                }
+
+        batch_key : str
+            ``.obs`` column identifying batches.  Default ``'batch'``.
+        cell_type_key : str or None
+            ``.obs`` column for cell-type labels.  If None, cell-type-
+            dependent metrics (``knn_purity``, ``clisi``, ``ari``, ``nmi``)
+            are skipped automatically.
+        cluster_key : str
+            ``.obs`` column for cluster assignments (used by ``ari``/``nmi``).
+            Default ``'topo_clusters'``.
+        metrics : list of str, optional
+            Subset of ``['knn_purity', 'knn_mixing', 'ilisi', 'clisi',
+            'ari', 'nmi']``.  Default: all available.
+        embedding_key : str or None
+            ``.obsm`` key for the embedding.  If None, uses ``'X_ms_spectral_scaffold'``
+            when present, then ``'X_spectral_scaffold'``, else ``.X``.
+        k : int
+            Number of neighbours for kNN-based metrics.  Default 30.
+        n_jobs : int
+            Threads for hnswlib.  Default ``-1`` (all cores).
+        seed : int
+            Random seed.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Rows = metric names, columns = dataset labels.
+            Missing metrics (e.g. cell-type metrics when no label key is
+            provided) are represented as ``NaN``.
+        """
+        all_metrics = [
+            "knn_purity", "knn_mixing", "ilisi", "clisi", "ari", "nmi"]
+        if metrics is None:
+            metrics = all_metrics
+        metrics = [m for m in metrics if m in all_metrics]
+
+        def _score_one(adata):
+            ek = embedding_key
+            if ek is None and "X_ms_spectral_scaffold" in adata.obsm:
+                ek = "X_ms_spectral_scaffold"
+            elif ek is None and "X_spectral_scaffold" in adata.obsm:
+                ek = "X_spectral_scaffold"
+
+            Z = _get_embedding(adata, ek)
+            row = {}
+
+            if "knn_mixing" in metrics and batch_key in adata.obs.columns:
+                batches = np.asarray(adata.obs[batch_key].values)
+                idx = _knn_indices(Z, k, n_jobs, seed)
+                row["knn_mixing"] = float(
+                    (batches[idx] != batches[:, None]).mean())
+            if "ilisi" in metrics and batch_key in adata.obs.columns:
+                row["ilisi"] = float(np.median(
+                    _compute_lisi_values(
+                        Z, np.asarray(adata.obs[batch_key].values),
+                        k, n_jobs, seed)))
+            if (cell_type_key is not None
+                    and cell_type_key in adata.obs.columns):
+                ct = np.asarray(adata.obs[cell_type_key].values)
+                idx = _knn_indices(Z, k, n_jobs, seed)
+                if "knn_purity" in metrics:
+                    row["knn_purity"] = float(
+                        (ct[idx] == ct[:, None]).mean())
+                if "clisi" in metrics:
+                    row["clisi"] = float(np.median(
+                        _compute_lisi_values(Z, ct, k, n_jobs, seed)))
+                if cluster_key in adata.obs.columns:
+                    from sklearn.metrics import (
+                        adjusted_rand_score,
+                        normalized_mutual_info_score,
+                    )
+                    cl = adata.obs[cluster_key].values
+                    if "ari" in metrics:
+                        row["ari"] = float(adjusted_rand_score(ct, cl))
+                    if "nmi" in metrics:
+                        row["nmi"] = float(
+                            normalized_mutual_info_score(ct, cl))
+            return row
+
+        results = {}
+        for label, adata in adata_dict.items():
+            results[label] = _score_one(adata)
+
+        # Build DataFrame with consistent index and NaN for missing metrics
+        present = sorted(
+            {m for row in results.values() for m in row},
+            key=lambda m: all_metrics.index(m) if m in all_metrics else 99)
+        return pd.DataFrame(results, index=present)
+
+    # ── prepare_for_mapping ────────────────────────────────────────────────
+
+    def prepare_for_mapping(
+        adata_query,
+        adata_ref,
+        batch_key: str = "batch",
+        input_type: str = "auto",
+        layer: str | None = None,
+    ) -> None:
+        """Normalize query data in-place for mapping to a CCA reference.
+
+        Applies the same normalisation logic as :func:`prepare_for_integration`
+        but validates feature overlap with the reference and ensures a
+        ``batch`` label exists in ``.obs``.
+
+        Parameters
+        ----------
+        adata_query : AnnData or list[AnnData]
+            Query dataset(s) to prepare.  Modified in-place.
+        adata_ref : AnnData
+            The completed CCA integration reference (output of
+            ``run_cca_integration``).  Used to check feature overlap.
+        batch_key : str
+            ``.obs`` column for the batch label.  If absent, one is added.
+            Default ``'batch'``.
+        input_type : {'auto', 'counts', 'lognorm'}
+            Normalisation mode.
+        layer : str or None
+            Use ``adata.layers[layer]`` as source.
+
+        Returns
+        -------
+        None  (modifies data in-place).
+        """
+        import warnings
+
+        queries = ([adata_query] if isinstance(adata_query, AnnData)
+                   else list(adata_query))
+        ref_features = set(adata_ref.var_names)
+        n_ref_feat = len(ref_features)
+
+        for i, q in enumerate(queries):
+            X = q.layers[layer] if layer is not None else q.X
+            if sp.issparse(X):
+                X = X.toarray()
+            X = np.asarray(X, dtype=np.float32)
+
+            if input_type == "auto":
+                norm_state = _detect_normalization(X)
+            elif input_type == "counts":
+                norm_state = "raw_counts"
+            elif input_type == "lognorm":
+                norm_state = "lognorm"
+            else:
+                raise ValueError(
+                    "input_type must be 'auto', 'counts', or 'lognorm'.")
+
+            if norm_state == "raw_counts":
+                if "counts" not in q.layers:
+                    q.layers["counts"] = q.X.copy()
+                row_sums = X.sum(axis=1, keepdims=True)
+                row_sums = np.where(row_sums == 0, 1.0, row_sums)
+                X_ln = np.log1p(X / row_sums * 1e4).astype(np.float32)
+                q.X = sp.csr_matrix(X_ln)
+                q.layers["lognorm"] = sp.csr_matrix(X_ln)
+            elif norm_state == "pre_normalized":
+                warnings.warn(
+                    f"Query {i}: pre-normalised values (max="
+                    f"{float(X.max()):.0f}); applying log1p only.",
+                    UserWarning, stacklevel=2)
+                if "counts" not in q.layers:
+                    q.layers["counts"] = q.X.copy()
+                X_ln = np.log1p(X).astype(np.float32)
+                q.X = sp.csr_matrix(X_ln)
+                q.layers["lognorm"] = sp.csr_matrix(X_ln)
+            else:
+                q.layers["lognorm"] = q.X.copy()
+
+            # Check feature overlap
+            shared = ref_features & set(q.var_names)
+            coverage = len(shared) / n_ref_feat if n_ref_feat > 0 else 0.0
+            if coverage < 0.5:
+                warnings.warn(
+                    f"Query {i}: only {coverage:.1%} overlap with reference "
+                    f"features ({len(shared)}/{n_ref_feat}). Mapping quality "
+                    "may be poor.", UserWarning, stacklevel=2)
+
+            # Ensure batch label exists
+            if batch_key not in q.obs.columns:
+                default = f"query_{i}" if len(queries) > 1 else "query"
+                q.obs[batch_key] = default
+
+    # ── find_mapping_order ─────────────────────────────────────────────────
+
+    def find_mapping_order(
+        adata_ref,
+        adata_queries: list,
+        n_components: int = 10,
+        k: int = 5,
+        n_jobs: int = -1,
+        seed: int = 0,
+    ) -> list:
+        """Determine the optimal sequential mapping order for query datasets.
+
+        Uses anchor count between each query and the reference as a similarity
+        proxy.  Queries with more anchors are mapped first (they are more
+        similar to the reference and produce a better-scaffolded atlas for
+        subsequent queries).
+
+        Parameters
+        ----------
+        adata_ref : AnnData
+            The CCA integration reference (output of ``run_cca_integration``).
+        adata_queries : list[AnnData]
+            Query datasets to order.
+        n_components : int
+            CCA dimensions for the similarity probe.  Default 10.
+        k : int
+            MNN k for anchor counting.  Default 5.
+        n_jobs : int
+            Threads.  ``-1`` uses all cores.  Default ``-1``.
+        seed : int
+            Random seed.  Default 0.
+
+        Returns
+        -------
+        list of int
+            Indices into ``adata_queries``, sorted from most to least similar
+            to the reference (map in this order for best results).
+
+        Examples
+        --------
+        >>> order = tp.sc.find_mapping_order(adata_ref, queries)
+        >>> adata_atlas, steps = tp.sc.map_to_cca_reference(
+        ...     queries, adata_ref, mapping_order=order,
+        ...     return_intermediates=True)
+        """
+        import warnings
+
+        n_jobs_resolved = _resolve_n_jobs(n_jobs)
+        features = list(adata_ref.var_names)
+        features_probe = features[: min(500, len(features))]
+
+        def _count_anchors(i):
+            try:
+                q = adata_queries[i]
+                q_genes = set(q.var_names)
+                feat_shared = [g for g in features_probe if g in q_genes]
+                if len(feat_shared) < 20:
+                    return 0
+                _, X_r_sc = _prepare_matrices(adata_ref, feat_shared)
+                _, X_q_sc = _prepare_matrices(q, feat_shared)
+                nc = min(n_components, min(len(X_r_sc), len(X_q_sc)) - 1)
+                if nc < 1:
+                    return 0
+                cc_r, cc_q, _ = _compute_cca(X_r_sc, X_q_sc, nc, seed)
+                k_eff = min(k, min(len(cc_r), len(cc_q)) - 1)
+                if k_eff < 1:
+                    return 0
+                anc_r, _ = _find_mnn_in_cca(
+                    cc_r, cc_q, k=k_eff, n_jobs=1, seed=seed)
+                return len(anc_r)
+            except Exception:
+                return 0
+
+        if n_jobs_resolved > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=n_jobs_resolved) as ex:
+                counts = list(ex.map(
+                    _count_anchors, range(len(adata_queries))))
+        else:
+            counts = [_count_anchors(i) for i in range(len(adata_queries))]
+
+        return sorted(range(len(adata_queries)), key=lambda i: -counts[i])
