@@ -7505,35 +7505,51 @@ if _HAVE_SCANPY:
         # The reference with CCA fields is kept frozen for all mapping steps
         adata_ref_map = reference
 
-        # Start atlas as the reference (lognorm layer if available)
-        features = list(reference.var_names)
-        if "corrected" in reference.layers:
-            ref_X = reference.layers["corrected"]
-        else:
-            ref_X = reference.X
-        atlas_parts = [reference]   # growing list for concat (no CCA fields needed)
+        # For atlas building, always use lognorm .X so that the concat is
+        # on a consistent scale before z-scoring.  When scale_output=True
+        # in run_cca_integration, .X is z-scored and lognorm lives in
+        # layers["corrected"].  We need lognorm here so that the whole
+        # atlas (ref + queries) can be re-z-scored uniformly.
+        ref_for_atlas = reference.copy()
+        if "corrected" in ref_for_atlas.layers:
+            _ln = ref_for_atlas.layers["corrected"]
+            ref_for_atlas.X = (_ln if not sp.issparse(_ln)
+                               else _ln)   # keep as-is (sparse or dense)
 
+        def _zscale_atlas(adata_c):
+            """Z-score .X inplace; preserve lognorm in layers['corrected']."""
+            X = adata_c.X
+            if sp.issparse(X):
+                X = X.toarray()
+            X = np.asarray(X, dtype=np.float32)
+            adata_c.layers["corrected"] = sp.csr_matrix(X)
+            mu = X.mean(axis=0)
+            sigma = X.std(axis=0, ddof=1)
+            sigma = np.where(sigma < 1e-8, 1.0, sigma)
+            adata_c.X = np.clip(
+                (X - mu) / sigma, -10.0, 10.0).astype(np.float32)
+            return adata_c
+
+        atlas_parts = [ref_for_atlas]  # lognorm .X for the reference
         intermediates = {}
-        mapped_outputs = []
 
         for step_idx, q in enumerate(ordered):
-            orig_idx = mapping_order[step_idx]
             step_label = f"step_{step_idx}"
 
             mapped = _map_single_query(
                 q, adata_ref_map, mode, min_shared_features,
                 k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
                 n_jobs, seed)
-            mapped_outputs.append(mapped)
-            atlas_parts.append(mapped)
+            atlas_parts.append(mapped)   # mapped.X is already lognorm
 
-            # Build current atlas (reference + all mapped so far)
+            # Build current atlas (reference + all mapped so far), z-scored
             current_atlas = ad.concat(
                 atlas_parts,
                 join="inner",
                 label=None,
                 uns_merge="first",
             )
+            _zscale_atlas(current_atlas)
 
             if sequential_topometry:
                 fit_adata(current_atlas, **topometry_kwargs)
@@ -7541,13 +7557,14 @@ if _HAVE_SCANPY:
             if return_intermediates:
                 intermediates[step_label] = current_atlas.copy()
 
-        # Final atlas is the last current_atlas
+        # Final atlas: re-concat and z-score (avoids duplicating last step)
         final_atlas = ad.concat(
             atlas_parts,
             join="inner",
             label=None,
             uns_merge="first",
         )
+        _zscale_atlas(final_atlas)
 
         if return_intermediates:
             return final_atlas, intermediates
