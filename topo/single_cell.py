@@ -5994,6 +5994,13 @@ if _HAVE_SCANPY:
 
     # ── hnswlib helpers ────────────────────────────────────────────────────
 
+    def _resolve_n_jobs(n_jobs: int) -> int:
+        """Resolve n_jobs: -1 → all cores, 0 → 1, positive → as-is."""
+        if n_jobs <= 0:
+            from multiprocessing import cpu_count
+            return cpu_count()
+        return n_jobs
+
     def _build_hnsw_index(
         data: np.ndarray,
         space: str = "l2",
@@ -6005,10 +6012,11 @@ if _HAVE_SCANPY:
         """Build an HNSW index. *data* must be C-contiguous float32."""
         import hnswlib
         n, d = data.shape
+        n_threads = _resolve_n_jobs(n_jobs)
         idx = hnswlib.Index(space=space, dim=d)
         idx.init_index(max_elements=n, ef_construction=ef_construction,
                        M=M, random_seed=seed)
-        idx.set_num_threads(n_jobs)
+        idx.set_num_threads(n_threads)
         idx.add_items(np.ascontiguousarray(data.astype(np.float32)))
         return idx
 
@@ -6023,7 +6031,7 @@ if _HAVE_SCANPY:
         if ef is None:
             ef = max(k * 2, 50)
         index.set_ef(ef)
-        index.set_num_threads(n_jobs)
+        index.set_num_threads(_resolve_n_jobs(n_jobs))
         labels, dists = index.knn_query(
             np.ascontiguousarray(queries.astype(np.float32)), k=k)
         return labels.astype(np.int32), dists.astype(np.float32)
@@ -6291,6 +6299,7 @@ if _HAVE_SCANPY:
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Mutual nearest neighbours in CCA space via hnswlib."""
+        n_jobs = _resolve_n_jobs(n_jobs)
         n_a, n_b = len(cc_a), len(cc_b)
         k_a = min(k, n_b - 1)
         k_b = min(k, n_a - 1)
@@ -6385,6 +6394,7 @@ if _HAVE_SCANPY:
         seed: int = 0,
     ) -> np.ndarray:
         """SNN-overlap scores rescaled to [0, 1]."""
+        n_jobs = _resolve_n_jobs(n_jobs)
         n_a, n_b = len(cc_a), len(cc_b)
         k_a = min(k_score, n_a - 1)
         k_b = min(k_score, n_b - 1)
@@ -6463,6 +6473,7 @@ if _HAVE_SCANPY:
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray, float]:
         """Symmetric per-cell correction in log-normalised expression space."""
+        n_jobs = _resolve_n_jobs(n_jobs)
         n_a = X_a_lognorm.shape[0]
         n_b = X_b_lognorm.shape[0]
         p = X_a_lognorm.shape[1]
@@ -6545,6 +6556,7 @@ if _HAVE_SCANPY:
         from scipy.cluster.hierarchy import linkage
         from scipy.spatial.distance import squareform
 
+        n_jobs = _resolve_n_jobs(n_jobs)
         N = len(adatas)
         features_low = features[:min(500, len(features))]
 
@@ -7026,6 +7038,7 @@ if _HAVE_SCANPY:
         embed_ref/embed_query are the embedding used for weight kNN (can be
         CCA space or z-scored expression space).
         """
+        n_jobs = _resolve_n_jobs(n_jobs)
         n_q, p = query_lognorm.shape
 
         batch_vecs = (X_ref_lognorm[anc_ref] -
