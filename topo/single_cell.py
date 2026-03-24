@@ -6058,9 +6058,11 @@ if _HAVE_SCANPY:
     def _estimate_k_filter(n_a: int, n_b: int, k_filter):
         if k_filter is not None:
             return k_filter  # 0 = disabled
-        # 20% of smaller batch; cap at 2000 for very large datasets
-        k = int(round(0.2 * min(n_a, n_b)))
-        return max(30, min(2000, k))
+        # sqrt(n_ref) targets ~0.5-1% of the reference for typical datasets.
+        # Capped at 200 (matching Seurat default) to stay selective.
+        n_ref = max(n_a, n_b)
+        k = int(round(np.sqrt(n_ref)))
+        return max(30, min(200, k))
 
     def _estimate_k_score(k_anchor: int, k_score):
         if k_score is not None:
