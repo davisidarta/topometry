@@ -58,6 +58,13 @@ cca_integration_blueprint.md
 cca_integration_blueprint_final.md
 cca_implementation_report.md
 
+# --- Test / cache ---
+.pytest_cache/
+data/
+
+# --- Private docs (not for public Git) ---
+docs/LBO_Review/
+
 # --- IDE and OS ---
 .vscode/
 .idea/
