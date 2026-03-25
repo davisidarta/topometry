@@ -6543,6 +6543,10 @@ if _HAVE_SCANPY:
                 kernel_a[s:e],
                 -midpoint_vecs[idx_a[s:e]])
 
+        # Free HNSW indices and temporaries
+        del idx_anc_a, idx_anc_b, anchor_pos_a, anchor_pos_b
+        del midpoint_vecs, kernel_a, kernel_b, raw_w_a, raw_w_b
+        del idx_a, idx_b, dist_a, dist_b
         return corr_b, corr_a, sd
 
     # ── Guide tree ─────────────────────────────────────────────────────────
@@ -6796,6 +6800,8 @@ if _HAVE_SCANPY:
         last_mu_ref = None
         last_sigma_ref = None
 
+        import gc
+
         nodes = {
             i: (Xs_lognorm[i],
                 Xs_scaled[i],
@@ -6804,6 +6810,10 @@ if _HAVE_SCANPY:
                 adatas[i])
             for i in range(N)
         }
+        # Free the separate lists — their arrays now live in `nodes`
+        del Xs_lognorm, Xs_scaled, adatas
+        gc.collect()
+
         next_node = N
 
         for left_id, right_id in merge_order:
@@ -6842,6 +6852,8 @@ if _HAVE_SCANPY:
                 nodes[next_node] = (X_merged_ln, X_merged_sc, X_orig_merged,
                                     labels_a + labels_b,
                                     ad.concat([adata_a, adata_b]))
+                del nodes[left_id], nodes[right_id]
+                gc.collect()
                 next_node += 1
                 continue
 
@@ -6865,6 +6877,8 @@ if _HAVE_SCANPY:
                 nodes[next_node] = (X_merged_ln, X_merged_sc, X_orig_merged,
                                     labels_a + labels_b,
                                     ad.concat([adata_a, adata_b]))
+                del nodes[left_id], nodes[right_id]
+                gc.collect()
                 next_node += 1
                 continue
 
@@ -6909,6 +6923,11 @@ if _HAVE_SCANPY:
                 X_merged_ln, X_merged_sc, X_orig_merged,
                 labels_a + labels_b,
                 ad.concat([adata_a, adata_b]))
+            # Free consumed nodes — their data is now in the merged node
+            del nodes[left_id], nodes[right_id]
+            del X_a_ln, X_a_sc, X_a_orig, X_b_ln, X_b_sc, X_b_orig
+            del cc_a, cc_b, U_k, scores, corr_a, corr_b
+            gc.collect()
             next_node += 1
 
         # ── 5. Assemble output ─────────────────────────────────────────
@@ -7086,6 +7105,8 @@ if _HAVE_SCANPY:
                 kernel_q[s:e],
                 batch_vecs[idx_q[s:e]])
 
+        # Free HNSW index and temporaries
+        del idx_anchors, batch_vecs, kernel_q, raw_w_q, idx_q, dist_q
         return correction_query, sd
 
     def _align_query_to_features(query_adata, features: list) -> "AnnData":
@@ -7236,6 +7257,10 @@ if _HAVE_SCANPY:
 
         query_corrected = np.maximum(query_lognorm + correction_query, 0.0)
 
+        # Free temporaries
+        del correction_query, scores, cc_query, X_ref_scaled
+        del anc_ref, anc_query
+
         return _assemble_query_output(
             query_adata, query_corrected, query_lognorm,
             features, n_anchors_raw, n_anchors_filt,
@@ -7295,8 +7320,9 @@ if _HAVE_SCANPY:
         """Map a single query AnnData against a reference. Internal helper."""
         from pathlib import Path as _Path
         import warnings
+        import gc
 
-        # Extract reference components
+        # Extract reference components (views/copies as needed)
         features = list(reference.var_names)
         n_features = len(features)
         n_components = reference.uns["cca_integration"]["n_components"]
@@ -7377,17 +7403,22 @@ if _HAVE_SCANPY:
                     ).astype(np.float32))
 
         if mode == "query_only":
-            return _map_query_only(
+            result = _map_query_only(
                 query, query_lognorm, query_scaled_perquery,
                 query_scaled_refnorm,
                 X_ref_lognorm, cc_ref, U_k, mu_ref, sigma_ref, features,
                 reference, k_anchor, k_filter, k_score, k_weight,
                 sd_bandwidth, n_jobs, seed)
         else:
-            return _map_full_reintegration(
+            result = _map_full_reintegration(
                 query, reference, features, n_components,
                 k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
                 n_jobs, seed)
+        # Free dense temporaries before returning
+        del X_ref_lognorm, X_sub, query_lognorm
+        del query_scaled_perquery, query_scaled_refnorm
+        gc.collect()
+        return result
 
     def map_to_cca_reference(
         query,
@@ -7505,6 +7536,8 @@ if _HAVE_SCANPY:
         # The reference with CCA fields is kept frozen for all mapping steps
         adata_ref_map = reference
 
+        import gc
+
         # For atlas building, always use lognorm .X so that the concat is
         # on a consistent scale before z-scoring.  When scale_output=True
         # in run_cca_integration, .X is z-scored and lognorm lives in
@@ -7528,10 +7561,12 @@ if _HAVE_SCANPY:
             sigma = np.where(sigma < 1e-8, 1.0, sigma)
             adata_c.X = np.clip(
                 (X - mu) / sigma, -10.0, 10.0).astype(np.float32)
+            del X
             return adata_c
 
         atlas_parts = [ref_for_atlas]  # lognorm .X for the reference
         intermediates = {}
+        current_atlas = None
 
         for step_idx, q in enumerate(ordered):
             step_label = f"step_{step_idx}"
@@ -7541,6 +7576,10 @@ if _HAVE_SCANPY:
                 k_anchor, k_filter, k_score, k_weight, sd_bandwidth,
                 n_jobs, seed)
             atlas_parts.append(mapped)   # mapped.X is already lognorm
+
+            # Free previous intermediate atlas before building new one
+            del current_atlas
+            gc.collect()
 
             # Build current atlas (reference + all mapped so far), z-scored
             current_atlas = ad.concat(
@@ -7557,14 +7596,17 @@ if _HAVE_SCANPY:
             if return_intermediates:
                 intermediates[step_label] = current_atlas.copy()
 
-        # Final atlas: re-concat and z-score (avoids duplicating last step)
-        final_atlas = ad.concat(
-            atlas_parts,
-            join="inner",
-            label=None,
-            uns_merge="first",
-        )
-        _zscale_atlas(final_atlas)
+        # The last current_atlas IS the final atlas — no need to re-concat
+        final_atlas = current_atlas
+        if final_atlas is None:
+            # Shouldn't happen (queries non-empty), but guard anyway
+            final_atlas = ad.concat(
+                atlas_parts, join="inner", label=None, uns_merge="first")
+            _zscale_atlas(final_atlas)
+
+        # Free atlas_parts — their data now lives in final_atlas
+        del atlas_parts, ref_for_atlas
+        gc.collect()
 
         if return_intermediates:
             return final_atlas, intermediates
@@ -8113,6 +8155,7 @@ if _HAVE_SCANPY:
         metrics = [m for m in metrics if m in all_metrics]
 
         def _score_one(adata):
+            import gc
             ek = embedding_key
             if ek is None and "X_ms_spectral_scaffold" in adata.obsm:
                 ek = "X_ms_spectral_scaffold"
@@ -8122,9 +8165,13 @@ if _HAVE_SCANPY:
             Z = _get_embedding(adata, ek)
             row = {}
 
+            # Build kNN indices once and reuse for all kNN-based metrics
+            need_knn = any(m in metrics for m in
+                          ["knn_mixing", "knn_purity"])
+            idx = _knn_indices(Z, k, n_jobs, seed) if need_knn else None
+
             if "knn_mixing" in metrics and batch_key in adata.obs.columns:
                 batches = np.asarray(adata.obs[batch_key].values)
-                idx = _knn_indices(Z, k, n_jobs, seed)
                 row["knn_mixing"] = float(
                     (batches[idx] != batches[:, None]).mean())
             if "ilisi" in metrics and batch_key in adata.obs.columns:
@@ -8135,8 +8182,7 @@ if _HAVE_SCANPY:
             if (cell_type_key is not None
                     and cell_type_key in adata.obs.columns):
                 ct = np.asarray(adata.obs[cell_type_key].values)
-                idx = _knn_indices(Z, k, n_jobs, seed)
-                if "knn_purity" in metrics:
+                if "knn_purity" in metrics and idx is not None:
                     row["knn_purity"] = float(
                         (ct[idx] == ct[:, None]).mean())
                 if "clisi" in metrics:
@@ -8153,6 +8199,8 @@ if _HAVE_SCANPY:
                     if "nmi" in metrics:
                         row["nmi"] = float(
                             normalized_mutual_info_score(ct, cl))
+            del Z, idx
+            gc.collect()
             return row
 
         results = {}

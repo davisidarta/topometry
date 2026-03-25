@@ -128,6 +128,7 @@ Citation
 
     T1_introduction
     T2_step_by_step
+    T3_Integration
 
 .. toctree::
     :maxdepth: 2
@@ -137,4 +138,23 @@ Citation
 
 .. toctree::
     :maxdepth: 3
+
+
+Changelog
+---------------------------
+
+**v1.1.0** — Batch integration and data mapping
+
+- CCA-anchor batch correction (Seurat v3-style) via ``tp.sc.run_cca_integration``
+- Reference atlas persistence (``save_cca_reference`` / ``load_cca_reference``) and sequential query mapping (``map_to_cca_reference``)
+- High-level preparation utilities (``prepare_for_integration``, ``prepare_for_mapping``, ``find_mapping_order``)
+- Neighbourhood-based integration quality metrics (``compute_all_integration_metrics``: kNN purity, kNN mixing, iLISI, cLISI, ARI, NMI)
+- Memory-efficient merge loop with systematic garbage collection
+
+**v1.0.x** — Complete overhaul
+
+- Redesigned user API with ``tp.sc.fit_adata`` and ``tp.sc.run_and_report`` one-liner workflows
+- New utilities for single-cell analysis: intrinsic dimensionality, spectral selectivity, feature modes, graph-signal filtering, imputation
+- Overhauled geometry-preservation metrics (PF1, PJS, SP) and Riemannian diagnostics (pullback metric, deformation maps)
+- Full compatibility with the ``scverse`` ecosystem (scanpy, scVelo, AnnData)
 
