@@ -87,6 +87,17 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Extra fraction of components beyond the estimated I.D. to keep.
     uom : bool, default False
         Enable unions-of-manifolds (block-diagonal scaffolds) if supported.
+    graph_input_type : str, default "knn"
+        Controls how a user-supplied precomputed graph is interpreted.
+        "knn"      : Input is a kNN adjacency matrix. TopOGraph will apply
+                     its standard kernel weighting before building diffusion
+                     operators. This is the default and preserves all
+                     existing behavior.
+        "affinity" : Input is a precomputed, kernel-weighted affinity matrix
+                     (e.g., the output of tp.sc.wnn_integration). TopOGraph
+                     skips kernel weighting and builds the diffusion operator
+                     directly. The matrix must be row-stochastic (rows sum
+                     to ~1.0) with values in [0, 1].
 
     Attributes
     ----------
@@ -137,10 +148,16 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 id_max_components=1024,
                 id_headroom=0.5,
                 uom=False,
+                graph_input_type='knn',
                 eigenmap_method=None,  # deprecated
                 laplacian_type='normalized', # deprecated
                 ):
         # Core config
+        if graph_input_type not in ('knn', 'affinity'):
+            raise ValueError(
+                f"graph_input_type must be 'knn' or 'affinity', got '{graph_input_type}'"
+            )
+        self.graph_input_type = graph_input_type
         self.projection_methods = projection_methods
         self.diff_t = diff_t
         self.min_eigs = min_eigs
@@ -392,7 +409,27 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._id_details[self.id_method] = id_details
 
 
-    def _csr(self, A): 
+    @staticmethod
+    def _validate_affinity_input(matrix):
+        """Validate that a matrix is a valid row-stochastic affinity matrix."""
+        if not sp.issparse(matrix):
+            raise TypeError(
+                "graph_input_type='affinity' requires a scipy.sparse matrix; "
+                f"got {type(matrix)}"
+            )
+        if matrix.min() < -1e-6 or matrix.max() > 1 + 1e-6:
+            raise ValueError(
+                "Affinity matrix values must be in [0, 1]. "
+                "If passing a raw kNN graph, use graph_input_type='knn'."
+            )
+        row_sums = np.array(matrix.sum(axis=1)).flatten()
+        if not np.allclose(row_sums, 1.0, atol=1e-3):
+            raise ValueError(
+                "Affinity matrix rows must sum to approximately 1.0 "
+                "(row-stochastic). Check kernel normalization before passing."
+            )
+
+    def _csr(self, A):
         return A if sp.isspmatrix_csr(A) else A.tocsr()
 
     def _to_float32_csr(self, A: sp.csr_matrix) -> sp.csr_matrix:
@@ -724,8 +761,48 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         else:
             self.layout_verbose = False
 
+        # --- Affinity input bypass ---
+        # When graph_input_type='affinity', X is a precomputed row-stochastic
+        # affinity matrix. Skip kNN construction and kernel weighting entirely.
+        if self.graph_input_type == 'affinity':
+            if X is None:
+                raise ValueError(
+                    "graph_input_type='affinity' requires X to be a precomputed "
+                    "affinity matrix, but X is None."
+                )
+            self._validate_affinity_input(X)
+            X_aff = self._csr(X).astype(np.float32, copy=False)
+            self.n = X_aff.shape[0]
+            self.m = X_aff.shape[1]
+
+            # Create a proxy that satisfies both the Kernel interface used by
+            # EigenDecomposition.fit() and the .P/.K properties used elsewhere.
+            proxy = Kernel.__new__(Kernel)
+            proxy._P = X_aff
+            proxy._K = X_aff
+            proxy.N = X_aff.shape[0]
+            proxy.M = X_aff.shape[1]
+            proxy.D_inv_sqrt_ = None
+            proxy.knn_ = None
+            proxy._A = None
+            proxy._degree = None
+            proxy._weighted_degree = None
+            proxy._L = None
+            self.base_kernel = proxy
+            self.base_knn_graph = X_aff  # store for downstream references
+            # Use min_eigs for scaffold sizing (no automated sizing on affinity)
+            self._scaffold_components_ms = self.n_eigs
+            self._scaffold_components_dm = self.n_eigs
+            self.global_dimensionality = self.n_eigs
+            if self.verbosity >= 1:
+                print(f'Affinity input: using precomputed {X_aff.shape[0]}x{X_aff.shape[1]} '
+                      f'affinity matrix directly (skipping kNN and kernel weighting)')
+            # Skip to eigenbasis computation (jump past kNN+kernel blocks below)
+            # Fall through to the eigenbasis section — base_kernel is now set
+
+        # --- Standard (kNN) input path ---
         # X or pre-fitted base kernel
-        if X is None:
+        elif X is None:
             if self.base_kernel is None:
                 raise ValueError('X was not passed and no base_kernel provided.')
             if not isinstance(self.base_kernel, Kernel):
@@ -739,8 +816,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 self.base_knn_graph = X.copy()
             self.n, self.m = X.shape[0], X.shape[1]
 
-        # Base kNN
-        if self.base_knn_graph is None:
+        # Base kNN (skipped when graph_input_type='affinity' — base_kernel already set)
+        if self.graph_input_type != 'affinity' and self.base_knn_graph is None:
             if self.verbosity >= 1:
                 print('Computing neighborhood graph (X space)...')
             t0 = time.time()
@@ -758,8 +835,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             if self.verbosity >= 1:
                 print(f' Base kNN computed in {self.runtimes["kNN_X"]:.3f} sec')
 
-        # Base kernel -> P(X)
-        if self.base_kernel_version in self.BaseKernelDict:
+        # Base kernel -> P(X) (skipped when graph_input_type='affinity')
+        if self.graph_input_type == 'affinity':
+            pass  # base_kernel already set in the affinity bypass above
+        elif self.base_kernel_version in self.BaseKernelDict:
             self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
         else:
             t0 = time.time()
@@ -778,7 +857,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 print(f' Base kernel ({self.base_kernel_version}) fitted in {self.runtimes["Kernel_X"]:.3f} sec')
 
         # Global automated sizing (diagnostics / BC)
-        if self.base_metric != 'precomputed':
+        # Skip when graph_input_type='affinity' — no raw feature data available for ID estimation
+        if self.graph_input_type != 'affinity' and self.base_metric != 'precomputed':
             self._automated_sizing(X if X is not None else self.base_kernel.X)
             if self.verbosity >= 1:
                 print(f"Automated sizing (pre-eigs) → target components: {self._scaffold_components_ms} "

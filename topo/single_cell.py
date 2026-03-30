@@ -614,6 +614,813 @@ if _HAVE_SCANPY:
         return AnnData.copy()
 
 
+    # -----------------------------------------------------------------
+    # ATAC-seq LSI (Latent Semantic Indexing)
+    # -----------------------------------------------------------------
+
+    def _sparse_tfidf(X_csr, cell_totals, idf, scale_factor):
+        """Apply TF-IDF in sparse form without materializing a dense matrix."""
+        tf_scaler = sp.diags(scale_factor / cell_totals)
+        X_tf = tf_scaler @ X_csr
+        idf_scaler = sp.diags(idf)
+        X_tfidf = X_tf @ idf_scaler
+        return X_tfidf.tocsr()
+
+    def atac_lsi(
+        adata: AnnData,
+        n_components: int = 50,
+        scale_factor: float = 1e4,
+        use_highly_variable: bool = False,
+        inplace: bool = True,
+        key_added: str = "X_lsi",
+    ):
+        """
+        Compute Latent Semantic Indexing (TF-IDF + truncated SVD) on an ATAC-seq
+        peak count matrix.
+
+        This is the sole operation in topometry where dimensionality reduction via
+        SVD is applied. It is restricted strictly to ATAC peak matrices.
+
+        Component 1 is always discarded (captures sequencing depth, not biology).
+        Output is L2-normalized per cell.
+
+        Parameters
+        ----------
+        adata : AnnData
+            AnnData whose ``.X`` is a cell x peak count matrix (raw integer counts).
+        n_components : int, default 50
+            Number of LSI components to compute. Output has ``n_components - 1``
+            columns (component 1 discarded).
+        scale_factor : float, default 1e4
+            TF-IDF normalization scale factor.
+        use_highly_variable : bool, default False
+            If True and ``adata.var["highly_variable"]`` exists, subset to HV peaks.
+        inplace : bool, default True
+            If True, stores result in ``adata.obsm[key_added]`` and returns None.
+        key_added : str, default "X_lsi"
+            Key for storage in ``.obsm``.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            LSI coordinates (n_cells x n_components-1) if ``inplace=False``,
+            else None.
+        """
+        import warnings
+        from sklearn.utils.extmath import randomized_svd
+
+        X = adata.X
+
+        # Input validation
+        if not issparse(X):
+            warnings.warn("atac_lsi: adata.X is dense; converting to sparse CSR.", UserWarning)
+            X = csr_matrix(X)
+        else:
+            X = X.tocsr()
+
+        if X.min() < -1e-6:
+            raise ValueError("ATAC peak matrix must contain non-negative values.")
+
+        if n_components >= min(X.shape[0], X.shape[1]):
+            raise ValueError(
+                f"n_components ({n_components}) must be less than "
+                f"min(n_cells, n_peaks) = {min(X.shape[0], X.shape[1])}."
+            )
+
+        # Optional peak subsetting
+        if use_highly_variable and "highly_variable" in adata.var.columns:
+            hv_mask = adata.var["highly_variable"].values
+            X = X[:, hv_mask].copy()
+
+        X = X.astype(float)
+
+        # TF-IDF normalization
+        cell_totals = np.array(X.sum(axis=1)).flatten()
+        zero_mask = cell_totals == 0
+        if zero_mask.any():
+            n_zero = zero_mask.sum()
+            zero_barcodes = np.where(zero_mask)[0][:10]
+            warnings.warn(
+                f"atac_lsi: {n_zero} cell(s) have zero total counts "
+                f"(first up to 10: {zero_barcodes.tolist()}). "
+                "These will produce zero-valued LSI vectors.",
+                UserWarning,
+            )
+        cell_totals = np.maximum(cell_totals, 1)
+
+        n_cells = X.shape[0]
+        peak_counts = np.array((X > 0).sum(axis=0)).flatten()
+        idf = np.log1p(n_cells / (peak_counts + 1))
+
+        X_tfidf = _sparse_tfidf(X, cell_totals, idf, scale_factor)
+
+        # Truncated SVD — [INVARIANT-2]: sole permitted use of SVD, on ATAC peaks only
+        U, S, Vt = randomized_svd(X_tfidf, n_components=n_components, random_state=42)
+        lsi_coords = U * S  # n_cells x n_components
+
+        # Discard component 1 (depth artifact)
+        lsi_coords = lsi_coords[:, 1:]
+        warnings.warn(
+            f"LSI component 1 discarded (depth artifact). "
+            f"Retained components 2-{n_components}.",
+            UserWarning,
+        )
+
+        # L2 normalize each cell's LSI vector
+        norms = np.linalg.norm(lsi_coords, axis=1, keepdims=True)
+        norms = np.maximum(norms, 1e-10)
+        lsi_coords = lsi_coords / norms
+
+        if inplace:
+            adata.obsm[key_added] = lsi_coords
+            adata.uns["lsi"] = {
+                "n_components": n_components,
+                "components_used": list(range(2, n_components + 1)),
+                "scale_factor": scale_factor,
+            }
+            return None
+        else:
+            return lsi_coords
+
+
+    # -----------------------------------------------------------------
+    # WNN (Weighted Nearest Neighbor) integration
+    # -----------------------------------------------------------------
+
+    def _clr_normalize(X):
+        """Centered log-ratio normalization for protein data (per cell)."""
+        if issparse(X):
+            X = X.toarray()
+        X = np.asarray(X, dtype=float)
+        X = X + 1.0  # pseudocount
+        log_X = np.log(X)
+        geo_mean = np.exp(log_X.mean(axis=1, keepdims=True))
+        return np.log(X / geo_mean)
+
+    def _estimate_modality_weights(affinity_matrices, knn_indices, weight_n_neighbors):
+        """
+        Compute per-cell modality weights based on within-modality neighborhood cohesion.
+
+        Parameters
+        ----------
+        affinity_matrices : dict of {name: sparse matrix}
+        knn_indices : dict of {name: ndarray (n_cells x k)}
+        weight_n_neighbors : int
+
+        Returns
+        -------
+        ndarray of shape (n_cells, n_modalities)
+        """
+        modality_names = list(affinity_matrices.keys())
+        n_modalities = len(modality_names)
+        n_cells = list(affinity_matrices.values())[0].shape[0]
+
+        raw_weight = np.zeros((n_cells, n_modalities), dtype=float)
+
+        for m_idx, mod_name in enumerate(modality_names):
+            W_m = affinity_matrices[mod_name]
+            knn_idx_m = knn_indices[mod_name]
+            k_use = min(weight_n_neighbors, knn_idx_m.shape[1])
+
+            for i in range(n_cells):
+                neighbors = knn_idx_m[i, :k_use]
+                # Mean pairwise affinity among the neighbors in this modality
+                if len(neighbors) < 2:
+                    raw_weight[i, m_idx] = 0.0
+                    continue
+                # Extract sub-matrix of affinities among neighbors
+                sub = W_m[np.ix_(neighbors, neighbors)]
+                if issparse(sub):
+                    sub = sub.toarray()
+                n_nbr = len(neighbors)
+                # Mean of off-diagonal elements
+                total = sub.sum() - np.trace(sub)
+                n_pairs = n_nbr * (n_nbr - 1)
+                raw_weight[i, m_idx] = total / max(n_pairs, 1)
+
+        # Per-cell softmax normalization
+        # Handle all-zero rows gracefully
+        all_zero = (raw_weight.sum(axis=1) == 0)
+        exp_w = np.exp(raw_weight - raw_weight.max(axis=1, keepdims=True))
+        modality_weights = exp_w / exp_w.sum(axis=1, keepdims=True)
+        # Fallback for pathological cells
+        modality_weights[all_zero] = 1.0 / n_modalities
+
+        return modality_weights
+
+    def wnn_integration(
+        data,
+        modality_keys=None,
+        rna_key: str = "rna",
+        atac_key: str = "atac",
+        protein_key: str = "protein",
+        rna_layer=None,
+        atac_use_precomputed_lsi: bool = False,
+        atac_lsi_key: str = "X_lsi",
+        protein_normalized: bool = False,
+        protein_layer=None,
+        n_neighbors: int = 30,
+        metric: str = "euclidean",
+        kernel: str = "bw_adaptive",
+        kernel_bandwidth=None,
+        weight_n_neighbors: int = 10,
+        n_jobs: int = -1,
+        random_state: int = 42,
+        key_added: str = "WNN",
+        inplace: bool = True,
+    ):
+        """
+        Build a Weighted Nearest Neighbor (WNN) graph from paired multi-omic data.
+
+        The output WNN graph is a row-stochastic affinity matrix suitable for
+        direct input to TopOGraph with ``graph_input_type="affinity"``.
+
+        Parameters
+        ----------
+        data : dict of {str: AnnData} or MuData
+            Paired multi-omic data. All AnnDatas must have identical obs_names.
+        modality_keys : list of str or None
+            Which keys in ``data`` to use. If None, auto-detect from rna/atac/protein keys.
+        rna_key, atac_key, protein_key : str
+            Keys for RNA, ATAC, and protein modalities.
+        rna_layer : str or None
+            Layer to use for RNA. None uses ``.X``.
+        atac_use_precomputed_lsi : bool
+            If True, use existing ``.obsm[atac_lsi_key]``. Else call ``atac_lsi()``.
+        atac_lsi_key : str
+            Key in ``.obsm`` for ATAC LSI coordinates.
+        protein_normalized : bool
+            If True, treat protein as already CLR-normalized.
+        protein_layer : str or None
+            Layer for protein data.
+        n_neighbors : int
+            Number of neighbors for per-modality kNN.
+        metric : str
+            Distance metric for kNN.
+        kernel : str
+            Kernel type. Must match TopOGraph kernel for consistency.
+        weight_n_neighbors : int
+            Neighbors for modality weight estimation (typically smaller than n_neighbors).
+        n_jobs : int
+            Threads for kNN. -1 uses all cores.
+        random_state : int
+            Random seed.
+        key_added : str
+            Key for WNN graph in ``.obsp``.
+        inplace : bool
+            If True and data is MuData, store in place.
+
+        Returns
+        -------
+        AnnData or None
+            AnnData with ``.obsp[key_added]`` containing the WNN graph.
+        """
+        from topo.base.ann import kNN as _kNN
+        from topo.tpgraph.kernels import Kernel as _Kernel
+
+        # --- Step 1: Extract modalities ---
+        try:
+            import mudata
+            _HAVE_MUDATA = True
+        except ImportError:
+            _HAVE_MUDATA = False
+
+        if _HAVE_MUDATA and isinstance(data, mudata.MuData):
+            modality_dict = {k: data.mod[k] for k in data.mod}
+        elif isinstance(data, dict):
+            modality_dict = data
+        else:
+            raise TypeError("data must be a dict of AnnDatas or a MuData object")
+
+        # Determine which modalities to use
+        if modality_keys is None:
+            modality_keys = []
+            for k in [rna_key, atac_key, protein_key]:
+                if k in modality_dict:
+                    modality_keys.append(k)
+        if len(modality_keys) < 2:
+            raise ValueError(f"At least 2 modalities required, found: {modality_keys}")
+
+        # Validate identical obs_names
+        ref_obs = modality_dict[modality_keys[0]].obs_names
+        for k in modality_keys[1:]:
+            if not ref_obs.equals(modality_dict[k].obs_names):
+                raise ValueError(
+                    f"obs_names mismatch between '{modality_keys[0]}' and '{k}'. "
+                    "All modalities must have identical cell barcodes in the same order."
+                )
+        if ref_obs.duplicated().any():
+            raise ValueError("obs_names contain duplicates. Remove duplicates first.")
+
+        n_cells = len(ref_obs)
+
+        # --- Step 2: Extract feature matrices ---
+        modality_data = {}
+        for k in modality_keys:
+            ad_m = modality_dict[k]
+            if k == rna_key:
+                X_m = ad_m.layers[rna_layer] if rna_layer else ad_m.X
+                if "highly_variable" in ad_m.var.columns:
+                    hv = ad_m.var["highly_variable"].values
+                    if issparse(X_m):
+                        X_m = X_m[:, hv]
+                    else:
+                        X_m = X_m[:, hv]
+                if issparse(X_m):
+                    X_m = X_m.toarray()
+                modality_data[k] = np.asarray(X_m, dtype=float)
+            elif k == atac_key:
+                if atac_use_precomputed_lsi:
+                    if atac_lsi_key not in ad_m.obsm:
+                        raise ValueError(
+                            f"atac_use_precomputed_lsi=True but '{atac_lsi_key}' not in "
+                            f"adata_atac.obsm. Run atac_lsi() first."
+                        )
+                    X_m = ad_m.obsm[atac_lsi_key]
+                else:
+                    atac_lsi(ad_m, inplace=True)
+                    X_m = ad_m.obsm["X_lsi"]
+                modality_data[k] = np.asarray(X_m, dtype=float)
+            elif k == protein_key:
+                X_m = ad_m.layers[protein_layer] if protein_layer else ad_m.X
+                if not protein_normalized:
+                    X_m = _clr_normalize(X_m)
+                else:
+                    if issparse(X_m):
+                        X_m = X_m.toarray()
+                    X_m = np.asarray(X_m, dtype=float)
+                modality_data[k] = X_m
+            else:
+                # Generic modality — use .X directly
+                X_m = ad_m.X
+                if issparse(X_m):
+                    X_m = X_m.toarray()
+                modality_data[k] = np.asarray(X_m, dtype=float)
+
+        # --- Step 3: Per-modality kNN and affinity ---
+        knn_indices_dict = {}
+        affinity_matrices = {}
+
+        for k in modality_keys:
+            X_m = modality_data[k]
+            k_nbrs = min(n_neighbors, n_cells - 1)
+
+            # Build kNN using topometry's kNN function
+            knn_sparse = _kNN(
+                X_m, n_neighbors=k_nbrs, metric=metric,
+                n_jobs=n_jobs, backend='hnswlib',
+                return_instance=False, verbose=False,
+            )
+
+            # Build affinity using topometry's Kernel class — consistent with TopOGraph
+            kern = _Kernel(
+                metric="precomputed",
+                n_neighbors=k_nbrs,
+                adaptive_bw=True,
+                fuzzy=(kernel == 'fuzzy'),
+                cknn=(kernel == 'cknn'),
+                backend='hnswlib',
+                n_jobs=n_jobs,
+                verbose=False,
+                random_state=random_state,
+            ).fit(knn_sparse)
+
+            affinity_matrices[k] = kern.K  # kernel affinity (NOT yet row-normalized)
+
+            # Extract kNN indices for weight estimation
+            # We need the actual neighbor indices, not just the sparse matrix
+            # Extract from the sparse kNN graph
+            knn_csr = knn_sparse.tocsr()
+            indices_arr = np.zeros((n_cells, k_nbrs), dtype=int)
+            for i in range(n_cells):
+                row_start = knn_csr.indptr[i]
+                row_end = knn_csr.indptr[i+1]
+                nbr_ids = knn_csr.indices[row_start:row_end]
+                n_found = len(nbr_ids)
+                if n_found >= k_nbrs:
+                    indices_arr[i] = nbr_ids[:k_nbrs]
+                else:
+                    indices_arr[i, :n_found] = nbr_ids
+                    if n_found > 0:
+                        indices_arr[i, n_found:] = nbr_ids[-1]
+            knn_indices_dict[k] = indices_arr
+
+        # --- Step 4: Modality weight estimation ---
+        modality_weights = _estimate_modality_weights(
+            affinity_matrices, knn_indices_dict, weight_n_neighbors
+        )
+
+        # --- Step 5: WNN graph assembly ---
+        # Weighted sum of affinity matrices
+        WNN = sp.csr_matrix((n_cells, n_cells), dtype=float)
+        for m_idx, k in enumerate(modality_keys):
+            W_m = affinity_matrices[k]
+            if not issparse(W_m):
+                W_m = csr_matrix(W_m)
+            # Multiply each row by the cell's modality weight
+            weight_diag = sp.diags(modality_weights[:, m_idx])
+            WNN = WNN + weight_diag @ W_m
+
+        # --- Step 6: Row normalization ---
+        row_sums = np.array(WNN.sum(axis=1)).flatten()
+        row_sums = np.maximum(row_sums, 1e-10)
+        WNN = sp.diags(1.0 / row_sums) @ WNN
+        WNN = WNN.tocsr()
+
+        # --- Step 7: Output ---
+        adata_rna = modality_dict.get(rna_key, modality_dict[modality_keys[0]])
+        out_adata = AnnData(obs=adata_rna.obs.copy())
+        out_adata.obs_names = ref_obs.copy()
+        out_adata.obsp[key_added] = WNN
+        out_adata.obsm["modality_weights"] = modality_weights
+        out_adata.uns["wnn_params"] = {
+            "modalities": modality_keys,
+            "n_neighbors": n_neighbors,
+            "metric": metric,
+            "kernel": kernel,
+            "weight_n_neighbors": weight_n_neighbors,
+        }
+        return out_adata
+
+
+    # -----------------------------------------------------------------
+    # Gene activity scores (ATAC peaks -> gene-level aggregation)
+    # -----------------------------------------------------------------
+
+    def compute_gene_activity_scores(
+        adata_atac: AnnData,
+        gtf_path: str,
+        upstream_bp: int = 2000,
+        gene_id_col: str = "gene_name",
+        chromosomes=None,
+        min_peaks_per_gene: int = 1,
+        inplace: bool = False,
+    ) -> AnnData:
+        """
+        Map ATAC peak accessibility to gene-level activity scores.
+
+        Aggregates peak signal within gene body + upstream promoter windows.
+        Requires ``pyranges`` for genomic interval arithmetic.
+
+        Parameters
+        ----------
+        adata_atac : AnnData
+            AnnData with peaks as features. ``var_names`` must be "chr:start-end".
+        gtf_path : str
+            Path to GTF file (Ensembl/GENCODE format).
+        upstream_bp : int, default 2000
+            Base pairs upstream of TSS to include.
+        gene_id_col : str, default "gene_name"
+            GTF attribute for gene identifier.
+        chromosomes : list of str or None
+            Restrict to these chromosomes. None infers from peak names.
+        min_peaks_per_gene : int, default 1
+            Genes with fewer overlapping peaks are excluded.
+        inplace : bool, default False
+            If True, replaces ``.X`` and ``.var`` in place. Else returns new AnnData.
+
+        Returns
+        -------
+        AnnData
+            Cell x gene matrix of activity scores.
+        """
+        import warnings
+        import re
+
+        try:
+            import pyranges as pr
+        except ImportError:
+            raise ImportError(
+                "compute_gene_activity_scores requires pyranges. "
+                "Install with: pip install pyranges"
+            )
+
+        if not os.path.exists(gtf_path):
+            raise FileNotFoundError(
+                f"GTF file not found: {gtf_path}. "
+                "Download from Ensembl (https://www.ensembl.org) or "
+                "GENCODE (https://www.gencodegenes.org)."
+            )
+
+        # Step 1: Parse peak coordinates
+        peak_names = list(adata_atac.var_names)
+        peak_records = []
+        for i, pname in enumerate(peak_names):
+            m = re.match(r'^(chr\w+):(\d+)-(\d+)$', pname)
+            if m is None:
+                m = re.match(r'^(\w+):(\d+)-(\d+)$', pname)
+            if m is None:
+                raise ValueError(
+                    f"Cannot parse peak name '{pname}'. Expected format: 'chr:start-end'"
+                )
+            peak_records.append({
+                'Chromosome': m.group(1),
+                'Start': int(m.group(2)),
+                'End': int(m.group(3)),
+                'peak_idx': i,
+            })
+
+        peaks_df = pd.DataFrame(peak_records)
+        peaks_pr = pr.PyRanges(peaks_df)
+
+        # Step 2: Parse gene annotations from GTF
+        gtf = pr.read_gtf(gtf_path)
+        # Filter to gene features
+        if 'Feature' in gtf.columns:
+            genes_gtf = gtf[gtf.Feature == 'gene']
+        else:
+            genes_gtf = gtf
+
+        if gene_id_col not in genes_gtf.columns:
+            raise ValueError(
+                f"gene_id_col='{gene_id_col}' not found in GTF. "
+                f"Available columns: {list(genes_gtf.columns)}"
+            )
+
+        genes_df = genes_gtf.df[[
+            'Chromosome', 'Start', 'End', 'Strand', gene_id_col
+        ]].copy()
+        genes_df = genes_df.rename(columns={gene_id_col: 'gene_name'})
+
+        # Filter chromosomes
+        if chromosomes is not None:
+            genes_df = genes_df[genes_df['Chromosome'].isin(chromosomes)]
+            peaks_df = peaks_df[peaks_df['Chromosome'].isin(chromosomes)]
+        else:
+            # Auto-filter non-standard chromosomes
+            standard = set(peaks_df['Chromosome'].unique())
+            non_standard = {c for c in standard if any(
+                x in c.lower() for x in ['random', 'un', 'chrm', '_']
+            )}
+            if non_standard:
+                warnings.warn(
+                    f"Filtering {len(non_standard)} non-standard chromosomes: "
+                    f"{sorted(non_standard)[:5]}{'...' if len(non_standard) > 5 else ''}",
+                    UserWarning,
+                )
+                standard -= non_standard
+            chromosomes_use = standard
+            genes_df = genes_df[genes_df['Chromosome'].isin(chromosomes_use)]
+
+        # Build gene windows (gene body + upstream promoter)
+        gene_windows = []
+        for _, row in genes_df.iterrows():
+            if row['Strand'] == '+':
+                tss = row['Start']
+                window_start = max(0, tss - upstream_bp)
+                window_end = row['End']
+            else:
+                tss = row['End']
+                window_start = row['Start']
+                window_end = tss + upstream_bp
+
+            gene_windows.append({
+                'Chromosome': row['Chromosome'],
+                'Start': window_start,
+                'End': window_end,
+                'gene_name': row['gene_name'],
+            })
+
+        windows_df = pd.DataFrame(gene_windows)
+        # Deduplicate: take union of windows per gene
+        windows_df = windows_df.groupby('gene_name').agg({
+            'Chromosome': 'first',
+            'Start': 'min',
+            'End': 'max',
+        }).reset_index()
+
+        windows_pr = pr.PyRanges(windows_df)
+
+        # Step 3: Intersect peaks with gene windows
+        overlap = windows_pr.join(peaks_pr, how='left')
+        overlap_df = overlap.df
+
+        # Build gene -> peak indices mapping
+        gene_peak_map = {}
+        for _, row in overlap_df.iterrows():
+            gname = row['gene_name']
+            pidx = row.get('peak_idx', None)
+            if pidx is not None and not np.isnan(pidx):
+                gene_peak_map.setdefault(gname, set()).add(int(pidx))
+
+        # Filter by min_peaks_per_gene
+        gene_names = [g for g, peaks in gene_peak_map.items()
+                      if len(peaks) >= min_peaks_per_gene]
+        gene_names.sort()
+
+        if len(gene_names) == 0:
+            raise ValueError(
+                "No genes found with sufficient peak overlap. "
+                "Check that peak names match GTF chromosome naming convention."
+            )
+
+        # Step 4: Aggregate peak counts per gene
+        X_atac = adata_atac.X
+        if not issparse(X_atac):
+            X_atac = csr_matrix(X_atac)
+
+        n_cells = adata_atac.n_obs
+        n_genes_out = len(gene_names)
+
+        # Build aggregation matrix (peaks x genes) for efficient sparse multiplication
+        rows, cols = [], []
+        for g_idx, gname in enumerate(gene_names):
+            for pidx in gene_peak_map[gname]:
+                rows.append(pidx)
+                cols.append(g_idx)
+
+        agg_matrix = sp.csc_matrix(
+            (np.ones(len(rows)), (rows, cols)),
+            shape=(adata_atac.n_vars, n_genes_out)
+        )
+        gene_activity = X_atac @ agg_matrix  # n_cells x n_genes
+        gene_activity = gene_activity.tocsr()
+
+        # Step 5: Construct output
+        new_adata = AnnData(
+            X=gene_activity,
+            obs=adata_atac.obs.copy(),
+            var=pd.DataFrame(index=gene_names),
+        )
+        new_adata.uns["gene_activity_params"] = {
+            "gtf_path": gtf_path,
+            "upstream_bp": upstream_bp,
+            "n_peaks_source": adata_atac.n_vars,
+            "n_genes_output": n_genes_out,
+        }
+
+        if inplace:
+            adata_atac._X = gene_activity
+            adata_atac._var = pd.DataFrame(index=gene_names)
+            adata_atac.uns["gene_activity_params"] = new_adata.uns["gene_activity_params"]
+            return adata_atac
+        else:
+            return new_adata
+
+
+    # -----------------------------------------------------------------
+    # ModalityBridge: unpaired multi-omic integration
+    # -----------------------------------------------------------------
+
+    from topo.bridge import ModalityBridge
+
+    def fit_modality_bridge(
+        adata_paired: AnnData,
+        atac_lsi_key: str = "X_lsi",
+        rna_layer=None,
+        n_hvgs=None,
+        hvg_key: str = "highly_variable",
+        k: int = 15,
+        metric: str = "euclidean",
+    ):
+        """
+        Fit a modality bridge for imputing RNA expression from ATAC LSI coordinates.
+
+        Parameters
+        ----------
+        adata_paired : AnnData
+            Paired multiome AnnData with LSI in ``.obsm[atac_lsi_key]``
+            and RNA expression in ``.X`` (or ``rna_layer``).
+        atac_lsi_key : str
+            Key in ``.obsm`` for ATAC LSI coordinates.
+        rna_layer : str or None
+            Layer for RNA expression. None uses ``.X``.
+        n_hvgs : int or None
+            If provided, select top n HVGs by variance.
+        hvg_key : str
+            Column in ``.var`` marking highly variable genes.
+        k : int
+            Number of neighbors for imputation.
+        metric : str
+            Distance metric for neighbor search.
+
+        Returns
+        -------
+        ModalityBridge
+        """
+        from topo.bridge import ModalityBridge
+
+        if atac_lsi_key not in adata_paired.obsm:
+            raise ValueError(
+                f"'{atac_lsi_key}' not in adata_paired.obsm. "
+                "Run atac_lsi() on ATAC data and store LSI in the paired AnnData."
+            )
+
+        lsi_coords = adata_paired.obsm[atac_lsi_key]
+
+        # Extract RNA expression
+        X_rna = adata_paired.layers[rna_layer] if rna_layer else adata_paired.X
+        if issparse(X_rna):
+            X_rna = X_rna.toarray()
+        X_rna = np.asarray(X_rna, dtype=float)
+
+        # Select HVGs
+        if n_hvgs is not None:
+            gene_variances = np.var(X_rna, axis=0)
+            hvg_idx = np.argsort(gene_variances)[::-1][:n_hvgs]
+            hvg_names = adata_paired.var_names[hvg_idx].tolist()
+            X_rna = X_rna[:, hvg_idx]
+        elif hvg_key in adata_paired.var.columns:
+            hvg_mask = adata_paired.var[hvg_key].values
+            hvg_names = adata_paired.var_names[hvg_mask].tolist()
+            X_rna = X_rna[:, hvg_mask]
+        else:
+            hvg_names = adata_paired.var_names.tolist()
+
+        bridge = ModalityBridge()
+        bridge.lsi_coords = np.asarray(lsi_coords, dtype=np.float32)
+        bridge.rna_expression = X_rna
+        bridge.hvg_names = hvg_names
+        bridge.k = k
+        bridge.metric = metric
+        bridge.lsi_params = adata_paired.uns.get("lsi", {})
+        bridge._rebuild_index()
+        bridge.is_fitted = True
+        return bridge
+
+    def apply_modality_bridge(
+        adata_atac: AnnData,
+        bridge,
+        atac_lsi_key: str = "X_lsi",
+        key_added: str = "X_imputed_rna",
+        inplace: bool = True,
+    ):
+        """
+        Impute RNA expression for ATAC cells using a fitted ModalityBridge.
+
+        Parameters
+        ----------
+        adata_atac : AnnData
+            ATAC AnnData with LSI coordinates in ``.obsm[atac_lsi_key]``.
+        bridge : ModalityBridge
+            Fitted bridge from ``fit_modality_bridge()``.
+        atac_lsi_key : str
+            Key in ``.obsm`` for LSI coordinates.
+        key_added : str
+            Key for imputed RNA in ``.obsm`` (when inplace=True).
+        inplace : bool
+            If True, store in ``adata_atac.obsm``. Else return new AnnData.
+
+        Returns
+        -------
+        AnnData or None
+        """
+        from topo.bridge import ModalityBridge as _MB
+
+        if not bridge.is_fitted:
+            raise ValueError("Bridge is not fitted. Call fit_modality_bridge() first.")
+
+        if atac_lsi_key not in adata_atac.obsm:
+            raise ValueError(
+                f"'{atac_lsi_key}' not in adata_atac.obsm. "
+                "Run atac_lsi() first."
+            )
+
+        query_lsi = adata_atac.obsm[atac_lsi_key]
+        bridge_dim = bridge.lsi_coords.shape[1]
+        query_dim = query_lsi.shape[1]
+
+        if query_dim != bridge_dim:
+            raise ValueError(
+                f"LSI component count mismatch between query ATAC data "
+                f"({query_dim}) and bridge ({bridge_dim}). "
+                "Recompute LSI with the same n_components."
+            )
+
+        # kNN lookup
+        query_lsi_f32 = np.asarray(query_lsi, dtype=np.float32)
+        labels, distances = bridge._hnsw_index.knn_query(query_lsi_f32, k=bridge.k)
+
+        # Distance-weighted imputation (Gaussian kernel, adaptive bandwidth)
+        sigma = np.median(distances, axis=1, keepdims=True)
+        sigma = np.maximum(sigma, 1e-10)
+        weights = np.exp(-(distances ** 2) / (2 * sigma ** 2))
+        weights /= weights.sum(axis=1, keepdims=True)
+
+        # Impute: weighted average of neighbor RNA expression
+        imputed_rna = np.einsum("ij,ijk->ik", weights, bridge.rna_expression[labels])
+
+        if inplace:
+            adata_atac.obsm[key_added] = imputed_rna
+            adata_atac.uns["imputed_rna"] = {
+                "bridge_k": bridge.k,
+                "hvg_names": bridge.hvg_names,
+                "n_hvgs": len(bridge.hvg_names),
+            }
+            return None
+        else:
+            imputed_adata = AnnData(
+                X=imputed_rna,
+                obs=adata_atac.obs.copy(),
+                var=pd.DataFrame(index=bridge.hvg_names),
+            )
+            imputed_adata.uns["imputed_rna"] = {
+                "bridge_k": bridge.k,
+                "source": "apply_modality_bridge",
+            }
+            return imputed_adata
+
+
     def fit_adata(
         adata: AnnData,
         tg: TopOGraph | None = None,
@@ -623,6 +1430,8 @@ if _HAVE_SCANPY:
         leiden_key_base: str = "topo_clusters",
         leiden_resolutions: list[float] | tuple[float, ...] = (0.2,0.8),
         leiden_primary_index: int = 1,
+        precomputed_graph_key: str | None = None,
+        graph_input_type: str = "knn",
         **topograph_kwargs,
     ):
         """
@@ -655,6 +1464,12 @@ if _HAVE_SCANPY:
             Leiden resolutions to compute.
         leiden_primary_index : int, default 1
             Index into `leiden_resolutions` to use as the primary cluster column.
+        precomputed_graph_key : str or None, default None
+            If provided, use ``adata.obsp[precomputed_graph_key]`` as the input graph
+            instead of building a kNN from features. Bypasses internal kNN construction.
+        graph_input_type : str, default "knn"
+            Forwarded to ``TopOGraph(graph_input_type=...)``. Use ``"affinity"``
+            when passing a WNN graph from ``wnn_integration()``.
         **topograph_kwargs
             Extra keyword arguments passed to `TopOGraph(...)` (on creation or refit).
 
@@ -678,14 +1493,22 @@ if _HAVE_SCANPY:
 
         need_refit = False
 
+        # Handle precomputed graph pathway (e.g., WNN graph)
+        use_precomputed = precomputed_graph_key is not None
+
         if tg is None:
-            tg = TopOGraph(**topograph_kwargs)
+            kw = dict(topograph_kwargs)
+            if use_precomputed:
+                kw['graph_input_type'] = graph_input_type
+            tg = TopOGraph(**kw)
             need_refit = True
         else:
             # Apply new params if provided
             if topograph_kwargs:
                 tg.set_params(**topograph_kwargs)
                 need_refit = True
+            if use_precomputed:
+                tg.graph_input_type = graph_input_type
 
             # Check if tg looks fitted & compatible with this adata
             if getattr(tg, "base_kernel", None) is None:
@@ -697,7 +1520,15 @@ if _HAVE_SCANPY:
                 need_refit = True
 
         if need_refit:
-            tg.fit(adata.X)
+            if use_precomputed:
+                if precomputed_graph_key not in adata.obsp:
+                    raise ValueError(
+                        f"precomputed_graph_key='{precomputed_graph_key}' not found "
+                        f"in adata.obsp. Available keys: {list(adata.obsp.keys())}"
+                    )
+                tg.fit(adata.obsp[precomputed_graph_key])
+            else:
+                tg.fit(adata.X)
 
         # Normalise leiden_resolutions: accept a bare scalar (e.g. 0.4) or any iterable.
         if isinstance(leiden_resolutions, (int, float)):
@@ -6152,15 +6983,27 @@ if _HAVE_SCANPY:
                 flavor = "seurat"
                 disp_col = "dispersions_norm"
             try:
+                import warnings as _w
+                with _w.catch_warnings():
+                    _w.filterwarnings("ignore", "overflow", RuntimeWarning)
+                    sc.pp.highly_variable_genes(
+                        a_copy, flavor=flavor,
+                        n_top_genes=min(n_features, len(shared)),
+                        inplace=True)
+            except (ValueError, Exception):
+                # seurat_v3 can overflow with large counts → fall back to seurat
+                a_copy_fb = a_copy.copy()
+                if norm_state == 'raw_counts':
+                    # Apply log1p for seurat flavor fallback
+                    X_fb = a_copy_fb.X
+                    if sp.issparse(X_fb):
+                        X_fb = X_fb.toarray()
+                    a_copy_fb.X = sp.csr_matrix(np.log1p(X_fb).astype(np.float32))
                 sc.pp.highly_variable_genes(
-                    a_copy, flavor=flavor,
+                    a_copy_fb, flavor="seurat",
                     n_top_genes=min(n_features, len(shared)),
                     inplace=True)
-            except Exception:
-                sc.pp.highly_variable_genes(
-                    a_copy, flavor="seurat",
-                    n_top_genes=min(n_features, len(shared)),
-                    inplace=True)
+                a_copy.var = a_copy_fb.var
                 disp_col = "dispersions_norm"
 
             hvg_set = set(a_copy.var_names[a_copy.var["highly_variable"]])

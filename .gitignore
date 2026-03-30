@@ -61,6 +61,8 @@ cca_implementation_report.md
 # --- Test / cache ---
 .pytest_cache/
 data/
+tests/fixtures/.cache/
+tests/fixtures/*.h5ad
 
 # --- Private docs (not for public Git) ---
 docs/LBO_Review/
