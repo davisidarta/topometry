@@ -34,8 +34,8 @@ autoapi_dirs = ['../topo']
 # -- Project information -----------------------------------------------------
 
 project = 'TopoMetry'
-copyright = '2021, Davi Sidarta-Oliveira'
-author = 'Davi Sidarta-Oliveira'
+copyright = '2021, David Sidarta Oliveira'
+author = 'David Sidarta Oliveira'
 copyright = f'2021, {author}'
 
 github_user = 'davisidarta'
@@ -67,6 +67,11 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'autoapi.extension',
+]
+
+myst_enable_extensions = [
+    'dollarmath',
+    'colon_fence',
 ]
 # autodoc_mock_imports = ['pandas', 'numba', 'matplotlib',
 #                         'torch', 'kneed', 'nmslib', 'hnswlib', 'pymde',
