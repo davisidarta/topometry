@@ -18,6 +18,7 @@ idea/
 
 # --- Jupyter ---
 *.ipynb
+!docs/*.ipynb
 .ipynb_checkpoints/
 
 # --- Large data / model files ---
@@ -51,12 +52,8 @@ docs/*.pdf
 topo/integration/
 topo/integration_tests/
 
-# --- Claude blueprints (not for public Git) ---
-api_notes.md
-topometry_integration_blueprint.md
-cca_integration_blueprint.md
-cca_integration_blueprint_final.md
-cca_implementation_report.md
+# --- Claude blueprints / session context (not for public Git) ---
+claude/
 
 # --- Test / cache ---
 .pytest_cache/

@@ -1,4 +1,6 @@
-# Why TopoMetry? Why never PCA?
+# Why geometry? Why not variance?
+
+David Sidarta Oliveira, University of Oxford, 2026
 
 ## Single-cell data has geometry
 
@@ -15,7 +17,8 @@ into two distinct fates traces a branching path along this manifold. A cell cycl
 through G1, S, and G2/M traces a closed loop. Activation states, effector gradients,
 and clonal imprints are all geometric features of this surface. Understanding
 single-cell data means understanding this shape — not just the directions along which
-cells vary the most.
+cells vary the most. That biological manifold is far more informative to the life sciences than
+the high-dimensional space (e.g., 10,000+ genes) where it lives.
 
 ## Why PCA fails: the intuitive case
 
@@ -139,18 +142,239 @@ fact, increasing the number of features tends to make it worse, as each addition
 gene introduces more nonlinear variation that PCA cannot represent. The issue is
 structural.
 
+## How PCA became the standard — and why no one checked the math
+
+Given the problems outlined above, a natural question is how PCA became so deeply
+embedded in single-cell analysis in the first place. The answer is not that the field
+carefully evaluated it and found it adequate; it is that PCA entered the workflow for
+practical reasons at a specific historical moment, and the practice propagated by
+continuity rather than by critical assessment.
+
+In science, it is often easier and faster to adopt published practice than to
+construct and justify a new one, especially in a field of biological rather than
+computational focus. That is precisely what happened in single-cell genomics: the
+widespread use of PCA as a preprocessing step did not arise from mathematically
+grounded observations about single-cell data, but was inherited from adjacent
+computational practice and then frozen into infrastructure.
+
+### The t-SNE origin
+
+The immediate precursor was t-distributed stochastic neighbor embedding (t-SNE), the
+visualization algorithm that dominated single-cell data exploration before UMAP. In
+the original t-SNE paper, van der Maaten and Hinton explicitly recommended reducing
+data to 30 dimensions with PCA before running t-SNE:
+
+> "Note that for large data sets, it may be necessary to use a reduced representation
+> of the data. We typically reduce the data to 30 dimensions using PCA."
+>
+> — van der Maaten & Hinton (2008), *Visualizing Data using t-SNE*,
+> [J. Mach. Learn. Res. 9, 2579–2605](https://www.jmlr.org/papers/v9/vandermaaten08a.html)
+
+The reason was purely computational. Early t-SNE implementations computed pairwise
+affinities in the full feature space, which scales quadratically in both the number
+of cells and the number of features. For the datasets available at the time — in many
+cases not biological at all, or far smaller than even early scRNA-seq experiments —
+this was already intractable on most hardware. PCA to 30 dimensions was a pragmatic
+compression step that made t-SNE feasible, with no claim that 30 PCs faithfully
+captured the data geometry. The recommendation was a workaround, not a principled
+preprocessing strategy.
+
+### Seurat, scran, and the packaging of PCA as a default
+
+When single-cell RNA-seq datasets began scaling into the tens of thousands of cells,
+the first comprehensive analysis toolkits — Seurat
+([Satija et al., 2015](https://doi.org/10.1038/nbt.3192)) and scran
+([Lun et al., 2016](https://doi.org/10.12688/f1000research.9501.2)) — needed to
+provide accessible end-to-end workflows for a biological audience. Both adopted the
+same reasoning: sacrifice representational fidelity for computational speed and
+accessibility, on the assumption that the cost would be minimal. Seurat in particular
+packaged PCA → kNN graph → Leiden clustering → UMAP or t-SNE into a handful of
+function calls, making it straightforward for users without a computational background
+to produce publication-ready figures from raw count matrices.
+
+The reasoning was understandable in context. Early scRNA-seq datasets were small by
+today's standards — hundreds to a few thousand cells — and the transcriptional
+differences between major cell types were large enough that PCA's distortions did not
+prevent correct annotation of the most abundant populations. The true cost of PCA
+was invisible precisely because the analyses it was most likely to fail on —
+fine-grained subpopulation structure, rare populations, continuous gradients — were
+not accessible from the data volumes available at the time. By the time datasets grew
+large enough for these failures to become visible, the PCA-based workflow had already
+been institutionalized.
+
+### Scanpy and field-wide adoption
+
+Scanpy ([Wolf et al., 2018](https://doi.org/10.1186/s13059-017-1382-0)) and the
+broader scverse ecosystem followed the same design choices and made them the default
+for a much larger user base. With the publication of widely read "best practices"
+guides — most notably Luecken and Theis (2019)
+([Mol. Syst. Biol. 15, e8746](https://doi.org/10.15252/msb.20188746)) and its
+successor Heumos et al. (2023)
+([Nat. Rev. Genet. 24, 550–572](https://doi.org/10.1038/s41576-023-00586-w)) —
+the PCA-based pipeline was codified as the recommended approach across modalities and
+experimental contexts. These guides introduced millions of new single-cell analysis
+users to a workflow in which PCA is presented as an unexamined first step, not as a
+methodological choice with known limitations and alternatives.
+
+### What users are shown — and what they are not
+
+Both Seurat and Scanpy provide diagnostic tools intended to help users choose how many
+principal components to retain. In Seurat, the standard tool is `ElbowPlot()`, which
+plots $\sigma_k = \sqrt{\lambda_k}$ — the standard deviation, not the variance — of
+each principal component on the $y$-axis against component rank on the $x$-axis.
+Scanpy's `sc.pl.pca_variance_ratio()` plots the per-component fraction of variance
+$\lambda_k / \sum_j \lambda_j$ on a logarithmic $y$-axis. In both cases, users are
+asked to identify a visual "elbow" — an informal subjective judgment with no
+established statistical definition — and to retain all components up to that point.
+
+Neither plot shows the quantity that actually matters: the cumulative explained
+variance ratio
+
+$$
+\mathrm{EVR}_k^{\text{cumul}} = \frac{\sum_{j=1}^{k} \lambda_j}{\sum_{j=1}^{D} \lambda_j}
+$$
+
+which is the only number that directly answers the question "what fraction of the
+total variance in the data is captured by my PCA representation?" A user inspecting
+an elbow plot cannot determine whether 20 PCs explain 30% of the total variance or
+85%; the shape of the per-component curve does not convey this. The logarithmic
+$y$-axis used in Scanpy further compresses differences between components, making a
+genuinely flat spectrum — the signature of a nonlinear system, as discussed above —
+visually indistinguishable from a spectrum with a meaningful gap. Seurat additionally
+offers the JackStraw test
+([Macosko et al., 2015](https://doi.org/10.1016/j.cell.2015.05.002)),
+which assesses whether each PC explains significantly more variance than expected by
+chance under permutation. This tests whether a component's eigenvalue is
+distinguishable from noise, but it says nothing about whether the retained components
+collectively capture a meaningful fraction of the biological signal. A PC can pass the
+JackStraw test and still represent 0.3% of total variance.
+
+The result is that users routinely select 20–50 PCs on the basis of a visual
+heuristic applied to a plot that does not show cumulative coverage, have no practical
+way to know from standard software output that their representation may capture less
+than 40% of the signal, and proceed to all downstream analyses — clustering,
+differential expression, trajectory inference — with this information gap unexamined.
+
+### A pattern of implicit reliance
+
+Beyond the software defaults, there is a broader pattern in the literature of PCA
+being applied without explicit acknowledgment in methods sections. This is
+particularly common in manuscripts that present or use nonlinear dimensionality
+reduction and trajectory methods, where the linear preprocessing step is an awkward
+admission for tools positioned as geometry-aware. PHATE
+([Moon et al., 2019](https://doi.org/10.1038/s41587-019-0336-3)) and related tools
+from the same group apply PCA for initial dimensionality reduction in their
+implementations; the degree to which this is disclosed prominently in methods sections
+varies considerably across publications using these tools. The diffusion pseudotime
+framework ([Haghverdi et al., 2016](https://doi.org/10.1038/nmeth.3971)) and several
+subsequent trajectory methods from the same tradition build diffusion operators on
+PCA-derived neighborhood graphs without always making this explicit in the description
+of the method itself, where the focus is understandably on the nonlinear step. The
+effect, across dozens of papers, is that readers absorb the impression that diffusion-
+or graph-based methods operate on raw or minimally processed data, when in practice
+they inherit the distortions introduced by PCA before any nonlinear computation
+begins.
+
+This is not confined to specific groups or tools; it is a field-wide pattern that
+reflects how PCA became infrastructure: invisible, unquestioned, and therefore
+unexamined. The benchmarking literature on single-cell methods
+([Luecken et al., 2022](https://doi.org/10.1038/s41592-021-01336-8)) has compared
+algorithms assuming PCA preprocessing as a shared starting point, which means that
+the comparative evaluations themselves are built on a foundation whose adequacy has
+not been tested. No study prior to TopoMetry systematically measured whether
+PCA-based neighborhood graphs preserve the geometry of the data they are built on.
+Until that measurement exists, the field has no principled basis for knowing how much
+biological signal its standard workflow discards before any downstream analysis
+begins.
+
+## Variational methods: the same assumption, differently packaged
+
+Methods such as scVI ([Lopez et al., 2018](https://doi.org/10.1038/s41592-018-0229-2)),
+totalVI, and their relatives have become standard in single-cell genomics as apparent
+improvements over PCA. They use deep neural networks to learn nonlinear encoders and
+decoders, and they model count data with appropriate likelihood functions (typically
+negative binomial). These are genuine advances. But at the core of their training
+objective lies an assumption that is just as incompatible with single-cell geometry as
+PCA's linearity — and it is one that rarely gets examined.
+
+All of these methods are variational autoencoders (VAEs). They are trained by
+maximizing the Evidence Lower BOund (ELBO):
+
+$$
+\mathcal{L}(\theta, \phi;\, x) = \underbrace{\mathbb{E}_{q_\phi(z \mid x)}\!\left[\log p_\theta(x \mid z)\right]}_{\text{reconstruction}} - \underbrace{\mathrm{KL}\!\left(q_\phi(z \mid x) \;\|\; p(z)\right)}_{\text{regularization}}
+$$
+
+where $q_\phi(z \mid x)$ is the approximate posterior (encoder), $p_\theta(x \mid z)$
+is the likelihood (decoder), and $p(z)$ is the prior over the latent space. In every
+widely used implementation of these methods for single-cell data, the prior is a
+standard isotropic Gaussian: $p(z) = \mathcal{N}(0, I_d)$.
+
+The KL regularization term penalizes the encoder for producing posteriors that deviate
+from this prior. Its effect on the aggregate posterior — the distribution of latent
+representations across all cells, $q_\phi^*(z) = \int q_\phi(z \mid x)\, p_{\mathrm{data}}(x)\, dx$
+— is to push it toward $\mathcal{N}(0, I_d)$. This is not a side effect; it is by
+design. The isotropic Gaussian prior is chosen precisely because it encourages a
+well-organized, continuous latent space where nearby points in $\mathbb{R}^d$ decode
+to similar gene expression profiles.
+
+The problem is that $\mathcal{N}(0, I_d)$ is a very specific geometric object: it is
+unimodal, isotropic, and supported on all of $\mathbb{R}^d$, which is contractible —
+it has no holes, no branches, no disconnected components. Single-cell manifolds, by
+contrast, can be any of these things. The cell cycle is topologically a loop. Multiple
+independent lineages are topologically disconnected. A branching differentiation tree
+has the topology of a graph with cycles removed. Forcing the aggregate posterior to
+look like a Gaussian ball is topologically incompatible with the true data geometry.
+
+Concretely: if the data lies on a manifold $\mathcal{M}$ with $k$ disconnected
+components — say, $k$ distinct cell lineages — and the latent prior is $\mathcal{N}(0, I_d)$,
+then the encoder must map cells from all $k$ components into a single connected,
+unimodal distribution. Cells from different lineages will necessarily be pushed
+together in the latent space to satisfy the prior. Rare populations are pulled hardest:
+the reconstruction term weights each cell equally, so it favors fitting common cell
+types well, while the KL term pulls the rare population's posterior toward the prior
+regardless of where that pulls it relative to other populations. The end result is a
+latent space whose local geometry reflects the prior distribution more than the data
+manifold.
+
+This is, at its core, a variance-based assumption in nonlinear disguise. The Gaussian
+prior assigns probability proportional to $\exp(-\|z\|^2/2)$, which decays with
+squared distance from the origin. Maximizing the ELBO subject to this prior
+encourages latent codes to spread evenly across a ball of fixed radius in $\mathbb{R}^d$
+— an implicit form of variance maximization in the latent space. The fundamental error
+is the same as PCA's: a parametric distributional assumption that is inconsistent with
+the topology and geometry of the data is used to define what a "good" representation
+looks like. In PCA, that assumption is linearity. In VAEs, it is Gaussianity. Both
+assumptions are convenient, both are mathematically tractable, and both are wrong for
+single-cell data.
+
+This is not a hypothetical concern. Supplementary Figure S1a of the TopoMetry
+manuscript directly shows that scVI's latent representations fail to preserve data
+geometry in benchmarks across the same 68 datasets where PCA fails — and for
+consistent reasons. The Gaussian prior topology does not match the data topology, and
+the latent space reflects that mismatch.
+
+It is worth noting that this is an active area of research in the machine learning
+community, where alternatives such as hyperspherical priors, Riemannian VAEs, and
+topologically-aware latent spaces have been proposed precisely to address this
+problem. None of these have been adopted in the standard single-cell toolbox. Until
+they are, any method that relies on a Gaussian latent prior shares the core limitation
+described here — regardless of how sophisticated its encoder or decoder architecture
+is.
+
 ## What TopoMetry does instead
 
-Rather than projecting cells onto linear axes of maximum variance, TopoMetry asks:
-given the local neighborhood of each cell, what is the geometry of the space it
-inhabits?
+Rather than projecting cells onto linear axes of maximum variance, or fitting a
+generative model that imposes a distributional prior on the latent space, TopoMetry
+asks a more direct question: given the local neighborhood of each cell, what is the
+geometry of the space it inhabits?
 
 It starts by building a cell–cell similarity graph with kernels that adapt to the
 local sampling density and intrinsic dimensionality of each cell's neighborhood. A
 cell in a densely sampled region and a cell in a sparse region are treated
 differently: the kernel bandwidth scales with the local neighborhood radius, so the
 resulting similarity measure reflects local geometry rather than global density. This
-directly addresses the sampling bias that PCA-based graphs accumulate.
+directly addresses the sampling bias that both PCA-based graphs and VAE reconstruction
+losses accumulate.
 
 From this graph, TopoMetry approximates the Laplace–Beltrami operator (LBO), the
 natural generalization of the Laplacian to curved spaces. On a smooth Riemannian
@@ -171,7 +395,7 @@ progressively finer structure such as local activation gradients, cell cycle pha
 or clonal imprints. Crucially, these coordinates are intrinsic to the manifold's
 geometry: they do not depend on how the manifold happens to be embedded in the
 ambient gene expression space, and they are not biased by the global variance of any
-particular direction.
+particular direction, nor constrained to match any prescribed distributional form.
 
 TopoMetry's spectral scaffold is a data-driven approximation of this eigenbasis,
 computed from the graph Laplacian built on the adaptive similarity graph. Under
