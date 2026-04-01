@@ -2,6 +2,7 @@
 
 David Sidarta Oliveira, University of Oxford, 2026
 
+
 ## Single-cell data has geometry
 
 When you sequence thousands of cells, each one becomes a point in a space with
@@ -17,14 +18,15 @@ into two distinct fates traces a branching path along this manifold. A cell cycl
 through G1, S, and G2/M traces a closed loop. Activation states, effector gradients,
 and clonal imprints are all geometric features of this surface. Understanding
 single-cell data means understanding this shape — not just the directions along which
-cells vary the most. That biological manifold is far more informative to the life sciences than
-the high-dimensional space (e.g., 10,000+ genes) where it lives.
+cells vary the most.
 
 ## Why PCA fails: the intuitive case
 
-Principal Component Analysis (PCA) is a linear method. It finds the directions in
-gene expression space along which cells vary the most, rotates the coordinate system
-to align with those directions, and discards the rest. This is a sensible strategy
+Principal Component Analysis (PCA) is a linear method originally introduced by
+Pearson ([1901](https://doi.org/10.1080/14786440109462720)) and later formalized as
+a general statistical tool by Jolliffe ([1986](https://doi.org/10.1007/978-1-4757-1904-8)).
+It finds the directions in gene expression space along which cells vary the most,
+rotates the coordinate system to align with those directions, and discards the rest. This is a sensible strategy
 when data genuinely forms a linear structure — a cloud elongated in a few directions
 and flat in others.
 
@@ -290,14 +292,16 @@ begins.
 ## Variational methods: the same assumption, differently packaged
 
 Methods such as scVI ([Lopez et al., 2018](https://doi.org/10.1038/s41592-018-0229-2)),
-totalVI, and their relatives have become standard in single-cell genomics as apparent
-improvements over PCA. They use deep neural networks to learn nonlinear encoders and
-decoders, and they model count data with appropriate likelihood functions (typically
-negative binomial). These are genuine advances. But at the core of their training
-objective lies an assumption that is just as incompatible with single-cell geometry as
-PCA's linearity — and it is one that rarely gets examined.
+totalVI ([Gayoso et al., 2021](https://doi.org/10.1038/s41592-020-01050-x)), and
+their relatives have become standard in single-cell genomics as apparent improvements
+over PCA. They use deep neural networks to learn nonlinear encoders and decoders, and
+they model count data with appropriate likelihood functions (typically negative
+binomial). These are genuine advances. But at the core of their training objective
+lies an assumption that is just as incompatible with single-cell geometry as PCA's
+linearity — and it is one that rarely gets examined.
 
-All of these methods are variational autoencoders (VAEs). They are trained by
+All of these methods are variational autoencoders (VAEs), a framework introduced by
+Kingma & Welling ([2013](https://arxiv.org/abs/1312.6114)). They are trained by
 maximizing the Evidence Lower BOund (ELBO):
 
 $$
