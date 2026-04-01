@@ -1106,13 +1106,13 @@ if _HAVE_SCANPY:
         peak_names = list(adata_atac.var_names)
         peak_records = []
         for i, pname in enumerate(peak_names):
-            m = re.match(r'^(chr\w+):(\d+)-(\d+)$', pname)
+            m = re.match(r'^([\w.]+):(\d+)-(\d+)$', pname)
             if m is None:
-                m = re.match(r'^(\w+):(\d+)-(\d+)$', pname)
-            if m is None:
-                raise ValueError(
-                    f"Cannot parse peak name '{pname}'. Expected format: 'chr:start-end'"
+                warnings.warn(
+                    f"Skipping unparseable peak name '{pname}'.",
+                    UserWarning,
                 )
+                continue
             peak_records.append({
                 'Chromosome': m.group(1),
                 'Start': int(m.group(2)),
@@ -1141,6 +1141,20 @@ if _HAVE_SCANPY:
             'Chromosome', 'Start', 'End', 'Strand', gene_id_col
         ]].copy()
         genes_df = genes_df.rename(columns={gene_id_col: 'gene_name'})
+
+        # Harmonize chromosome naming between peaks and GTF
+        peak_chroms = set(peaks_df['Chromosome'].unique())
+        gene_chroms = set(genes_df['Chromosome'].unique())
+        peaks_have_chr = any(c.startswith('chr') for c in peak_chroms)
+        genes_have_chr = any(c.startswith('chr') for c in gene_chroms)
+        if peaks_have_chr and not genes_have_chr:
+            # GTF uses bare numbers, peaks use chr-prefix → add chr to GTF
+            genes_df['Chromosome'] = 'chr' + genes_df['Chromosome'].astype(str)
+        elif genes_have_chr and not peaks_have_chr:
+            # Peaks use bare numbers, GTF uses chr-prefix → strip chr from GTF
+            genes_df['Chromosome'] = genes_df['Chromosome'].str.replace(
+                r'^chr', '', regex=True
+            )
 
         # Filter chromosomes
         if chromosomes is not None:
@@ -1200,7 +1214,7 @@ if _HAVE_SCANPY:
         for _, row in overlap_df.iterrows():
             gname = row['gene_name']
             pidx = row.get('peak_idx', None)
-            if pidx is not None and not np.isnan(pidx):
+            if pidx is not None and not np.isnan(pidx) and int(pidx) >= 0:
                 gene_peak_map.setdefault(gname, set()).add(int(pidx))
 
         # Filter by min_peaks_per_gene
@@ -9230,3 +9244,109 @@ if _HAVE_SCANPY:
             counts = [_count_anchors(i) for i in range(len(adata_queries))]
 
         return sorted(range(len(adata_queries)), key=lambda i: -counts[i])
+
+    def add_clonotype_metadata(
+        adata_rna: AnnData,
+        adata_vdj: Optional[AnnData] = None,
+        clonotype_key: str = "clonotype_id",
+        clone_size_key: str = "clone_size",
+        expansion_key: str = "expansion_category",
+        obs_key_prefix: str = "tcr_",
+        inplace: bool = True,
+    ) -> Optional[AnnData]:
+        """
+        Overlay TCR/VDJ clonotype metadata onto an RNA AnnData.
+
+        Two usage modes:
+
+        A) Metadata already in ``adata_rna.obs`` (``adata_vdj=None``):
+           Validates and standardises existing TCR columns, computes
+           clone size if not present, and categorizes expansion.
+
+        B) Separate VDJ AnnData (``adata_vdj`` provided):
+           Clonotype assignments from ``adata_vdj.obs`` are joined to
+           ``adata_rna`` by shared ``obs_names``.
+
+        Parameters
+        ----------
+        adata_rna : AnnData
+            RNA AnnData object.
+        adata_vdj : AnnData, optional
+            Separate VDJ AnnData whose ``.obs`` contains clonotype info.
+        clonotype_key : str
+            Column name in obs containing clonotype identifiers.
+        clone_size_key : str
+            Column name used for clone size (looked up or computed).
+        expansion_key : str
+            Column name used for expansion category (looked up or computed).
+        obs_key_prefix : str
+            Prefix for new columns added to ``adata_rna.obs``.
+        inplace : bool
+            If True, modify ``adata_rna`` in place. Otherwise return a copy.
+
+        Returns
+        -------
+        AnnData or None
+            Modified AnnData if ``inplace=False``, else None.
+        """
+        adata = adata_rna if inplace else adata_rna.copy()
+
+        # --- Mode B: merge VDJ obs into RNA ---
+        if adata_vdj is not None:
+            shared = adata.obs_names.intersection(adata_vdj.obs_names)
+            if len(shared) == 0:
+                raise ValueError(
+                    "No shared cell barcodes between adata_rna and adata_vdj."
+                )
+            vdj_obs = adata_vdj.obs.reindex(adata.obs_names)
+            if clonotype_key in vdj_obs.columns:
+                adata.obs[f"{obs_key_prefix}clonotype_id"] = vdj_obs[clonotype_key].values
+            else:
+                raise KeyError(
+                    f"Column '{clonotype_key}' not found in adata_vdj.obs. "
+                    f"Available: {list(adata_vdj.obs.columns)}"
+                )
+        else:
+            # --- Mode A: clonotype info already in adata_rna.obs ---
+            if clonotype_key in adata.obs.columns:
+                adata.obs[f"{obs_key_prefix}clonotype_id"] = adata.obs[clonotype_key].values
+            else:
+                raise KeyError(
+                    f"Column '{clonotype_key}' not found in adata_rna.obs. "
+                    f"Available: {list(adata.obs.columns)}"
+                )
+
+        cid_col = f"{obs_key_prefix}clonotype_id"
+
+        # --- Compute clone size ---
+        clone_counts = adata.obs[cid_col].map(
+            adata.obs[cid_col].value_counts()
+        )
+        # NaN clonotypes get clone_size = 0
+        clone_counts = clone_counts.fillna(0).astype(int)
+        adata.obs[f"{obs_key_prefix}clone_size"] = clone_counts.values
+
+        # --- log1p clone size ---
+        adata.obs[f"{obs_key_prefix}log_clone_size"] = np.log1p(
+            clone_counts.values.astype(float)
+        )
+
+        # --- Expansion category ---
+        def _expansion_cat(n):
+            if n <= 1:
+                return "singleton"
+            elif n <= 5:
+                return "small"
+            elif n <= 20:
+                return "medium"
+            else:
+                return "large"
+
+        adata.obs[f"{obs_key_prefix}expansion"] = pd.Categorical(
+            [_expansion_cat(n) for n in clone_counts.values],
+            categories=["singleton", "small", "medium", "large"],
+            ordered=True,
+        )
+
+        if not inplace:
+            return adata

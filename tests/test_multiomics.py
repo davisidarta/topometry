@@ -440,3 +440,95 @@ class TestFitAdataWnn:
         scaffold = adata_rna.obsm["X_ms_spectral_scaffold"]
         assert scaffold.shape[0] == 300
         assert scaffold.shape[1] > 0
+
+
+class TestAddClonotypeMetadata:
+    """Tests for tp.sc.add_clonotype_metadata."""
+
+    def _make_adata_with_clonotypes(self):
+        n = 100
+        rng = np.random.RandomState(42)
+        X = rng.rand(n, 50)
+        adata = ad.AnnData(X=X)
+        adata.obs_names = [f"cell_{i}" for i in range(n)]
+        adata.var_names = [f"gene_{i}" for i in range(50)]
+        # Assign clonotypes: 30 cells → A (large), 10 → B (medium),
+        # 4 → C (small), 1 → D (singleton), rest NaN
+        clonotypes = [np.nan] * n
+        for i in range(30):
+            clonotypes[i] = "cloneA"
+        for i in range(30, 40):
+            clonotypes[i] = "cloneB"
+        for i in range(40, 44):
+            clonotypes[i] = "cloneC"
+        clonotypes[44] = "cloneD"
+        adata.obs["clonotype_id"] = clonotypes
+        return adata
+
+    def test_mode_a_clone_size(self):
+        adata = self._make_adata_with_clonotypes()
+        tp.sc.add_clonotype_metadata(adata, clonotype_key="clonotype_id", inplace=True)
+        assert "tcr_clone_size" in adata.obs.columns
+        # cloneA has 30 cells
+        clone_a_cells = adata.obs["tcr_clonotype_id"] == "cloneA"
+        assert (adata.obs.loc[clone_a_cells, "tcr_clone_size"] == 30).all()
+        # cloneD has 1 cell
+        clone_d_cells = adata.obs["tcr_clonotype_id"] == "cloneD"
+        assert (adata.obs.loc[clone_d_cells, "tcr_clone_size"] == 1).all()
+        # NaN clonotype → clone_size 0
+        nan_cells = adata.obs["tcr_clonotype_id"].isna()
+        assert (adata.obs.loc[nan_cells, "tcr_clone_size"] == 0).all()
+
+    def test_expansion_categories(self):
+        adata = self._make_adata_with_clonotypes()
+        tp.sc.add_clonotype_metadata(adata, clonotype_key="clonotype_id", inplace=True)
+        assert "tcr_expansion" in adata.obs.columns
+        exp = adata.obs.set_index("tcr_clonotype_id")["tcr_expansion"]
+        assert (exp.loc["cloneA"] == "large").all()     # 30 > 20
+        assert (exp.loc["cloneB"] == "medium").all()    # 10 in 6-20
+        assert (exp.loc["cloneC"] == "small").all()     # 4 in 2-5
+        clone_d = exp.loc["cloneD"]
+        if isinstance(clone_d, str):
+            assert clone_d == "singleton"  # single cell
+        else:
+            assert (clone_d == "singleton").all()
+
+    def test_log_clone_size(self):
+        adata = self._make_adata_with_clonotypes()
+        tp.sc.add_clonotype_metadata(adata, clonotype_key="clonotype_id", inplace=True)
+        assert "tcr_log_clone_size" in adata.obs.columns
+        expected = np.log1p(adata.obs["tcr_clone_size"].values.astype(float))
+        np.testing.assert_allclose(adata.obs["tcr_log_clone_size"].values, expected)
+
+    def test_inplace_false_returns_copy(self):
+        adata = self._make_adata_with_clonotypes()
+        result = tp.sc.add_clonotype_metadata(
+            adata, clonotype_key="clonotype_id", inplace=False
+        )
+        assert result is not None
+        assert "tcr_clone_size" in result.obs.columns
+        assert "tcr_clone_size" not in adata.obs.columns
+
+    def test_mode_b_separate_vdj(self):
+        n = 50
+        rng = np.random.RandomState(0)
+        adata_rna = ad.AnnData(X=rng.rand(n, 20))
+        adata_rna.obs_names = [f"cell_{i}" for i in range(n)]
+        adata_rna.var_names = [f"gene_{i}" for i in range(20)]
+
+        adata_vdj = ad.AnnData(X=rng.rand(n, 5))
+        adata_vdj.obs_names = [f"cell_{i}" for i in range(n)]
+        adata_vdj.var_names = [f"vdj_{i}" for i in range(5)]
+        adata_vdj.obs["my_clone"] = ["cloneX"] * 20 + ["cloneY"] * 30
+
+        tp.sc.add_clonotype_metadata(
+            adata_rna, adata_vdj=adata_vdj,
+            clonotype_key="my_clone", inplace=True,
+        )
+        assert "tcr_clonotype_id" in adata_rna.obs.columns
+        assert (adata_rna.obs.loc["cell_0", "tcr_clone_size"] == 20)
+
+    def test_missing_key_raises(self):
+        adata = self._make_adata_with_clonotypes()
+        with pytest.raises(KeyError, match="nonexistent"):
+            tp.sc.add_clonotype_metadata(adata, clonotype_key="nonexistent")
