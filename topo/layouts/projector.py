@@ -318,8 +318,25 @@ class Projector(BaseEstimator, TransformerMixin):
                 _HAS_MCTSNE = False
             if not _HAS_MCTSNE:
                 from sklearn.manifold import TSNE
-            self.estimator_ = TSNE(n_components=self.n_components,
-                                   metric='precomputed', n_iter=self.num_iters)
+            # `metric` must follow the input actually handed to this Projector.
+            # TopOGraph.project() passes eigenbasis *coordinates* with metric=graph_metric
+            # for coordinate-based methods, so hardcoding 'precomputed' here made t-SNE
+            # interpret coordinates as a square distance matrix.
+            if _HAS_MCTSNE:
+                self.estimator_ = TSNE(n_components=self.n_components,
+                                       metric=self.metric, n_iter=self.num_iters)
+            else:
+                # scikit-learn >= 1.2 defaults to init='pca', which is rejected when
+                # metric='precomputed'. The spectral initialization TopOMetry already
+                # computed is valid for both cases and is what the other projections use.
+                # `n_iter` was renamed `max_iter` in scikit-learn 1.5 and removed in 1.7.
+                from inspect import signature as _signature
+                _iter_kw = ('max_iter' if 'max_iter' in _signature(TSNE.__init__).parameters
+                            else 'n_iter')
+                self.estimator_ = TSNE(n_components=self.n_components,
+                                       metric=self.metric,
+                                       init=self.init_Y_,
+                                       **{_iter_kw: self.num_iters})
             self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'MAP':
