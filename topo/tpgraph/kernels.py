@@ -44,17 +44,37 @@ def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
     """Backends that expect unit-norm vectors for 'cosine' space."""
     return backend in ('hnswlib', 'faiss')
 
+def _cosine_distance_to_angle(dists):
+    """
+    Convert cosine *distance* d = 1 - cos in [0, 2] to angle θ = arccos(cos) in [0, pi].
+    """
+    # cos = 1 - d; clamp to [-1, 1] before arccos
+    cos_vals = np.clip(1.0 - dists, -1.0, 1.0)
+    return np.arccos(cos_vals)
+
+
+def _angularize_graph(K, metric, use_angular):
+    """
+    Return a copy of the kNN graph `K` with its stored cosine distances replaced by
+    angles, or `K` itself when no conversion applies.
+
+    The adaptive bandwidth is derived from the graph's stored distances, so the
+    conversion has to happen *before* `_adap_bw` is called -- otherwise the bandwidth
+    is in cosine-distance units while the distances it normalizes are in radians.
+    """
+    if metric == 'cosine' and use_angular:
+        K_ang = K.copy()
+        K_ang.data = _cosine_distance_to_angle(K_ang.data)
+        return K_ang
+    return K
+
+
 def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
     """
-    Given triplets of cosine *distance* d = 1 - cos in [0, 2],
-    convert to angle θ = arccos(cos) with cos = 1 - d.
-    Returns in-place modified dists (angles in radians).
+    Deprecated: kept for backwards compatibility. Prefer `_cosine_distance_to_angle`.
+    `x_idx` and `y_idx` are unused.
     """
-    # cos = 1 - d
-    # clamp to [-1, 1] before arccos
-    cos_vals = 1.0 - dists
-    cos_vals = np.clip(cos_vals, -1.0, 1.0)
-    return np.arccos(cos_vals)
+    return _cosine_distance_to_angle(dists)
 
 def _ensure_nonneg_and_finite(arr, eps=0.0):
     arr = np.where(np.isfinite(arr), arr, 0.0)
@@ -163,6 +183,7 @@ def compute_kernel(X, metric='cosine',
     adap_sd_new = None
     pm_new = None
     new_K = None
+    dists_new = None
     if n_jobs == -1:
         from joblib import cpu_count
         n_jobs = cpu_count()
@@ -216,8 +237,12 @@ def compute_kernel(X, metric='cosine',
             dens_dict['unweighted_adjacency'] = A
             dens_dict['adaptive_bw'] = adap_sd
     else:
+        # Work in a single distance convention from here on: if angular distances are
+        # requested, convert the graph up front so that the adaptive bandwidth and the
+        # distances it normalizes are in the same units (radians).
+        K_scaled = _angularize_graph(K, metric, use_angular)
         if adaptive_bw:
-            adap_sd = _adap_bw(K, k)
+            adap_sd = _adap_bw(K_scaled, k)
             # Get an indirect measure of the local density
             pm = np.interp(adap_sd, (adap_sd.min(), adap_sd.max()), (2, k))
             if return_densities:
@@ -227,8 +252,9 @@ def compute_kernel(X, metric='cosine',
                 new_k = int(k + (k - pm.max()))
                 new_K = kNN(X, metric=metric, n_neighbors=new_k,
                             backend=backend, n_jobs=n_jobs, **kwargs)
-                adap_sd_new = _adap_bw(new_K, new_k)
-                x_new, y_new, dists_new = find(new_K)
+                new_K_scaled = _angularize_graph(new_K, metric, use_angular)
+                adap_sd_new = _adap_bw(new_K_scaled, new_k)
+                x_new, y_new, dists_new = find(new_K_scaled)
                 # Get an indirect measure of the local density
                 pm_new = np.interp(
                     adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k))
@@ -238,11 +264,7 @@ def compute_kernel(X, metric='cosine',
                     dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
                     dens_dict['expanded_neighborhood_graph'] = new_K
                     dens_dict['knn_expanded'] = new_K
-        x, y, dists = find(K)
-
-        # If using cosine metric and 'use_angular', convert cosine distance (=1-cos) to angle (radians)
-        if metric == 'cosine' and use_angular:
-            dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
+        x, y, dists = find(K_scaled)
 
         # Numerical guards for distances (important for arccos and exponent)
         # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.
@@ -252,6 +274,13 @@ def compute_kernel(X, metric='cosine',
             dists = np.clip(dists, 0.0, np.pi)
         else:
             dists = np.maximum(dists, 0.0)
+        if expand_nbr_search and dists_new is not None:
+            if metric == 'cosine' and not use_angular:
+                dists_new = np.clip(dists_new, 0.0, 2.0)
+            elif metric == 'cosine' and use_angular:
+                dists_new = np.clip(dists_new, 0.0, np.pi)
+            else:
+                dists_new = np.maximum(dists_new, 0.0)
         # Normalize distances
         if adaptive_bw:
             # Alpha decaying: the kernel adaptively decays depending on neighborhood density
