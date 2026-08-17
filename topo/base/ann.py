@@ -106,10 +106,9 @@ def kNN(X, Y=None,
             warn("Only the 'sklearn' backend supports Y. Falling back to 'sklearn'...")
             backend = 'sklearn'
     if backend == 'nmslib':
-        if isinstance(X, np.ndarray):
-            warn("nmslib does not support dense matrices. Converting to array...")
-            X = csr_matrix(X)
-        # Construct an approximate k-nearest-neighbors graph
+        # nmslib handles dense input natively (DataType.DENSE_VECTOR), so dense arrays are
+        # passed through rather than sparsified; NMSlibTransformer picks the matching
+        # space and data type from the input it is given.
         nbrs = NMSlibTransformer(n_neighbors=n_neighbors,
                                       metric=metric,
                                       p=p,
@@ -118,6 +117,7 @@ def kNN(X, Y=None,
                                       M=M,
                                       efC=efC,
                                       efS=efS,
+                                      dense=isinstance(X, np.ndarray),
                                       verbose=verbose).fit(X)
     elif backend == 'hnswlib':
         if issparse(X):
@@ -289,7 +289,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         if self.n_jobs == -1:
             self.n_jobs = cpu_count()
 
-        self.space = {
+        # NOTE: the space name must match the index's data type, so it is chosen
+        # alongside it below (see `use_sparse_index`), not up front.
+        sparse_spaces = {
             'sqeuclidean': 'l2_sparse',
             'euclidean': 'l2_sparse',
             'cosine': 'cosinesimil_sparse_fast',
@@ -303,7 +305,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             'bit_hamming': 'bit_hamming',
             'levenshtein': 'leven',
             'normleven': 'normleven'
-        }[self.metric]
+        }
         start = time.time()
         # see more metrics in the manual
         # https://github.com/nmslib/nmslib/tree/master/manual
@@ -311,10 +313,12 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             print('Fractional L norms are slower to compute. Computations are faster for fractions'
                   ' of the form \'1/2ek\', where k is a small integer (i.g. 0.5, 0.25) ')
         if self.dense:
-            self.nmslib_ = nmslib.init(method=self.method,
-                                       space=self.space,
-                                       data_type=nmslib.DataType.DENSE_VECTOR)
-
+            # A dense index cannot consume sparse rows: each row's stored values would be
+            # read as the whole vector, so rows with differing nnz give differing lengths.
+            if issparse(data):
+                if self.verbose:
+                    print('Dense index requested for sparse input. Densifying...')
+                data = data.toarray()
         else:
             if issparse(data) == True:
                 if self.verbose:
@@ -330,7 +334,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         index_time_params = {'M': self.M, 'indexThreadQty': self.n_jobs, 'efConstruction': self.efC, 'post': 2}
 
-        if issparse(data) and (not self.dense) and (not isinstance(data, np.ndarray)):
+        use_sparse_index = issparse(data) and (not self.dense) and (not isinstance(data, np.ndarray))
+        if use_sparse_index:
+            self.space = sparse_spaces[self.metric]
             if self.metric not in ['levenshtein', 'normleven', 'jansen-shan']:
                 if self.metric == 'lp':
                     self.nmslib_ = nmslib.init(method=self.method,
