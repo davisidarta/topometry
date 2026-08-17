@@ -155,7 +155,7 @@ def eval_models_layouts(TopOGraph, X,
     import numpy as np
     if issparse(X) == True:
         if isinstance(X, csr_matrix):
-            data = X.todense()
+            data = X.toarray()
             gc.collect()
     if issparse(X) == False:
         if not isinstance(X, np.ndarray):

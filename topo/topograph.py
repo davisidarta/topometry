@@ -3191,7 +3191,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             print('Computing PCA for comparison...')
         if issparse(X) is True:
             if isinstance(X, csr_matrix):
-                data = X.todense()
+                data = X.toarray()
             else:
                 data = X
         else:
