@@ -19,7 +19,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 import textwrap
 from matplotlib.collections import PathCollection
 import matplotlib.patheffects as patheffects
-from adjustText import adjust_text
 
 try:
     import scanpy as sc
@@ -2971,6 +2970,10 @@ if _HAVE_SCANPY:
 
 
         """
+        try:
+            from adjustText import adjust_text
+        except ImportError:
+            raise ImportError("Label repulsion requires `adjustText` (pip install adjustText).")
 
         if adjust_kwargs is None:
             adjust_kwargs = {}
