@@ -728,7 +728,16 @@ if _HAVE_SCANPY:
             def _ensure_projection(tg, method: str, multiscale: bool):
                 Y = _get_projection_if_available(tg, method, multiscale)
                 if Y is None:
-                    tg.project(projection_method=method, multiscale=multiscale)
+                    # A projection whose optional dependency is missing (PaCMAP is in the
+                    # defaults) is skipped with a warning, as in TopOGraph.fit, rather than
+                    # aborting the whole analysis.
+                    try:
+                        tg.project(projection_method=method, multiscale=multiscale)
+                    except ImportError as e:
+                        import warnings
+                        warnings.warn(f"Projection '{method}' skipped, it requires an extra dependency: {e}",
+                                      RuntimeWarning)
+                        return None
                     Y = _get_projection_if_available(tg, method, multiscale)
                 return Y
 
