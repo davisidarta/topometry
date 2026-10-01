@@ -148,10 +148,15 @@ def kNN(X, Y=None,
             knn = nbrs.kneighbors_graph(X, mode='distance')
         else:
             knn = nbrs.kneighbors_graph(Y, mode='distance')
-    if metric in ['angular', 'cosine']:
-        # distances must be monotonically decreasing, needs to be inverted with angular metrics
-        # otherwise, we'll have a similarity metric, not a distance metric
-        knn.data = 1 - knn.data 
+    if metric == 'cosine':
+        # Every backend already returns cosine *distances* (d = 1 - cos), so the graph is
+        # kept as it comes. Rounding can leave d marginally outside [0, 2], and a point's
+        # distance to itself marginally above zero - which the kernels built on this graph
+        # would turn into a self-loop of weight ~1 for an arbitrary subset of points.
+        np.clip(knn.data, 0.0, 2.0, out=knn.data)
+        if Y is None:
+            rows = np.repeat(np.arange(knn.shape[0]), np.diff(knn.indptr))
+            knn.data[knn.indices == rows] = 0.0
     if return_instance:
         return nbrs, knn
     else:

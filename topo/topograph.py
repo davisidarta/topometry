@@ -12,7 +12,7 @@ import scipy.sparse as sp
 from scipy.sparse import issparse, csr_matrix
 from typing import Dict, Tuple, Optional, Union
 from topo.base.ann import kNN
-from topo.tpgraph.kernels import Kernel
+from topo.tpgraph.kernels import Kernel, _angularize_graph
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
@@ -771,7 +771,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 suffix='',
                 low_memory=self.low_memory,
                 data_for_expansion=X,
-                base=True
+                base=True,
+                knn_metric=self.base_metric
             )
             self.runtimes['Kernel_X'] = time.time() - t0
             if self.verbosity >= 1:
@@ -892,7 +893,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     suffix=f'_uom_X[{n_i}]',
                     low_memory=self.low_memory,
                     data_for_expansion=Xi,
-                    base=True
+                    base=True,
+                    knn_metric=self.base_metric
                 )
                 self.uom_BaseKernel_list.append(Ki)
 
@@ -971,7 +973,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     suffix=f'_uom_Z[{n_i}]',
                     low_memory=self.low_memory,
                     data_for_expansion=Zi,
-                    base=False
+                    base=False,
+                    knn_metric=self.graph_metric
                 )
                 KmsZ_i, _ = self._compute_kernel_from_version_knn(
                     knn_msZ_i, k_graph_i, self.graph_kernel_version,
@@ -979,7 +982,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                     suffix=f'_uom_msZ[{n_i}]',
                     low_memory=self.low_memory,
                     data_for_expansion=msZi,
-                    base=False
+                    base=False,
+                    knn_metric=self.graph_metric
                 )
                 self.uom_Kernel_Z_list.append(KZ_i); self.uom_Kernel_msZ_list.append(KmsZ_i)
 
@@ -1139,7 +1143,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 suffix=' from ' + ms_key,
                 low_memory=self.low_memory,
                 data_for_expansion=ms_eig.transform(X),
-                base=False
+                base=False,
+                knn_metric=self.graph_metric
             )
             self.runtimes['Kernel_msZ'] = time.time() - t0
             if self.verbosity >= 1:
@@ -1154,7 +1159,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 suffix=' from ' + dm_key,
                 low_memory=self.low_memory,
                 data_for_expansion=dm_eig.transform(X),
-                base=False
+                base=False,
+                knn_metric=self.graph_metric
             )
             self.runtimes['Kernel_Z'] = time.time() - t0
             if self.verbosity >= 1:
@@ -2379,7 +2385,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     # Kernel builder (internal)
     # ---------------------------------------------------------------------
     def _compute_kernel_from_version_knn(self, knn, n_neighbors, kernel_version, results_dict,
-                                         prefix='', suffix='', low_memory=False, base=True, data_for_expansion=None):
+                                         prefix='', suffix='', low_memory=False, base=True, data_for_expansion=None,
+                                         knn_metric=None):
         import gc as _gc
         _gc.collect()
         kernel_key = kernel_version
@@ -2391,6 +2398,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             kernel = results_dict[kernel_key]
             return kernel, results_dict
         else:
+            # `knn_metric` names the metric `knn` was computed with, and is only passed by callers
+            # that computed it themselves. Kernel(metric='cosine') takes its bandwidths and
+            # distances in angles, so a cosine graph is converted before being handed over as
+            # 'precomputed' - otherwise the two routes to the same kernel would disagree.
+            if kernel_version in ('bw_adaptive', 'bw_adaptive_alpha_decaying', 'gaussian'):
+                knn = _angularize_graph(knn, knn_metric, True)
             # Note: anisotropy fixed to 1.0 and semi_aniso fixed to False (kwargs removed)
             if kernel_version == 'cknn':
                 kernel = Kernel(metric="precomputed",
