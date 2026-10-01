@@ -5,6 +5,7 @@ from sklearn.preprocessing import KernelCenterer
 from topo.eval.local_scores import geodesic_distance
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
+from topo.tpgraph.kernels import _angularize_graph
 from topo.spectral.eigen import eigendecompose
 
 
@@ -56,7 +57,8 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
     Returns
     -------
     Y : ndarray of shape (n_samples, n_components)
-        Isomap embedding coordinates.
+        Isomap embedding coordinates. With ``landmarks``, only the landmarks are embedded
+        (geodesics still run through the whole graph), giving shape (n_landmarks, n_components).
     """
     if landmarks is not None:
         if isinstance(landmarks, np.ndarray):
@@ -69,14 +71,14 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
     if metric != 'precomputed':
         K = kNN(X, metric=metric, n_neighbors=n_neighbors,
                 n_jobs=n_jobs, **kwargs)
+        # Path lengths have to add up: cosine distance is not a metric, the angle is
+        K = _angularize_graph(K, metric, True)
     else:
         K = X.copy()
 
     # Pairwise geodesic distances
     G = geodesic_distance(K, method='D', unweighted=False, directed=False,
                           indices=landmarks, n_jobs=n_jobs)
-    if landmarks is not None:
-        G = G.T[landmarks].T
 
     # Guarantee symmetry and zero diagonal
     G = (G + G.T) / 2

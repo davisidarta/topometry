@@ -6,6 +6,7 @@ from sklearn.metrics import pairwise_distances
 from sklearn.manifold import trustworthiness
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
+from topo.tpgraph.kernels import _angularize_graph
 from topo.topograph import TopOGraph
 from topo.eval.global_scores import global_score_pca
 from topo.eval.local_scores import geodesic_distance, geodesic_correlation
@@ -117,6 +118,9 @@ def eval_models_layouts(TopOGraph, X,
         print('Running specified models...')
     if run_uncomputed_models:
         TopOGraph.run_models(X, kernels, eigenmap_methods, projections)
+    # Path lengths have to add up: cosine distance is not a metric, the angle is. The same
+    # conversion is applied to every cosine graph below.
+    base_knn_graph = _angularize_graph(TopOGraph.base_knn_graph, TopOGraph.base_metric, True)
     # Define landmarks if applicable
     if landmarks is not None:
         if landmark_method == 'random':
@@ -130,7 +134,7 @@ def eval_models_layouts(TopOGraph, X,
             else:
                 raise ValueError(
                     '\'landmarks\' must be either an integer or a numpy array.')
-            base_graph = TopOGraph.base_knn_graph[landmark_indices, :][:, landmark_indices]
+            base_graph = base_knn_graph[landmark_indices, :][:, landmark_indices]
         elif landmark_method == 'kmeans':
             if isinstance(landmarks, int):
                 landmark_indices = get_landmark_indices(
@@ -139,13 +143,13 @@ def eval_models_layouts(TopOGraph, X,
             else:
                 raise ValueError(
                     '\'landmarks\' must be either an integer or a numpy array.')
-            base_graph = TopOGraph.base_knn_graph[landmark_indices, :][:, landmark_indices]
+            base_graph = base_knn_graph[landmark_indices, :][:, landmark_indices]
             gc.collect()
         else:
             raise ValueError(
                     '\'landmark_method\' must be either `random` or `kmeans`.')
     else:
-        base_graph = TopOGraph.base_knn_graph
+        base_graph = base_knn_graph
 
     gc.collect()
     # Run PCA
@@ -155,7 +159,7 @@ def eval_models_layouts(TopOGraph, X,
     import numpy as np
     if issparse(X) == True:
         if isinstance(X, csr_matrix):
-            data = X.todense()
+            data = X.toarray()
             gc.collect()
     if issparse(X) == False:
         if not isinstance(X, np.ndarray):
@@ -194,6 +198,7 @@ def eval_models_layouts(TopOGraph, X,
                             backend=TopOGraph.backend,
                             return_instance=False,
                             verbose=False, **kwargs)
+            emb_graph = _angularize_graph(emb_graph, metric, True)
             if landmarks is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
                 gc.collect()
@@ -232,6 +237,7 @@ def eval_models_layouts(TopOGraph, X,
                             backend=TopOGraph.backend,
                             return_instance=False,
                             verbose=False, **kwargs)
+            emb_graph = _angularize_graph(emb_graph, metric, True)
             gc.collect()
             if landmarks is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
@@ -268,6 +274,7 @@ def eval_models_layouts(TopOGraph, X,
                         backend=TopOGraph.backend,
                         return_instance=False,
                         verbose=False, **kwargs)
+        emb_graph = _angularize_graph(emb_graph, TopOGraph.base_metric, True)
         if landmarks is not None:
             emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
             gc.collect()
@@ -296,6 +303,7 @@ def eval_models_layouts(TopOGraph, X,
                                 backend=TopOGraph.backend,
                                 return_instance=False,
                                 verbose=False, **kwargs)
+                emb_graph = _angularize_graph(emb_graph, metric, True)
                 gc.collect()
                 if landmarks is not None:
                     emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
@@ -331,6 +339,7 @@ def eval_models_layouts(TopOGraph, X,
                                 backend=TopOGraph.backend,
                                 return_instance=False,
                                 verbose=False, **kwargs)
+                emb_graph = _angularize_graph(emb_graph, metric, True)
                 gc.collect()
                 if landmarks is not None:
                     emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]

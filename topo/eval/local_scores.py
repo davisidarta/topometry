@@ -5,6 +5,7 @@ from scipy.stats import spearmanr, kendalltau
 from scipy.sparse import csr_matrix, csgraph
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
+from topo.tpgraph.kernels import _angularize_graph
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
 
@@ -43,57 +44,45 @@ def geodesic_distance(A, method='D', unweighted=False, directed=False, indices=N
     Returns
     -------
     geodesic_distance : array-like, shape (n_vertices, n_vertices)
+        If `indices` is given, the distances among those vertices only, shape (n_indices, n_indices);
+        if it is a single integer, the distances from that vertex to all others, shape (n_vertices,).
 
     """
-    if n_jobs == 1:
-        G = csgraph.shortest_path(A, method=method,
-                          unweighted=unweighted, directed=directed, indices=None)
-        if indices is not None:
-            G = G.T[indices].T
-        # guarantee symmetry
-        G = (G + G.T) / 2
-        # zero diagonal
-        G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
-    else:
-        import multiprocessing as mp
-        from functools import partial
-        if n_jobs == -1:
-            from joblib import cpu_count
-            n_jobs = cpu_count()
-        if not isinstance(n_jobs, int):
-            n_jobs = 1
-        if method == 'FW':
-            raise ValueError('The Floyd-Warshall algorithm cannot be used with parallel computations.')
-        if indices is None:
-            indices = np.arange(A.shape[0])
-        elif np.issubdtype(type(indices), np.integer):
-            indices = np.array([indices])
-        n = len(indices)
-        local_function = partial(csgraph.shortest_path,
-                                A, method, directed, False, unweighted, False)
-        if n_jobs == 1 or n == 1:
-            try:
-                G = csgraph.shortest_path(A, method, directed, False,
-                                                unweighted, False, indices)
-            except csgraph.NegativeCycleError:
-                raise ValueError(
-                    "The shortest path computation could not be completed because a negative cycle is present.")
+    single = indices is not None and np.ndim(indices) == 0
+    if indices is not None:
+        indices = np.atleast_1d(np.asarray(indices, dtype=int))
+    if n_jobs == -1:
+        from joblib import cpu_count
+        n_jobs = cpu_count()
+    if not isinstance(n_jobs, int):
+        n_jobs = 1
+    sources = np.arange(A.shape[0]) if indices is None else indices
+    try:
+        if n_jobs == 1 or len(sources) == 1:
+            G = csgraph.shortest_path(A, method=method, directed=directed,
+                                      unweighted=unweighted, indices=indices)
         else:
-            try:
-                with mp.Pool(n_jobs) as pool:
-                    G = np.array(pool.map(local_function, indices))
-            except csgraph.NegativeCycleError:
-                pool.terminate()
-                raise ValueError(
-                    "The shortest path computation could not be completed because a negative cycle is present.")
-        if n == 1:
-            G = G.ravel()
-        # guarantee symmetry
-        G = (G + G.T) / 2
-        #
-        G[np.where(G == 0)] = np.inf
-        # zero diagonal
-        G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
+            if method == 'FW':
+                raise ValueError('The Floyd-Warshall algorithm cannot be used with parallel computations.')
+            import multiprocessing as mp
+            from functools import partial
+            local_function = partial(csgraph.shortest_path,
+                                     A, method, directed, False, unweighted, False)
+            with mp.Pool(n_jobs) as pool:
+                G = np.array(pool.map(local_function, sources))
+    except csgraph.NegativeCycleError:
+        raise ValueError(
+            "The shortest path computation could not be completed because a negative cycle is present.")
+    if single:
+        # distances from one vertex to every other
+        return np.asarray(G).ravel()
+    if indices is not None:
+        # paths run through the whole graph; only the chosen vertices are reported
+        G = G[:, indices]
+    # guarantee symmetry
+    G = (G + G.T) / 2
+    # zero diagonal
+    G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
     return G
 
 
@@ -164,6 +153,8 @@ def geodesic_correlation(data, emb, landmarks=None,
                         n_jobs=n_jobs,
                         return_instance=False,
                         verbose=False, **kwargs)
+        # path lengths have to add up: cosine distance is not a metric, the angle is
+        data_graph = _angularize_graph(data_graph, metric, True)
     else:
         data_graph = data.copy()
     if not EMB_IS_GRAPH:
@@ -172,6 +163,7 @@ def geodesic_correlation(data, emb, landmarks=None,
                         n_jobs=n_jobs,
                         return_instance=False,
                         verbose=False, **kwargs)
+        emb_graph = _angularize_graph(emb_graph, metric, True)
     else:
         emb_graph = emb.copy()
     # Define landmarks if applicable

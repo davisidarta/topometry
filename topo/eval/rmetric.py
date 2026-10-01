@@ -15,6 +15,7 @@
 
 import numpy as np
 import warnings
+from scipy.sparse import issparse, diags
 
 try:
     import matplotlib.pyplot as plt
@@ -36,7 +37,13 @@ def _ensure_array(A):
 
 
 def _symmetrize(L):
-    L = _ensure_array(L)
+    """
+    Symmetric part of the Laplacian. A sparse Laplacian stays sparse: the metric only needs
+    products `L @ v`, and a dense copy takes n^2 * 8 bytes (1.4 TB for 413,000 cells).
+    """
+    if issparse(L):
+        return (0.5 * (L + L.T)).tocsr()
+    L = np.asarray(L)
     return 0.5 * (L + L.T)
 
 
@@ -185,7 +192,7 @@ def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=No
         if arr.ndim == 1 and arr.shape[0] == n and np.issubdtype(arr.dtype, np.number):
             norm = mcolors.Normalize(vmin=None if vmin is None else float(vmin),
                                      vmax=None if vmax is None else float(vmax))
-            mapper = cm.get_cmap(cmap)
+            mapper = plt.get_cmap(cmap)
             rgba = mapper(norm(arr))
             if default_alpha is not None:
                 rgba[:, 3] = default_alpha
@@ -212,7 +219,7 @@ def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=No
         pass
     # Treat as categorical labels
     labels, inv = np.unique(np.asarray(c), return_inverse=True)
-    base = cm.get_cmap("tab20" if len(labels) > 10 else "tab10")
+    base = plt.get_cmap("tab20" if len(labels) > 10 else "tab10")
     palette = np.array([base(i / max(1, len(labels) - 1)) for i in range(len(labels))], float)
     rgba = palette[inv]
     if default_alpha is not None:
@@ -387,6 +394,8 @@ def plot_riemann_metric_localized(
         if rgba_all is not None:
             rch, gch, bch, a_in = rgba_all[i]
             a_fill = alpha if ellipse_alpha is None else ellipse_alpha
+            if a_fill is None:
+                a_fill = a_in  # no transparency asked for: keep the color's own
             fc = (rch, gch, bch, a_fill)
             ec = (rch, gch, bch, 1.0 if ellipse_alpha is None else ellipse_alpha)
 
@@ -590,7 +599,7 @@ def plot_riemann_metric_global(
     vmin_eff = vmin if vmin is not None else vmin_auto
     vmax_eff = vmax if vmax is not None else vmax_auto
     norm = mcolors.Normalize(vmin=vmin_eff, vmax=vmax_eff)
-    mapper = cm.get_cmap(cmap)
+    mapper = plt.get_cmap(cmap)
 
     scales = _scaling_values(G_avg, mode=scale_mode)
     min_axis = 0.2 * base
@@ -776,10 +785,14 @@ def calculate_deformation(
     if int(diffusion_t) > 0:
         if diffusion_op is None:
             # build random-walk from L
-            Ld = _ea(L)
-            d = np.clip(np.diag(Ld).astype(float), 1e-12, None)
-            W = np.diag(d) - Ld
-            P = (W / d[:, None])
+            if issparse(L):
+                d = np.clip(L.diagonal().astype(float), 1e-12, None)
+                P = diags(1.0 / d) @ (diags(d) - L)
+            else:
+                Ld = _ea(L)
+                d = np.clip(np.diag(Ld).astype(float), 1e-12, None)
+                W = np.diag(d) - Ld
+                P = (W / d[:, None])
         else:
             P = diffusion_op
         v = vals.copy()

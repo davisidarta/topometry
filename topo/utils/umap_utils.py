@@ -78,7 +78,7 @@ def create_density_plot(X, Y, embedding):
 
 @numba.njit(fastmath=True)
 def torus_euclidean_grad(x, y, torus_dimensions=(2*np.pi,2*np.pi)):
-    """Standard euclidean distance.
+    r"""Standard euclidean distance.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}

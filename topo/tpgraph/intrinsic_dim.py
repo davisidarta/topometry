@@ -4,7 +4,17 @@ from scipy.sparse.linalg import eigsh
 from topo.spectral import diffusion_operator
 from topo.base.ann import kNN
 from sklearn.base import BaseEstimator, TransformerMixin
+from topo.tpgraph.kernels import _angularize_graph
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
+
+
+def _knn_distances(X, metric, **kwargs):
+    """
+    kNN graph for the estimators below, which read dimension off the *ratio* of neighbor
+    distances and so need a proper metric. Cosine distance grows with the square of a small
+    angle, which halves both estimates, so cosine graphs are converted to angles.
+    """
+    return _angularize_graph(kNN(X, metric=metric, **kwargs), metric, True)
 
 
 class IntrinsicDim(BaseEstimator, TransformerMixin):
@@ -78,18 +88,11 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                 **kwargs):
         if isinstance(methods, str):
             methods = [methods]
-        if isinstance(k, list):
-            n_k = len(k)
-            use_k = k
-        elif isinstance(k, int):
-            n_k = 1
-            use_k = k
-        elif isinstance(k, range):
-            n_k = len(k)
-            use_k = k
+        # one neighborhood size or any iterable of them
+        use_k = [int(k)] if isinstance(k, (int, np.integer)) else [int(v) for v in k]
         self.methods = methods
         self.use_k = use_k
-        self.n_k = n_k
+        self.n_k = len(use_k)
         self.backend = backend
         self.metric = metric
         self.n_jobs = n_jobs
@@ -120,30 +123,17 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         self.local_id['mle'] = {}
         self.global_id['fsa'] = {}
         self.global_id['mle'] = {}
-        if self.n_k == 1:
-            knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=self.use_k, metric=self.metric, backend=self.backend)
+        for k in self.use_k:
+            knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=k, backend=self.backend)
             for method in self.methods:
                 if method not in ['fsa', 'mle']:
                     raise ValueError('Invalid method. Valid methods are: fsa, mle.')
                 if method == 'fsa':
-                    self.local_id['fsa'][str(self.use_k)] = fsa_local(knn, self.use_k)
-                    self.global_id['fsa'][str(self.use_k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(self.use_k)])
+                    self.local_id['fsa'][str(k)] = fsa_local(knn, k)
+                    self.global_id['fsa'][str(k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(k)])
                 elif method == 'mle':
-                    self.local_id['mle'][str(self.use_k)] = mle_local(knn, self.use_k)
-                    self.global_id['mle'][str(self.use_k)] = mle_global(knn, id_local=self.local_id['mle'][str(self.use_k)])
-
-        else:
-            for k in self.use_k:
-                knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=k, metric=self.metric, backend=self.backend)
-                for method in self.methods:
-                    if method not in ['fsa', 'mle']:
-                        raise ValueError('Invalid method. Valid methods are: fsa, mle.')
-                    if method == 'fsa':
-                        self.local_id['fsa'][str(k)] = fsa_local(knn, k)
-                        self.global_id['fsa'][str(k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(k)])
-                    elif method == 'mle':
-                        self.local_id['mle'][str(k)] = mle_local(knn, k)
-                        self.global_id['mle'][str(k)] = mle_global(knn, id_local=self.local_id['mle'][str(k)])
+                    self.local_id['mle'][str(k)] = mle_local(knn, k)
+                    self.global_id['mle'][str(k)] = mle_global(knn, id_local=self.local_id['mle'][str(k)])
 
     def plot_id(self, bins=30, figsize=(6, 8), titlesize=22, labelsize=16, legendsize=10):
         self._parse_random_state()
@@ -280,12 +270,14 @@ def fsa_local(K, n_neighbors=10):
 
 
 def fsa_global(K, id_local=None, **kwargs):
-    from statistics import median
+    """Global FSA dimension: the median of the local estimates."""
     if id_local is None:
         dims = fsa_local(K, **kwargs)
     else:
         dims = id_local
-    return median(np.abs(dims)) / np.log(2)
+    # The local estimates already carry the log(2) of the FSA formula; dividing the median by
+    # it once more overestimated the dimension by 44%.
+    return float(np.median(np.abs(dims)))
 
 
 def mle_local(K, n_neighbors=10, k1=1):
@@ -297,7 +289,7 @@ def mle_local(K, n_neighbors=10, k1=1):
 
 def mle_global(K, id_local=None, n_neighbors=15, k1=1):
     if id_local is None:
-        id_local, _, _ = mle_local(K, n_neighbors, k1)
+        id_local = mle_local(K, n_neighbors, k1)
     return 1.0 / np.mean(1.0 / id_local)
 
 
@@ -312,7 +304,7 @@ def automated_scaffold_sizing(
     min_components: int = 16,
     max_components: int = 512,
     headroom: float = 0.15,
-    random_state=None,
+    random_state=None,             # unused (no kNN backend takes it); kept so existing callers do not break
     use_median: bool = False,      # only used for 'mle': global id via median of locals (else Levina–Bickel global)
     return_details: bool = False,
     **knn_kwargs,
@@ -356,13 +348,12 @@ def automated_scaffold_sizing(
         per_k_local = {}
         for k in ks_use:
             k_eff = min(int(k), max(2, n - 1))
-            K = kNN(
+            K = _knn_distances(
                 X,
+                metric,
                 n_jobs=n_jobs,
                 n_neighbors=k_eff,
-                metric=metric,
                 backend=backend,
-                random_state=random_state,
                 **knn_kwargs,
             )
             d_local = fsa_local(K, n_neighbors=k_eff)
@@ -396,13 +387,12 @@ def automated_scaffold_sizing(
             k_int = max(ks_list) if len(ks_list) else 100  # sensible default
         k_int = min(int(k_int), max(2, n - 1))
 
-        K = kNN(
+        K = _knn_distances(
             X,
+            metric,
             n_jobs=n_jobs,
             n_neighbors=k_int,
-            metric=metric,
             backend=backend,
-            random_state=random_state,
             **knn_kwargs,
         )
         local = np.asarray(mle_local(K, n_neighbors=k_int), dtype=float)

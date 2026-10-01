@@ -143,6 +143,20 @@ Citation
 Changelog
 ---------------------------
 
+**v1.1.1** — Fixes to standing issues
+
+⚠️ Results computed with a cosine metric change, and ``base_metric='cosine'`` is the default. Analyses run with any release from 0.2.0.0 to 1.1.0 on a cosine metric should be re-run. Euclidean graphs and the default kernels are unchanged on the hnswlib and nmslib backends.
+
+- **Cosine neighbor graphs held similarities instead of distances.** Within each neighborhood the closest points got the lowest kernel weights. Neighbor sets were right; the weights were not. Cosine kernels, geodesics and intrinsic-dimension estimates are now computed on angles, and kernels have no self-loops.
+- **Neighbor search.** A missing backend falls back to the next available of hnswlib, nmslib and scikit-learn with a warning; every backend returns the same number of neighbors; ``backend='nmslib'`` is honoured; nmslib no longer returns squared distances for dense input.
+- **Kernel options that did not do what they say** now do: CkNN (``delta`` is passed on and usually needs tuning), neighborhood expansion, ``use_angular=False``, ``pairwise=True``.
+- **Projections.** Isomap and the MDE recipes are run on distances rather than on the diffusion operator; UMAP and landmarks work; a standalone ``Projector`` builds proper affinities.
+- **Reproducibility.** With ``n_jobs=1`` and a ``random_state``, two fits agree bit for bit. Eigenvector signs no longer flip between runs.
+- **TopOGraph.** ``global_id``, ``local_ids()``, ``global_id_mle()`` and ``global_id_fsa()`` return the estimates (the scaffold size is ``n_scaffold_components``); ``pseudotime`` and ``spectral_selectivity`` pair each eigenvector with its own eigenvalue; saving no longer strips the fitted object.
+- **Riemannian diagnostics** keep the Laplacian sparse, and the plotting wrapper honours ``diffusion_t`` and ``groupby``.
+- **Single-cell wrappers.** ``tp.sc.preprocess`` no longer modifies its input; BBKNN integration builds kernels from distances; PaCMAP is optional; ``fit_adata`` works without hnswlib.
+- Compatibility with current scikit-learn, SciPy and matplotlib.
+
 **v1.1.0** — Batch integration and data mapping
 
 - CCA-anchor batch correction (Seurat v3-style) via ``tp.sc.run_cca_integration``

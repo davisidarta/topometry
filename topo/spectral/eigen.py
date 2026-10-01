@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.utils import check_random_state
 from scipy.linalg import eigh
 from topo.spectral import graph_laplacian, diffusion_operator, LE 
+from topo.spectral._spectral import _arpack_v0, _deterministic_signs
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy import sparse
 from topo.tpgraph.kernels import Kernel
@@ -57,9 +58,9 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
         Error tolerance for the eigenvalue solver. If 0, machine precision is used.
 
     random_state : int or numpy.random.RandomState() (optional, default None).
-        A pseudo random number generator used for the initialization of the
-        lobpcg eigen vectors decomposition when eigen_solver == 'amg'.
-        By default, arpack is used.  
+        A pseudo random number generator used for the starting vector of ARPACK and for the
+        initialization of the lobpcg eigen vectors decomposition. With None, ARPACK always
+        starts from the same vector, so 'arpack' results are reproducible either way.
 
 
     Returns
@@ -74,6 +75,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
     N = G.shape[0]
     if eigensolver not in EIGEN_SOLVERS:
         raise ValueError('Unknown eigensolver %s' % eigensolver)
+    v0 = _arpack_v0(N, random_state)
     random_state = check_random_state(random_state)
     if not sparse.issparse(G) and eigensolver != 'dense':
         if verbose:
@@ -97,7 +99,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
         else:
             which = 'SM'
         evals, evecs = sparse.linalg.eigsh(
-            G, k=n_components, which=which, tol=eigen_tol, maxiter=N * 5)
+            G, k=n_components, which=which, tol=eigen_tol, maxiter=N * 5, v0=v0)
     elif eigensolver == 'lobpcg':
         evals, evecs = sparse.linalg.lobpcg(
             G, random_state.normal(size=(G.shape[0], n_components)), largest=largest, tol=eigen_tol, maxiter=N // 5)
@@ -121,7 +123,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
     else:
         idx = np.argsort(evals)[::]
     evals = evals[idx]
-    evecs = evecs[:, idx]
+    evecs = _deterministic_signs(evecs[:, idx])
     return evals, evecs
 
 
@@ -657,7 +659,7 @@ def multi_component_layout(
             )
             continue
 
-        L = graph_laplacian(graph, laplacian_type)
+        L = graph_laplacian(component_graph.tocsr(), laplacian_type)
         k = dim + 1
         try:
             eigenvalues, eigenvectors = sparse.linalg.eigsh(
