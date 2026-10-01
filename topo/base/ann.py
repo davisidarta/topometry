@@ -340,6 +340,8 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         index_time_params = {'M': self.M, 'indexThreadQty': self.n_jobs, 'efConstruction': self.efC, 'post': 2}
 
         use_sparse_index = issparse(data) and (not self.dense) and (not isinstance(data, np.ndarray))
+        # Queries have to be handed over in the index's own data type (see `_match_index_type`).
+        self.sparse_index_ = use_sparse_index
         if use_sparse_index:
             self.space = sparse_spaces[self.metric]
             if self.metric not in ['levenshtein', 'normleven', 'jansen-shan']:
@@ -355,6 +357,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             else:
                 print('Metric ' + self.metric + 'available for string data only. Trying to compute distances...')
                 data = data.toarray()
+                self.sparse_index_ = None  # string index: queries are passed through untouched
                 self.nmslib_ = nmslib.init(method=self.method,
                                            space=self.space,
                                            data_type=nmslib.DataType.OBJECT_AS_STRING)
@@ -395,8 +398,35 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         return self
 
+    def _match_index_type(self, data):
+        """
+        Return `data` in the data type of the fitted index. `fit` may densify its input
+        (`dense=True`) to build a dense index, which then cannot consume the sparse rows
+        the caller still holds - and a sparse index cannot consume dense ones.
+        """
+        sparse_index = getattr(self, 'sparse_index_', None)
+        if sparse_index is None:
+            return data
+        if sparse_index:
+            return data if issparse(data) else csr_matrix(data)
+        return data.toarray() if issparse(data) else data
+
+    def _to_metric_units(self, distances):
+        """
+        Return query distances in the units of `self.metric`. nmslib's optimized HNSW index,
+        which is what a dense 'l2' space gets, reports *squared* L2 distances; every other
+        'l2' index (sparse, or built with another method) reports plain L2.
+        """
+        squared = (self.method == 'hnsw') and (self.space == 'l2')
+        if self.metric == 'euclidean' and squared:
+            return np.sqrt(distances)
+        if self.metric == 'sqeuclidean' and not squared:
+            return distances ** 2
+        return distances
+
     def transform(self, data):
         start = time.time()
+        data = self._match_index_type(data)
         n_samples_transform = data.shape[0]
         query_time_params = {'efSearch': self.efS}
         if self.verbose:
@@ -405,9 +435,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
+        k = self.n_neighbors + 1
 
-        results = self.nmslib_.knnQueryBatch(data, k=self.n_neighbors,
+        results = self.nmslib_.knnQueryBatch(data, k=k,
                                              num_threads=self.n_jobs)
 
         indices, distances = zip(*results)
@@ -415,11 +445,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         query_qty = data.shape[0]
 
-        if self.metric == 'sqeuclidean':
-            distances **= 2
+        distances = self._to_metric_units(distances)
 
-        indptr = np.arange(0, n_samples_transform * self.n_neighbors + 1,
-                           self.n_neighbors)
+        indptr = np.arange(0, n_samples_transform * k + 1, k)
         kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
                                        indptr), shape=(n_samples_transform,
                                                        n_samples_transform))
@@ -432,6 +460,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
     def ind_dist_grad(self, data, return_grad=True, return_graph=True):
         start = time.time()
+        data = self._match_index_type(data)
         n_samples_transform = data.shape[0]
         query_time_params = {'efSearch': self.efS}
         if self.verbose:
@@ -439,19 +468,17 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         self.nmslib_.setQueryTimeParams(query_time_params)
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
-        results = self.nmslib_.knnQueryBatch(data, k=self.n_neighbors,
+        k = self.n_neighbors + 1
+        results = self.nmslib_.knnQueryBatch(data, k=k,
                                              num_threads=self.n_jobs)
         indices, distances = zip(*results)
         indices, distances = np.vstack(indices), np.vstack(distances)
 
         query_qty = data.shape[0]
 
-        if self.metric == 'sqeuclidean':
-            distances **= 2
+        distances = self._to_metric_units(distances)
 
-        indptr = np.arange(0, n_samples_transform * self.n_neighbors + 1,
-                           self.n_neighbors)
+        indptr = np.arange(0, n_samples_transform * k + 1, k)
         kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
                                        indptr), shape=(n_samples_transform,
                                                        n_samples_transform))
@@ -523,9 +550,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
+        k = self.n_neighbors + 1
         start = time.time()
-        ann_results = self.nmslib_.knnQueryBatch(data, k=self.n_neighbors,
+        ann_results = self.nmslib_.knnQueryBatch(self._match_index_type(data), k=k,
                                                  num_threads=self.n_jobs)
         end = time.time()
         if self.verbose:
@@ -534,7 +561,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         # Use sklearn for exact neighbor search
         start = time.time()
-        nbrs = NearestNeighbors(n_neighbors=self.n_neighbors,
+        nbrs = NearestNeighbors(n_neighbors=k,
                                 metric=self.metric,
                                 algorithm='brute').fit(data)
         knn = nbrs.kneighbors(data)
@@ -766,13 +793,12 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             print('Query-time parameter efSearch:', self.efS)
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
-        indices, distances = self.p.knn_query(data, k=self.n_neighbors)
+        k = self.n_neighbors + 1
+        indices, distances = self.p.knn_query(data, k=k)
         query_qty = self.N
         if self.metric == 'euclidean':
             distances = np.sqrt(distances)
-        indptr = np.arange(0, self.N * self.n_neighbors + 1,
-                           self.n_neighbors)
+        indptr = np.arange(0, self.N * k + 1, k)
         kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
                                        indptr), shape=(self.N,
                                                        self.N))
@@ -788,14 +814,13 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             print('Query-time parameter efSearch:', self.efS)
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
-        indices, distances = self.p.knn_query(data, k=self.n_neighbors)
+        k = self.n_neighbors + 1
+        indices, distances = self.p.knn_query(data, k=k)
         query_qty = self.N
         if self.metric == 'euclidean':
             distances = np.sqrt(distances)
-        if self.return_graph:
-            indptr = np.arange(0, self.N * self.n_neighbors + 1,
-                            self.n_neighbors)
+        if return_graph or return_grad:
+            indptr = np.arange(0, self.N * k + 1, k)
             kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
                                         indptr), shape=(self.N,
                                                         self.N))
