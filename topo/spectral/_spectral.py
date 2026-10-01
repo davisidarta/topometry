@@ -12,6 +12,34 @@ import pandas as pd
 from scipy import sparse
 from sklearn.utils import check_random_state, as_float_array
 
+def _arpack_v0(n, random_state=None):
+    """
+    Starting vector for ARPACK. SciPy >= 1.15 draws it from an unseeded generator when none is
+    given, so the signs of the eigenvectors (and the last digits of everything) change from one
+    run to the next. With a `random_state` the vector is drawn from it; without one it is
+    always the same vector.
+    """
+    if random_state is None:
+        random_state = 0
+    if isinstance(random_state, np.random.RandomState):
+        # draw from a copy, so that the caller's stream is left where it was
+        clone = np.random.RandomState()
+        clone.set_state(random_state.get_state())
+        random_state = clone
+    return check_random_state(random_state).uniform(-1, 1, n)
+
+
+def _deterministic_signs(evecs):
+    """
+    Flip each eigenvector so that its largest-magnitude entry is positive. An eigenvector is
+    only defined up to its sign, and which one a solver returns is an accident.
+    """
+    largest = np.argmax(np.abs(evecs), axis=0)
+    signs = np.sign(evecs[largest, np.arange(evecs.shape[1])])
+    signs[signs == 0] = 1
+    return evecs * signs
+
+
 def _dense_degree(W):
     return np.diag(W.sum(axis=1))
 
@@ -282,6 +310,7 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
         The eigenvectors and associated eigenvalues, sorted by ascending eigenvalues.
 
     """
+    v0 = _arpack_v0(np.shape(W)[0], random_state)
     random_state = check_random_state(random_state)
     if n_eigs > np.shape(W)[0]:
         raise ValueError(
@@ -297,7 +326,7 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
     try:
         if L.shape[0] < 1000000:
             evals, evecs = sparse.linalg.eigsh(
-                L, k=n_eigs, which='SM', tol=eigen_tol, maxiter=L.shape[0] * 5)
+                L, k=n_eigs, which='SM', tol=eigen_tol, maxiter=L.shape[0] * 5, v0=v0)
         else:
             evals, evecs = sparse.linalg.lobpcg(
                 L, random_state.normal(size=(L.shape[0], n_eigs)), largest=False, tol=1e-8
@@ -313,7 +342,7 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
     # Sort eigenvalues and eigenvectors in ascending order
     idx = evals.argsort()
     evals = evals[idx]
-    evecs = evecs[:, idx]
+    evecs = _deterministic_signs(evecs[:, idx])
     # Normalize
     for i in range(evecs.shape[1]):
         evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])

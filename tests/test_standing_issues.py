@@ -429,3 +429,50 @@ def test_umap_projection():
     assert Y.shape == (200, 2) and np.isfinite(Y).all()
     tg = _topograph().fit(X)
     assert tg.project(projection_method="UMAP", multiscale=True, num_iters=50).shape == (200, 2)
+
+
+# ── reproducibility ───────────────────────────────────────────────────────────
+def test_eigendecomposition_is_reproducible():
+    """Eigenvector signs flipped between runs: SciPy no longer seeds ARPACK's start vector."""
+    from topo.spectral.eigen import EigenDecomposition, eigendecompose
+    X = _blobs(n=200)
+    kernel = Kernel(metric="euclidean", n_neighbors=K, backend="sklearn", n_jobs=1).fit(X)
+    for seed in (None, 7):
+        runs = [eigendecompose(kernel.P, n_components=10, random_state=seed) for _ in range(3)]
+        for evals, evecs in runs[1:]:
+            np.testing.assert_array_equal(evals, runs[0][0])
+            np.testing.assert_array_equal(evecs, runs[0][1])
+    # the largest entry of every eigenvector is positive
+    evecs = runs[0][1]
+    assert np.all(evecs[np.argmax(np.abs(evecs), axis=0), np.arange(evecs.shape[1])] > 0)
+
+    a = EigenDecomposition(n_components=10, method="msDM", random_state=3).fit(kernel).transform(X=None)
+    b = EigenDecomposition(n_components=10, method="msDM", random_state=3).fit(kernel).transform(X=None)
+    np.testing.assert_array_equal(a, b)
+
+
+@pytest.mark.parametrize("backend", ["sklearn", pytest.param("hnswlib", marks=requires_hnswlib)])
+def test_topograph_is_reproducible_with_a_seed(backend):
+    """With one job: index construction and layout optimization are not deterministic in parallel."""
+    X = _blobs(n=200)
+    first = _topograph(backend, projection_methods=["MAP"]).fit(X)
+    second = _topograph(backend, projection_methods=["MAP"]).fit(X)
+    for multiscale in (True, False):
+        np.testing.assert_array_equal(first.spectral_scaffold(multiscale), second.spectral_scaffold(multiscale))
+    np.testing.assert_array_equal(first.P_of_msZ.toarray(), second.P_of_msZ.toarray())
+    np.testing.assert_array_equal(first.msTopoMAP, second.msTopoMAP)
+
+
+def test_spectral_layout_of_a_disconnected_graph():
+    """Each component was embedded with the Laplacian of the whole graph, which cannot fit."""
+    from scipy.sparse import block_diag
+    from topo.spectral.eigen import spectral_layout
+    blocks = [Kernel(metric="euclidean", n_neighbors=10, backend="sklearn", n_jobs=1).fit(_blobs(n=n, seed=s)).K
+              for n, s in ((60, 0), (80, 1), (50, 2))]
+    graph = block_diag(blocks).tocsr()
+    Y = spectral_layout(graph, 2, np.random.RandomState(0))
+    assert Y.shape == (190, 2) and np.isfinite(Y).all()
+    # the components are laid out apart from each other
+    centers = np.array([Y[:60].mean(0), Y[60:140].mean(0), Y[140:].mean(0)])
+    spread = max(Y[:60].std(), Y[60:140].std(), Y[140:].std())
+    assert np.linalg.norm(centers[0] - centers[1]) > spread

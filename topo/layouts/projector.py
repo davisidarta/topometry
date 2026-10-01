@@ -281,6 +281,9 @@ class Projector(BaseEstimator, TransformerMixin):
             self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'MAP':
+            # The parallel optimizer is not deterministic; with a single job the layout is
+            # reproducible for a given random_state.
+            kwargs.setdefault('parallel', self.n_jobs != 1)
             Y, Y_aux = fuzzy_embedding(
                 affinity,
                 n_components=self.n_components,

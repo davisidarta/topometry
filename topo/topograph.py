@@ -14,6 +14,7 @@ from typing import Dict, Tuple, Optional, Union
 from topo.base.ann import kNN, resolve_backend, _is_installed
 from topo.tpgraph.kernels import Kernel, _angularize_graph
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
+from topo.spectral._spectral import _arpack_v0
 from topo.layouts.projector import Projector
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
 
@@ -626,7 +627,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Lw = self._normalized_laplacian(W)
         k_max = int(min(8, max(3, np.floor(np.sqrt(k) + 1))))   # <- tweak
         nev = int(min(k_max + 1, max(2, k - 1)))
-        vals_w, vecs_w = eigsh(Lw, k=nev, which="SM")
+        vals_w, vecs_w = eigsh(Lw, k=nev, which="SM", v0=_arpack_v0(Lw.shape[0], self.random_state))
         order = np.argsort(vals_w)
         vals_w, vecs_w = vals_w[order], vecs_w[:, order]
         k_macro = self._eigengap_k(vals_w[:nev], k_max=k_max, k_min=2)
