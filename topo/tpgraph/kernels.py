@@ -15,7 +15,7 @@ from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
 
-from topo.base.ann import kNN
+from topo.base.ann import kNN, resolve_backend, _is_installed
 from topo.base.dists import pairwise_distances
 from topo.spectral._spectral import graph_laplacian, diffusion_operator
 from topo.spectral._spectral import degree as compute_degree
@@ -542,71 +542,11 @@ class Kernel(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
-        try:
-            import hnswlib
-            self._have_hnswlib = True
-        except ImportError:
-            self._have_hnswlib = False
-        try:
-            import nmslib
-            self._have_nmslib = True
-        except ImportError:
-            self._have_nmslib = False
-        try:
-            import annoy
-            self._have_annoy = True
-        except ImportError:
-            self._have_annoy = False
-        try:
-            import faiss
-            self._have_faiss = True
-        except ImportError:
-            self._have_faiss = False
-
-        if self.backend == 'hnswlib':
-            if not self._have_hnswlib:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
-                else:
-                    self.backend = 'sklearn'
-        elif self.backend == 'nmslib':
-            if not self._have_nmslib:
-                if self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
-                else:
-                    self.backend = 'sklearn'
-        elif self.backend == 'annoy':
-            if not self._have_annoy:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                elif self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_faiss:
-                    self.backend = 'faiss'
-                else:
-                    self.backend = 'sklearn'
-        elif self.backend == 'faiss':
-            if not self._have_faiss:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                elif self._have_hnswlib:
-                    self.backend = 'hnswlib'
-                elif self._have_annoy:
-                    self.backend = 'annoy'
-                else:
-                    self.backend = 'sklearn'
-        else:
-            print(
-                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-            self.backend == 'sklearn'
+        self._have_hnswlib = _is_installed('hnswlib')
+        self._have_nmslib = _is_installed('nmslib')
+        self._have_annoy = _is_installed('annoy')
+        self._have_faiss = _is_installed('faiss')
+        self.backend = resolve_backend(self.backend)
 
     def fit(self, X, recompute=False, **kwargs):
         """

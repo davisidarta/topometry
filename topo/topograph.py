@@ -11,7 +11,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import scipy.sparse as sp
 from scipy.sparse import issparse, csr_matrix
 from typing import Dict, Tuple, Optional, Union
-from topo.base.ann import kNN
+from topo.base.ann import kNN, resolve_backend, _is_installed
 from topo.tpgraph.kernels import Kernel, _angularize_graph
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.layouts.projector import Projector
@@ -288,45 +288,12 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         msg += " \n Active graph kernel  -  .graph_kernel"
         return msg
 
-    def _noANN_lib(self):
-        print("Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-        self.backend = 'sklearn'
-
     def _parse_backend(self):
-        try:
-            import hnswlib  # noqa: F401
-            self._have_hnswlib = True
-        except ImportError:
-            self._have_hnswlib = False
-        try:
-            import nmslib  # noqa: F401
-            self._have_nmslib = True
-        except ImportError:
-            self._have_nmslib = False
-        try:
-            import annoy  # noqa: F401
-            self._have_annoy = True
-        except ImportError:
-            self._have_annoy = False
-        try:
-            import faiss  # noqa: F401
-            self._have_faiss = True
-        except ImportError:
-            self._have_faiss = False
-
-        if self.backend == 'hnswlib':
-            if not self._have_hnswlib:
-                if self._have_nmslib:
-                    self.backend = 'nmslib'
-                else:
-                    self._noANN_lib()
-        elif self.backend == 'nmslib':
-            if self._have_hnswlib:
-                self.backend = 'hnswlib'
-            else:
-                self._noANN_lib()
-        else:
-            self._noANN_lib()
+        self._have_hnswlib = _is_installed('hnswlib')
+        self._have_nmslib = _is_installed('nmslib')
+        self._have_annoy = _is_installed('annoy')
+        self._have_faiss = _is_installed('faiss')
+        self.backend = resolve_backend(self.backend)
 
     def _parse_random_state(self):
         if self.random_state is None:

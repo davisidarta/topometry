@@ -8,11 +8,37 @@
 import time
 import numpy as np
 from warnings import warn
-from scipy.sparse import csr_matrix, find, issparse
+from scipy.sparse import csr_matrix, issparse
 from sklearn.base import TransformerMixin, BaseEstimator
-from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from joblib import cpu_count
+
+
+def _is_installed(module):
+    from importlib.util import find_spec
+    return find_spec(module) is not None
+
+
+def resolve_backend(backend):
+    """
+    Return the neighbor-search backend that will actually be used when `backend` is asked for:
+    `backend` itself if its library is installed, otherwise the first available of 'hnswlib',
+    'nmslib' and 'sklearn' (exact search, always available). Falling back emits a warning.
+    """
+    if backend == 'sklearn':
+        return backend
+    if backend not in ('hnswlib', 'nmslib'):
+        warn("Neighbor-search backend '%s' is not supported. Using scikit-learn's exact search." % backend)
+        return 'sklearn'
+    other = 'nmslib' if backend == 'hnswlib' else 'hnswlib'
+    if _is_installed(backend):
+        return backend
+    if _is_installed(other):
+        warn("'%s' is not installed. Using '%s' for neighbor search." % (backend, other))
+        return other
+    warn("No approximate nearest-neighbor library ('hnswlib' or 'nmslib') is installed. "
+         "Using scikit-learn's exact search.")
+    return 'sklearn'
 
 
 def kNN(X, Y=None,
@@ -46,9 +72,10 @@ def kNN(X, Y=None,
         defined neighborhoods that arise as an artifact of downsampling. Defaults to 30. Larger
         values can slightly increase computational time.
 
-    backend : str (optional, default 'nmslib').
+    backend : str (optional, default 'hnswlib').
         Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib'
-        and 'sklearn'.
+        and 'sklearn'. If the library of the requested backend is not installed, the first
+        available of 'hnswlib', 'nmslib' and 'sklearn' is used instead, with a warning.
 
     metric : str (optional, default 'cosine').
         Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
@@ -95,7 +122,8 @@ def kNN(X, Y=None,
     Returns
     -------
 
-    A scipy.sparse.csr_matrix containing k-nearest-neighbor distances.
+    A scipy.sparse.csr_matrix containing k-nearest-neighbor distances. Each row holds the point
+    itself (at distance 0) and its `n_neighbors` nearest neighbors, whichever the backend.
 
     """
     if n_jobs == -1:
@@ -105,6 +133,7 @@ def kNN(X, Y=None,
         if backend in ['nmslib', 'hnswlib']:
             warn("Only the 'sklearn' backend supports Y. Falling back to 'sklearn'...")
             backend = 'sklearn'
+    backend = resolve_backend(backend)
     if backend == 'nmslib':
         # nmslib handles dense input natively (DataType.DENSE_VECTOR), so dense arrays are
         # passed through rather than sparsified; NMSlibTransformer picks the matching
@@ -130,10 +159,6 @@ def kNN(X, Y=None,
                                        efC=efC,
                                        efS=efS,
                                        verbose=False).fit(X)
-    else:
-        if verbose:
-            print('Falling back to sklearn nearest-neighbors!')
-        backend = 'sklearn'
 
     if backend != 'sklearn':
         if Y is None:
@@ -142,25 +167,41 @@ def kNN(X, Y=None,
             knn = nbrs.transform(Y)
 
     if backend == 'sklearn':
-        # Construct a k-nearest-neighbors graph
-        nbrs = NearestNeighbors(n_neighbors=int(n_neighbors), metric=metric, n_jobs=n_jobs, **kwargs).fit(X)
+        # Construct a k-nearest-neighbors graph. Queried with the indexed data, each point comes
+        # back as its own first neighbor, so one extra is asked for - as the other backends do -
+        # to return `n_neighbors` neighbors besides the point itself.
+        k = int(n_neighbors) if Y is not None else min(int(n_neighbors) + 1, X.shape[0])
+        nbrs = NearestNeighbors(n_neighbors=k, metric=metric, n_jobs=n_jobs, **kwargs).fit(X)
         if Y is None:
             knn = nbrs.kneighbors_graph(X, mode='distance')
         else:
             knn = nbrs.kneighbors_graph(Y, mode='distance')
     if metric == 'cosine':
         # Every backend already returns cosine *distances* (d = 1 - cos), so the graph is
-        # kept as it comes. Rounding can leave d marginally outside [0, 2], and a point's
-        # distance to itself marginally above zero - which the kernels built on this graph
-        # would turn into a self-loop of weight ~1 for an arbitrary subset of points.
+        # kept as it comes. Rounding can leave d marginally outside [0, 2].
         np.clip(knn.data, 0.0, 2.0, out=knn.data)
-        if Y is None:
-            rows = np.repeat(np.arange(knn.shape[0]), np.diff(knn.indptr))
-            knn.data[knn.indices == rows] = 0.0
+    if Y is None and isinstance(metric, str) and metric not in ('negdotprod', 'inner_product'):
+        # A point is at distance zero from itself. Backends return that distance as rounding
+        # noise (exactly 0 for some rows, ~1e-7 for others), which the kernels built on this
+        # graph would turn into a self-loop of weight ~1 for an arbitrary subset of points.
+        rows = np.repeat(np.arange(knn.shape[0]), np.diff(knn.indptr))
+        knn.data[knn.indices == rows] = 0.0
     if return_instance:
         return nbrs, knn
     else:
         return knn
+
+
+def _recall_against_exact_search(data, ann_indices, k, metric, verbose=False):
+    """Mean fraction of each point's `k` exact nearest neighbors found by an approximate search."""
+    start = time.time()
+    nbrs = NearestNeighbors(n_neighbors=k, metric=metric, algorithm='brute').fit(data)
+    exact = nbrs.kneighbors(data, return_distance=False)
+    end = time.time()
+    if verbose:
+        print('brute-force gold-standart kNN time total=%f (sec), per query=%f (sec)' %
+              (end - start, float(end - start) / data.shape[0]))
+    return float(np.mean([len(set(exact[i]).intersection(ann_indices[i])) / k for i in range(data.shape[0])]))
 
 
 class NMSlibTransformer(BaseEstimator, TransformerMixin):
@@ -253,8 +294,8 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
     # Obtain kNN graph
     knn = nn.transform(data)
     #
-    # Obtain kNN indices, distances and distance gradient
-    ind, dist, grad = nn.ind_dist_grad(data)
+    # Obtain kNN indices, distances and the kNN graph
+    ind, dist, graph = nn.ind_dist_grad(data)
     #
     # Test for recall efficiency during approximate nearest neighbors search
     test = nn.test_efficiency(data)
@@ -289,7 +330,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         try:
             import nmslib
         except ImportError:
-            return(print("MNMSlib is required for this function. Please install it with `pip install nmslib`. "))
+            raise ImportError("NMSlib is required for this transformer. Please install it with `pip install nmslib`.")
 
         if self.n_jobs == -1:
             self.n_jobs = cpu_count()
@@ -458,7 +499,17 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         return kneighbors_graph
 
-    def ind_dist_grad(self, data, return_grad=True, return_graph=True):
+    def ind_dist_grad(self, data, return_grad=False, return_graph=True):
+        """
+        Query the index and return neighbor indices and distances, and optionally the
+        neighborhood graph.
+
+        `return_grad` is kept for backwards compatibility only. Distance gradients were
+        never computed from the data (they were derived from the indices), so asking for
+        them now raises instead of returning meaningless values.
+        """
+        if return_grad:
+            raise NotImplementedError('Distance gradients are not available. Call with `return_grad=False`.')
         start = time.time()
         data = self._match_index_type(data)
         n_samples_transform = data.shape[0]
@@ -478,71 +529,26 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         distances = self._to_metric_units(distances)
 
-        indptr = np.arange(0, n_samples_transform * k + 1, k)
-        kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
-                                       indptr), shape=(n_samples_transform,
-                                                       n_samples_transform))
-        if return_grad:
-            x, y, dists = find(kneighbors_graph)
-
-            # Define gradients
-            grad = []
-            if self.metric not in ['sqeuclidean', 'euclidean', 'cosine', 'linf']:
-                print('Gradient undefined for metric \'' + self.metric + '\'. Returning empty array.')
-
-            if self.metric == 'cosine':
-                norm_x = 0.0
-                norm_y = 0.0
-                for i in range(x.shape[0]):
-                    norm_x += x[i] ** 2
-                    norm_y += y[i] ** 2
-                if norm_x == 0.0 and norm_y == 0.0:
-                    grad = np.zeros(x.shape)
-                elif norm_x == 0.0 or norm_y == 0.0:
-                    grad = np.zeros(x.shape)
-                else:
-                    grad = -(x * dists - y * norm_x) / np.sqrt(norm_x ** 3 * norm_y)
-
-            if self.metric == 'euclidean':
-                grad = x - y / (1e-6 + np.sqrt(dists))
-
-            if self.metric == 'sqeuclidean':
-                grad = x - y / (1e-6 + dists)
-
-            if self.metric == 'linf':
-                result = 0.0
-                max_i = 0
-                for i in range(x.shape[0]):
-                    v = np.abs(x[i] - y[i])
-                    if v > result:
-                        result = dists
-                        max_i = i
-                grad = np.zeros(x.shape)
-                grad[max_i] = np.sign(x[max_i] - y[max_i])
-
         end = time.time()
 
         if self.verbose:
             print('kNN time total=%f (sec), per query=%f (sec), per query adjusted for thread number=%f (sec)' %
                   (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
 
-        if return_graph and return_grad:
-            return indices, distances, grad, kneighbors_graph
-        if return_graph and not return_grad:
+        if return_graph:
+            indptr = np.arange(0, n_samples_transform * k + 1, k)
+            kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
+                                           indptr), shape=(n_samples_transform,
+                                                           n_samples_transform))
             return indices, distances, kneighbors_graph
-        if not return_graph and return_grad:
-            return indices, distances, grad
-        if not return_graph and not return_grad:
-            return indices, distances
+        return indices, distances
 
     def test_efficiency(self, data, data_use=0.1):
-        """Test if NMSlibTransformer and KNeighborsTransformer give same results
         """
-        self.data_use = data_use
-
+        Print and return the recall of the approximate search against scikit-learn's exact one.
+        `data_use` is unused and kept for backwards compatibility.
+        """
         query_qty = data.shape[0]
-
-        (dismiss, test) = train_test_split(data, test_size=self.data_use)
         query_time_params = {'efSearch': self.efS}
         if self.verbose:
             print('Setting query-time parameters', query_time_params)
@@ -559,24 +565,10 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             print('kNN time total=%f (sec), per query=%f (sec), per query adjusted for thread number=%f (sec)' %
                   (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
 
-        # Use sklearn for exact neighbor search
-        start = time.time()
-        nbrs = NearestNeighbors(n_neighbors=k,
-                                metric=self.metric,
-                                algorithm='brute').fit(data)
-        knn = nbrs.kneighbors(data)
-        end = time.time()
-        if self.verbose:
-            print('brute-force gold-standart kNN time total=%f (sec), per query=%f (sec)' %
-                  (end - start, float(end - start) / query_qty))
-
-        recall = 0.0
-        for i in range(0, query_qty):
-            correct_set = set(knn[1][i])
-            ret_set = set(ann_results[i][0])
-            recall = recall + float(len(correct_set.intersection(ret_set))) / len(correct_set)
-        recall = recall / query_qty
+        recall = _recall_against_exact_search(data, [res[0] for res in ann_results], k, self.metric,
+                                              verbose=self.verbose)
         print('kNN recall %f' % recall)
+        return recall
 
     def update_search(self, n_neighbors):
         """
@@ -749,21 +741,13 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         try:
             import hnswlib
         except ImportError:
-            return(print("HNSWlib is required for this function. Please install it with `pip install hnswlib`. "))
+            raise ImportError("HNSWlib is required for this transformer. Please install it with `pip install hnswlib`.")
         if self.n_jobs == -1:
             self.n_jobs = cpu_count()
 
         self.N = data.shape[0]
         self.m = data.shape[1]
-        if not isinstance(data, np.ndarray):
-            import pandas as pd
-            if isinstance(data, csr_matrix):
-                arr = np.zeros([self.N, self.m])
-                data = data.toarray()
-            if isinstance(data, pd.DataFrame):
-                data = data.to_numpy()
-            else:
-                return print('Data should be a np.ndarray, sp.csr_matrix or pd.DataFrame!')
+        data = self._as_dense(data)
         start = time.time()
         data_labels = np.arange(self.N) # indices
         self.space = {
@@ -787,8 +771,21 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             print('Indexing time = %f (sec)' % (end - start))
         return self
 
+    @staticmethod
+    def _as_dense(data):
+        """hnswlib only takes dense arrays."""
+        if isinstance(data, np.ndarray):
+            return data
+        if issparse(data):
+            return data.toarray()
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return data.to_numpy()
+        raise TypeError('Data should be a np.ndarray, a scipy sparse matrix or a pd.DataFrame!')
+
     def transform(self, data):
         start = time.time()
+        data = self._as_dense(data)
         if self.verbose:
             print('Query-time parameter efSearch:', self.efS)
         # For compatibility reasons, as each sample is considered as its own
@@ -808,8 +805,19 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
                   (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
         return kneighbors_graph
 
-    def ind_dist_grad(self, data, return_grad=True, return_graph=True):
+    def ind_dist_grad(self, data, return_grad=False, return_graph=True):
+        """
+        Query the index and return neighbor indices and distances, and optionally the
+        neighborhood graph.
+
+        `return_grad` is kept for backwards compatibility only. Distance gradients were
+        never computed from the data (they were derived from the indices), so asking for
+        them now raises instead of returning meaningless values.
+        """
+        if return_grad:
+            raise NotImplementedError('Distance gradients are not available. Call with `return_grad=False`.')
         start = time.time()
+        data = self._as_dense(data)
         if self.verbose:
             print('Query-time parameter efSearch:', self.efS)
         # For compatibility reasons, as each sample is considered as its own
@@ -819,91 +827,34 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         query_qty = self.N
         if self.metric == 'euclidean':
             distances = np.sqrt(distances)
-        if return_graph or return_grad:
+
+        end = time.time()
+
+        if self.verbose:
+            print('kNN time total=%f (sec), per query=%f (sec), per query adjusted for thread number=%f (sec)' %
+                  (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
+
+        if return_graph:
             indptr = np.arange(0, self.N * k + 1, k)
             kneighbors_graph = csr_matrix((distances.ravel(), indices.ravel(),
-                                        indptr), shape=(self.N,
-                                                        self.N))
-        if return_grad:
-            x, y, dists = find(kneighbors_graph)
-
-            # Define gradients
-            grad = []
-            if self.metric not in ['sqeuclidean', 'euclidean', 'cosine']:
-                print('Gradient undefined for metric \'' + self.metric + '\'. Returning empty array.')
-
-            if self.metric == 'cosine':
-                norm_x = 0.0
-                norm_y = 0.0
-                for i in range(x.shape[0]):
-                    norm_x += x[i] ** 2
-                    norm_y += y[i] ** 2
-                if norm_x == 0.0 and norm_y == 0.0:
-                    grad = np.zeros(x.shape)
-                elif norm_x == 0.0 or norm_y == 0.0:
-                    grad = np.zeros(x.shape)
-                else:
-                    grad = -(x * dists - y * norm_x) / np.sqrt(norm_x ** 3 * norm_y)
-
-            if self.metric == 'euclidean' or self.metric == 'sqeuclidean':
-                grad = x - y / (1e-6 + dists)
-
-        end = time.time()
-
-        if self.verbose:
-            print('kNN time total=%f (sec), per query=%f (sec), per query adjusted for thread number=%f (sec)' %
-                  (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
-
-        if return_graph and return_grad:
-            return indices, distances, grad, kneighbors_graph
-        if return_graph and not return_grad:
+                                           indptr), shape=(self.N,
+                                                           self.N))
             return indices, distances, kneighbors_graph
-        if not return_graph and return_grad:
-            return indices, distances, grad
-        if not return_graph and not return_grad:
-            return indices, distances
+        return indices, distances
 
     def test_efficiency(self, data, percent_use=0.1):
-        """Test if HNSWlibTransformer and KNeighborsTransformer give same results
         """
-        self.data_use = percent_use
-
-        query_qty = data.shape[0]
-
-        (dismiss, test) = train_test_split(data, test_size=self.data_use)
-        query_time_params = {'efSearch': self.efS}
-        if self.verbose:
-            print('Setting query-time parameters', query_time_params)
-        self.nmslib_.setQueryTimeParams(query_time_params)
-
+        Print and return the recall of the approximate search against scikit-learn's exact one.
+        `percent_use` is unused and kept for backwards compatibility.
+        """
+        data = self._as_dense(data)
         # For compatibility reasons, as each sample is considered as its own
         # neighbor, one extra neighbor will be computed.
-        self.n_neighbors = self.n_neighbors + 1
-        start = time.time()
-        ann_results = self.fit(data).transform(data)
-        end = time.time()
-        if self.verbose:
-            print('kNN time total=%f (sec), per query=%f (sec), per query adjusted for thread number=%f (sec)' %
-                  (end - start, float(end - start) / query_qty, self.n_jobs * float(end - start) / query_qty))
-
-        # Use sklearn for exact neighbor search
-        start = time.time()
-        nbrs = NearestNeighbors(n_neighbors=self.n_neighbors,
-                                metric=self.metric,
-                                algorithm='brute').fit(data)
-        knn = nbrs.kneighbors(data)
-        end = time.time()
-        if self.verbose:
-            print('brute-force gold-standart kNN time total=%f (sec), per query=%f (sec)' %
-                  (end - start, float(end - start) / query_qty))
-
-        recall = 0.0
-        for i in range(0, query_qty):
-            correct_set = set(knn[1][i])
-            ret_set = set(ann_results[i][0])
-            recall = recall + float(len(correct_set.intersection(ret_set))) / len(correct_set)
-        recall = recall / query_qty
+        k = self.n_neighbors + 1
+        indices, _ = self.p.knn_query(data, k=k)
+        recall = _recall_against_exact_search(data, indices, k, self.metric, verbose=self.verbose)
         print('kNN recall %f' % recall)
+        return recall
 
     def update_search(self, n_neighbors):
         """

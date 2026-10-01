@@ -11,34 +11,13 @@ from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
 from topo.utils._utils import get_landmark_indices
 from topo.spectral.eigen import spectral_layout
-from topo.base.ann import kNN
+from topo.base.ann import kNN, resolve_backend
 from topo.tpgraph.kernels import Kernel
 import logging
 
 # dumb warning, suggests lilmatrix but it doesnt work
 from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
-
-try:
-    import hnswlib
-    _have_hnswlib = True
-except ImportError:
-    _have_hnswlib = False
-try:
-    import nmslib
-    _have_nmslib = True
-except ImportError:
-    _have_nmslib = False
-try:
-    import annoy
-    _have_annoy = True
-except ImportError:
-    _have_annoy = False
-try:
-    import faiss
-    _have_faiss = True
-except ImportError:
-    _have_faiss = False
 
 
 class Projector(BaseEstimator, TransformerMixin):
@@ -154,50 +133,7 @@ class Projector(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
-        if self.nbrs_backend == 'hnswlib':
-            if not _have_hnswlib:
-                if _have_nmslib:
-                    self.nbrs_backend == 'nmslib'
-                elif _have_annoy:
-                    self.nbrs_backend == 'annoy'
-                elif _have_faiss:
-                    self.nbrs_backend == 'faiss'
-                else:
-                    self.nbrs_backend == 'sklearn'
-        elif self.nbrs_backend == 'nmslib':
-            if not _have_nmslib:
-                if _have_hnswlib:
-                    self.nbrs_backend == 'hnswlib'
-                elif _have_annoy:
-                    self.nbrs_backend == 'annoy'
-                elif _have_faiss:
-                    self.nbrs_backend == 'faiss'
-                else:
-                    self.backend == 'sklearn'
-        elif self.nbrs_backend == 'annoy':
-            if not _have_annoy:
-                if _have_nmslib:
-                    self.nbrs_backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.nbrs_backend == 'hnswlib'
-                elif _have_faiss:
-                    self.nbrs_backend == 'faiss'
-                else:
-                    self.nbrs_backend == 'sklearn'
-        elif self.nbrs_backend == 'faiss':
-            if not _have_faiss:
-                if _have_nmslib:
-                    self.nbrs_backend == 'nmslib'
-                elif _have_hnswlib:
-                    self.nbrs_backend == 'hnswlib'
-                elif _have_annoy:
-                    self.nbrs_backend == 'annoy'
-                else:
-                    self.nbrs_backend == 'sklearn'
-        else:
-            print(
-                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead.")
-            self.nbrs_backend == 'sklearn'
+        self.nbrs_backend = resolve_backend(self.nbrs_backend)
 
     def fit(self, X, **kwargs):
         """

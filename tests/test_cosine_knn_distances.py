@@ -247,13 +247,17 @@ def test_projector_readers_get_the_graph_they_expect(monkeypatch):
 
 
 # ── euclidean is untouched ────────────────────────────────────────────────────
-def test_euclidean_knn_is_sklearn_graph_unchanged():
+def test_euclidean_knn_is_the_sklearn_graph():
+    """Unchanged apart from the self-distance, which sklearn returns as rounding noise."""
     X = _blobs()
     G = kNN(X, n_neighbors=K, metric="euclidean", backend="sklearn", n_jobs=1)
-    ref = NearestNeighbors(n_neighbors=K, metric="euclidean", n_jobs=1).fit(X).kneighbors_graph(
+    # K neighbors besides the point itself, as on the other backends
+    ref = NearestNeighbors(n_neighbors=K + 1, metric="euclidean", n_jobs=1).fit(X).kneighbors_graph(
         X, mode="distance")
-    np.testing.assert_array_equal(G.indices, ref.indices)
-    np.testing.assert_array_equal(G.data, ref.data)
+    rows, cols, vals = _edges(G)
+    np.testing.assert_array_equal(cols, ref.indices)
+    np.testing.assert_array_equal(vals[rows != cols], ref.data[rows != cols])
+    assert np.all(vals[rows == cols] == 0.0)
 
 
 def test_euclidean_topograph_kernel_is_built_from_the_graph_unchanged():
