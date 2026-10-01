@@ -385,9 +385,10 @@ class Kernel(BaseEstimator, TransformerMixin):
     symmetrize : bool (optional, default True).
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : str (optional, default 'nmslib').
-        Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.   
+    backend : str (optional, default 'hnswlib').
+        Which backend to use for k-nearest-neighbor computations.
+        Options are 'hnswlib', 'nmslib' and 'sklearn'. If the library of the requested backend is
+        not installed, the first available of these is used instead, with a warning.
 
     n_jobs : int (optional, default 1).
         The number of jobs to use for parallel computations. If -1, all CPUs are used.

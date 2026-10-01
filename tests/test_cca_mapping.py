@@ -1,6 +1,9 @@
 import numpy as np
 import scipy.sparse as sp
 import pytest
+
+# CCA anchoring searches neighbors with hnswlib directly
+pytest.importorskip("hnswlib")
 import anndata
 from anndata import AnnData
 from pathlib import Path

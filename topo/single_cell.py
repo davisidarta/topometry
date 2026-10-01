@@ -3527,7 +3527,7 @@ if _HAVE_SCANPY:
             s2 = (
                 f"-  Cells x genes: {n_cells} x {n_genes}\n"
                 f"-  Global ID ({tg.id_method}): {'n/a' if tg.global_id is None else format(tg.global_id, '.1f')}\n"
-                f"-  spectral scaffold size: {int(tg.n_eigs)}\n"
+                f"-  spectral scaffold size: {int(tg.n_scaffold_components or tg.n_eigs)} components ({int(tg.n_eigs)} eigenpairs computed)\n"
                 "\n"
                 "Hyperparameters\n"
                 f"-  k-nearest neighbors for base graph: {base_knn} / metric: {base_metric} / kernel version: {_safe(bk_ver)}\n"
