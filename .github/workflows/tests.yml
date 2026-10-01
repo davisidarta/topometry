@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: setup.cfg
+      - name: Install TopoMetry with its test dependencies
+        run: pip install -e ".[test]"
+      - name: Install optional backends and projections
+        # the tests that need these skip when they are missing
+        run: pip install nmslib umap-learn || true
+      - name: Run the tests
+        run: pytest -q
+        env:
+          MPLBACKEND: Agg
