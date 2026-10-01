@@ -12,7 +12,7 @@ Covers:
   - Kernel weights decrease with distance, for Kernel(metric='cosine') and for the
     TopOGraph base kernel, and the two agree.
   - Fitting a cosine kernel leaves the caller's data alone.
-  - A standalone Projector hands similarities to its affinity readers and distances to
+  - A standalone Projector hands affinities to its affinity readers and distances to
     Isomap.
   - Euclidean graphs and kernels are untouched.
   - A dense nmslib index can be queried with the sparse rows it was fitted on.
@@ -217,14 +217,17 @@ def test_precomputed_graph_is_used_as_given():
 
 
 # ── standalone Projector ──────────────────────────────────────────────────────
-def test_projector_readers_get_the_graph_they_expect(monkeypatch):
+@pytest.mark.parametrize("metric", ["cosine", "euclidean"])
+def test_projector_readers_get_the_graph_they_expect(monkeypatch, metric):
     """
     Projector reads its kNN graph as affinities for the spectral initialization and MAP, and
-    as distances for Isomap. All three used to receive cosine similarities.
+    as distances for Isomap. With cosine all three used to receive similarities; with any
+    other metric all three received distances.
     """
     import topo.layouts.projector as projector
+    from sklearn.metrics.pairwise import euclidean_distances
     X = _blobs()
-    D = cosine_distances(X)
+    D = cosine_distances(X) if metric == "cosine" else euclidean_distances(X)
     seen = {}
 
     def capture(name, result):
@@ -238,12 +241,18 @@ def test_projector_readers_get_the_graph_they_expect(monkeypatch):
     monkeypatch.setattr(projector, "fuzzy_embedding", capture("MAP", (Y, {})))
     monkeypatch.setattr(projector, "Isomap", capture("Isomap", Y))
     for method in ("MAP", "Isomap"):
-        projector.Projector(metric="cosine", projection_method=method, n_neighbors=K, n_jobs=1,
+        projector.Projector(metric=metric, projection_method=method, n_neighbors=K, n_jobs=1,
                             nbrs_backend="sklearn", random_state=0).fit(X)
 
-    for name, expected in (("init", 1 - D), ("MAP", 1 - D), ("Isomap", D)):
-        rows, cols, vals = _edges(seen[name])
-        np.testing.assert_allclose(vals, expected[rows, cols], atol=1e-5, err_msg=name)
+    # affinities: the diffusion operator of the kernel on this data, as TopOGraph hands to MAP
+    expected = Kernel(metric=metric, n_neighbors=K, backend="sklearn", n_jobs=1).fit(X).P
+    for name in ("init", "MAP"):
+        np.testing.assert_array_equal(seen[name].toarray(), expected.toarray())
+
+    # distances a path can be measured along: angles for cosine
+    rows, cols, vals = _edges(seen["Isomap"])
+    distances = np.arccos(np.clip(1 - D, -1, 1)) if metric == "cosine" else D
+    np.testing.assert_allclose(vals, distances[rows, cols], atol=1e-5)
 
 
 # ── euclidean is untouched ────────────────────────────────────────────────────

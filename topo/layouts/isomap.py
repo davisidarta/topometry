@@ -57,7 +57,8 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
     Returns
     -------
     Y : ndarray of shape (n_samples, n_components)
-        Isomap embedding coordinates.
+        Isomap embedding coordinates. With ``landmarks``, only the landmarks are embedded
+        (geodesics still run through the whole graph), giving shape (n_landmarks, n_components).
     """
     if landmarks is not None:
         if isinstance(landmarks, np.ndarray):
@@ -78,8 +79,6 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
     # Pairwise geodesic distances
     G = geodesic_distance(K, method='D', unweighted=False, directed=False,
                           indices=landmarks, n_jobs=n_jobs)
-    if landmarks is not None:
-        G = G.T[landmarks].T
 
     # Guarantee symmetry and zero diagonal
     G = (G + G.T) / 2

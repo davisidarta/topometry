@@ -356,3 +356,76 @@ def test_evaluation_geodesics_use_angles_for_a_cosine_base_graph(monkeypatch):
     with pytest.raises(RuntimeError, match="captured"):
         tg.eval_models_layouts(X, landmarks=None, kernels=[], eigenmap_methods=[], projections=[])
     np.testing.assert_allclose(seen[0].data, _cosine_distance_to_angle(tg.base_knn_graph.data))
+
+
+# ── projections ───────────────────────────────────────────────────────────────
+from topo.layouts.projector import Projector  # noqa: E402
+
+
+def test_topograph_gives_isomap_distances_not_affinities(monkeypatch):
+    """Isomap was run on the diffusion operator, whose entries are larger for closer points."""
+    import topo.layouts.projector as projector
+    X = _blobs(n=200)
+    tg = _topograph().fit(X)
+    seen = {}
+
+    def isomap(graph, *args, **kwargs):
+        seen["graph"] = graph
+        return np.zeros((X.shape[0], 2))
+
+    monkeypatch.setattr(projector, "Isomap", isomap)
+    tg.project(projection_method="Isomap", multiscale=True)
+    msZ = tg.spectral_scaffold(multiscale=True)[:, :tg._scaffold_components_ms]
+    G = seen["graph"].tocsr()
+    rows = np.repeat(np.arange(G.shape[0]), np.diff(G.indptr))
+    np.testing.assert_allclose(G.data, euclidean_distances(msZ)[rows, G.indices], rtol=1e-4, atol=1e-6)
+
+
+def test_topograph_isomap_and_y_aliases():
+    X = _blobs(n=200)
+    tg = _topograph().fit(X)
+    for method in ("Isomap", "MAP"):
+        tg.project(projection_method=method, multiscale=True, num_iters=50)
+        tg.project(projection_method=method, multiscale=False, num_iters=50)
+    assert all(np.isfinite(Y).all() for Y in tg.ProjectionDict.values())
+    np.testing.assert_array_equal(tg.Y("msTopoMAP"), tg.msTopoMAP)
+    np.testing.assert_array_equal(tg.Y("TopoMAP"), tg.TopoMAP)
+
+
+@pytest.mark.parametrize("method", ["Isomap", "MAP"])
+def test_projector_landmarks(method):
+    """Any use of landmarks raised AttributeError (a misspelled attribute)."""
+    X = _blobs(n=200)
+    landmarks = np.arange(0, 200, 2)
+    Y = Projector(metric="euclidean", projection_method=method, n_neighbors=K, n_jobs=1,
+                  nbrs_backend="sklearn", num_iters=50, landmarks=landmarks, random_state=0).fit_transform(X)
+    Y = Y[0] if isinstance(Y, tuple) else Y
+    assert Y.shape == (100, 2) and np.isfinite(Y).all()
+
+
+def test_geodesic_distance_among_a_subset_of_vertices():
+    from topo.eval.local_scores import geodesic_distance
+    X = _blobs(n=150)
+    G = kNN(X, n_neighbors=K, metric="euclidean", backend="sklearn", n_jobs=1)
+    full = geodesic_distance(G, n_jobs=1)
+    np.testing.assert_array_equal(geodesic_distance(G, n_jobs=2), full)
+    subset = np.arange(0, 150, 3)
+    for n_jobs in (1, 2):
+        np.testing.assert_array_equal(geodesic_distance(G, indices=subset, n_jobs=n_jobs),
+                                      full[np.ix_(subset, subset)])
+    assert geodesic_distance(G, indices=7, n_jobs=1).shape == (150,)
+
+
+def test_umap_projection():
+    """UMAP was handed a graph matrix where it takes (indices, distances)."""
+    pytest.importorskip("umap")
+    X = _blobs(n=200)
+    Y = Projector(metric="euclidean", projection_method="UMAP", n_neighbors=K, n_jobs=1,
+                  nbrs_backend="sklearn", num_iters=50, random_state=0).fit_transform(X)
+    assert Y.shape == (200, 2) and np.isfinite(Y).all()
+    G = NearestNeighbors(n_neighbors=K + 1).fit(X).kneighbors_graph(X, mode="distance")
+    Y = Projector(metric="precomputed", projection_method="UMAP", n_neighbors=K, n_jobs=1,
+                  num_iters=50, random_state=0).fit_transform(G)
+    assert Y.shape == (200, 2) and np.isfinite(Y).all()
+    tg = _topograph().fit(X)
+    assert tg.project(projection_method="UMAP", multiscale=True, num_iters=50).shape == (200, 2)

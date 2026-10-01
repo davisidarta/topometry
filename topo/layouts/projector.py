@@ -11,8 +11,8 @@ from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
 from topo.utils._utils import get_landmark_indices
 from topo.spectral.eigen import spectral_layout
-from topo.base.ann import kNN, resolve_backend
-from topo.tpgraph.kernels import Kernel
+from topo.base.ann import resolve_backend
+from topo.tpgraph.kernels import Kernel, _angularize_graph
 import logging
 
 # dumb warning, suggests lilmatrix but it doesnt work
@@ -195,60 +195,57 @@ class Projector(BaseEstimator, TransformerMixin):
                 raise ValueError(
                     '\'landmarks\' must be either an integer or a numpy array.')
 
+        # The methods below read the neighborhood graph in one of two ways: Isomap and the MDE
+        # recipes walk it, so they need distances; the spectral initialization and MAP need
+        # affinities. Both views are prepared here, restricted to the landmarks for the methods
+        # that embed only those (Isomap handles its landmarks itself).
+        subset = self.landmarks_ if self.projection_method != 'Isomap' else None
         if isinstance(X, Kernel):
-            if self.landmarks_ is not None:
-                if self.projection_method != 'Isomap':
-                    self.N = self.landmarkds_
-                    K = X.P[self.landmarkds_, self.landmarkds_].copy()
-            else:
-                self.N = X.N
-            self.M = X.M
-            K = X.P.copy()
+            self.N, self.M = X.N, X.M
+            affinity = X.P
+            distances = None if X.knn_ is None else _angularize_graph(X.knn_, X.metric, X.use_angular)
+        elif self.metric != 'precomputed':
+            if issparse(X):
+                X = X.toarray()
+            if subset is not None:
+                X = X[subset, :]
+            kernel = Kernel(metric=self.metric, n_neighbors=self.n_neighbors,
+                            n_jobs=self.n_jobs, backend=self.nbrs_backend).fit(X)
+            affinity = kernel.P
+            distances = _angularize_graph(kernel.knn_, self.metric, True)
+            subset = None
         else:
-            if self.metric != 'precomputed':
-                if issparse(X):
-                    X = X.toarray()
-                if self.landmarks_ is not None:
-                    if self.projection_method != 'Isomap':
-                        X = X[self.landmarkds_, :]
-                K = kNN(X, metric=self.metric, n_neighbors=self.n_neighbors
-                        , n_jobs=self.n_jobs, backend=self.nbrs_backend)
-            else:
-                if self.landmarks_ is not None:
-                    if self.projection_method != 'Isomap':
-                        K = X[self.landmarkds_, self.landmarkds_].copy()
-                    else:
-                        K = X.copy()
-                else:
-                    K = X.copy()
-
-        # `K` is read below both as distances (Isomap, IsometricMDE) and as affinities
-        # (spectral initialization, MAP, IsomorphicMDE). A cosine kNN graph computed here
-        # holds distances, so its affinity readers are given the matching similarities.
-        K_affinity = K
-        if (not isinstance(X, Kernel)) and self.metric == 'cosine':
-            K_affinity = K.copy()
-            K_affinity.data = 1 - K_affinity.data
+            # a precomputed graph is taken to hold what the chosen method reads
+            affinity = distances = X
+        if subset is not None:
+            affinity = affinity[subset, :][:, subset]
+            distances = None if distances is None else distances[subset, :][:, subset]
+        if distances is None and self.projection_method in ['Isomap', 'IsomorphicMDE', 'IsometricMDE', 'UMAP']:
+            raise ValueError(
+                "'%s' needs the distance graph, which a Kernel fitted on a precomputed graph does not keep. "
+                "Pass that graph itself with metric='precomputed'." % self.projection_method)
 
         if isinstance(self.init, np.ndarray):
             self.init_Y_ = self.init
+        elif self.projection_method == 'Isomap':
+            self.init_Y_ = None  # Isomap is not iterative
         else:
             if self.init == 'spectral':
                 try:
                     self.init_Y_ = spectral_layout(
-                        K_affinity, self.n_components, self.random_state, laplacian_type='random_walk', eigen_tol=10e-4, return_evals=False)
+                        affinity, self.n_components, self.random_state, laplacian_type='random_walk', eigen_tol=10e-4, return_evals=False)
                 except:
                     print(
                         'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
                     from topo.spectral.eigen import EigenDecomposition
                     self.init_Y_ = EigenDecomposition(
-                        n_components=self.n_components).fit_transform(K_affinity)
+                        n_components=self.n_components).fit_transform(affinity)
             else:
                 self.init_Y_ = self.random_state.randn(
-                    K.shape[0], self.n_components)
+                    affinity.shape[0], self.n_components)
         # Fit the desired method
         if self.projection_method == 'Isomap':
-            self.Y_ = Isomap(K, n_components=self.n_components,
+            self.Y_ = Isomap(distances, n_components=self.n_components,
                              n_neighbors=self.n_neighbors, metric='precomputed',
                              landmarks=self.landmarks_,
                              landmark_method=self.landmark_method,
@@ -285,7 +282,7 @@ class Projector(BaseEstimator, TransformerMixin):
 
         elif self.projection_method == 'MAP':
             Y, Y_aux = fuzzy_embedding(
-                K_affinity,
+                affinity,
                 n_components=self.n_components,
                 init=self.init_Y_,
                 n_epochs=self.num_iters,
@@ -311,8 +308,21 @@ class Projector(BaseEstimator, TransformerMixin):
             except ImportError:
                 raise ImportError(
                     'UMAP is not installed. Please install UMAP with \'pip install umap\' before using this method.')
-            self.estimator_ = umap.UMAP(
-                n_components=self.n_components, precomputed_knn=K, init=self.init_Y_, n_epochs=self.num_iters, **kwargs)
+            if self.metric == 'precomputed':
+                # UMAP reads a precomputed (sparse) distance matrix directly, if it is symmetric
+                # and has a zero diagonal
+                if issparse(X):
+                    X = X.maximum(X.T).tocsr()
+                    X.setdiag(0.0)
+                self.estimator_ = umap.UMAP(
+                    n_components=self.n_components, n_neighbors=self.n_neighbors, metric='precomputed',
+                    init=self.init_Y_, n_epochs=self.num_iters, **kwargs)
+            else:
+                # hand over the neighbors found above rather than a graph matrix, which UMAP rejects
+                knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(distances, self.n_neighbors)
+                self.estimator_ = umap.UMAP(
+                    n_components=self.n_components, n_neighbors=self.n_neighbors, metric=self.metric,
+                    precomputed_knn=(knn_indices, knn_dists), init=self.init_Y_, n_epochs=self.num_iters, **kwargs)
             self.Y_ = self.estimator_.fit_transform(X)
 
         elif self.projection_method == 'PaCMAP':
@@ -358,7 +368,7 @@ class Projector(BaseEstimator, TransformerMixin):
             attractive_penalty = pymde.penalties.Log1p
             repulsive_penalty = pymde.penalties.Log
             loss = pymde.losses.Absolute
-            graph = preprocess.graph.Graph(K_affinity)
+            graph = preprocess.graph.Graph(distances)
             self.estimator_ = IsomorphicMDE(graph,
                                             attractive_penalty=attractive_penalty,
                                             repulsive_penalty=repulsive_penalty,
@@ -381,7 +391,7 @@ class Projector(BaseEstimator, TransformerMixin):
             attractive_penalty = pymde.penalties.Log1p
             repulsive_penalty = pymde.penalties.Log
             loss = pymde.losses.Absolute
-            graph = preprocess.graph.Graph(K)
+            graph = preprocess.graph.Graph(distances)
             max_distance = 5e7
             self.estimator_ = IsometricMDE(graph,
                                            embedding_dim=self.n_components,

@@ -1681,8 +1681,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         Notes
         -----
-        For graph-based DR methods we pass precomputed affinities from the chosen refined graph:
-        {MAP, UMAP, Isomap, (Iso/Isomorphic)MDE, PaCMAP, NCVis, TriMAP, t-SNE}.
+        MAP is optimized on the refined diffusion operator of the chosen scaffold. Isomap and the
+        MDE recipes are given the scaffold's neighbor distances. The other methods (UMAP, PaCMAP,
+        TriMAP, t-SNE, NCVis) are run on the scaffold coordinates with `graph_metric`.
         """
         if n_neighbors is None:
             n_neighbors = self.graph_knn
@@ -1695,7 +1696,14 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # choose which refined graph / scaffold to use
         if projection_method in ['MAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']:
             metric = 'precomputed'
-            input_mat = self.P_of_msZ if multiscale else self.P_of_Z
+            if projection_method == 'MAP':
+                input_mat = self.P_of_msZ if multiscale else self.P_of_Z
+            else:
+                # Isomap and the MDE recipes walk the graph, so they are given the scaffold's
+                # neighbor *distances*; the refined operator holds affinities, on which the
+                # shortest path would run through the least similar neighbors.
+                input_mat = _angularize_graph(self.knn_msZ if multiscale else self.knn_Z,
+                                              self.graph_metric, True)
             tag = 'msDM' if multiscale else 'DM'
             # Standardize keys even in UoM mode (no "UoM" prefix)
             key = f"{self.graph_kernel_version} from {tag} with {self.base_kernel_version}"
