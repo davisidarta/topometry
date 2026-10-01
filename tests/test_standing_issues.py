@@ -300,3 +300,59 @@ def test_package_compiles_without_syntax_warnings():
         warnings.simplefilter("error")
         for path in pathlib.Path(topo.__file__).parent.rglob("*.py"):
             compile(path.read_text(), str(path), "exec")
+
+
+# ── geodesics ─────────────────────────────────────────────────────────────────
+def _arc(n=120, radians=2.5, ambient=6, seed=0):
+    """Points along an arc of a great circle, in order; the angle between the ends is `radians`."""
+    rng = np.random.default_rng(seed)
+    t = np.linspace(0.0, radians, n)
+    Q, _ = np.linalg.qr(rng.normal(size=(ambient, 2)))
+    return np.c_[np.cos(t), np.sin(t)] @ Q.T, t
+
+
+def test_cosine_geodesics_are_angles():
+    """Summed along a path, 1 - cos underestimates: it is not a metric. Angles add up."""
+    from topo.eval.local_scores import geodesic_distance
+    X, t = _arc()
+    kernel = Kernel(metric="cosine", n_neighbors=4, backend="sklearn", n_jobs=1).fit(X)
+    np.testing.assert_allclose(kernel.SP[0], t, atol=1e-6)
+
+    raw = geodesic_distance(kernel.knn_, n_jobs=1)[0]       # what summing 1 - cos gives
+    assert raw[-1] < 0.05 * t[-1]
+
+    with pytest.raises(ValueError, match="precomputed"):     # no distances kept to walk on
+        Kernel(metric="precomputed", n_neighbors=4).fit(kernel.knn_).SP
+    cached = Kernel(metric="precomputed", n_neighbors=4, cache_input=True).fit(kernel.knn_)
+    np.testing.assert_allclose(cached.SP[0], raw, atol=1e-12)
+
+
+def test_isomap_unrolls_an_arc_measured_by_cosine():
+    from topo.layouts.isomap import Isomap
+    X, t = _arc()
+    Y = Isomap(X, n_components=1, n_neighbors=4, metric="cosine", backend="sklearn", n_jobs=1)
+    # an isometric unrolling: embedding distances equal the angles
+    np.testing.assert_allclose(np.abs(Y[:, 0] - Y[0, 0]), t, atol=1e-3)
+
+
+def test_geodesic_correlation_with_cosine_metric():
+    from topo.eval.local_scores import geodesic_correlation
+    X, t = _arc()
+    assert geodesic_correlation(X, X, metric="cosine", n_neighbors=4, n_jobs=1, backend="sklearn") > 0.999
+
+
+def test_evaluation_geodesics_use_angles_for_a_cosine_base_graph(monkeypatch):
+    import topo.eval.local_scores as local_scores
+    from topo.tpgraph.kernels import _cosine_distance_to_angle
+    X = _blobs(n=200)
+    tg = _topograph().fit(X)
+    seen = []
+
+    def capture(graph, *args, **kwargs):
+        seen.append(graph)
+        raise RuntimeError("captured")
+
+    monkeypatch.setattr(local_scores, "geodesic_distance", capture)
+    with pytest.raises(RuntimeError, match="captured"):
+        tg.eval_models_layouts(X, landmarks=None, kernels=[], eigenmap_methods=[], projections=[])
+    np.testing.assert_allclose(seen[0].data, _cosine_distance_to_angle(tg.base_knn_graph.data))

@@ -5,6 +5,7 @@ from scipy.stats import spearmanr, kendalltau
 from scipy.sparse import csr_matrix, csgraph
 from topo.utils._utils import get_landmark_indices
 from topo.base.ann import kNN
+from topo.tpgraph.kernels import _angularize_graph
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
 
@@ -164,6 +165,8 @@ def geodesic_correlation(data, emb, landmarks=None,
                         n_jobs=n_jobs,
                         return_instance=False,
                         verbose=False, **kwargs)
+        # path lengths have to add up: cosine distance is not a metric, the angle is
+        data_graph = _angularize_graph(data_graph, metric, True)
     else:
         data_graph = data.copy()
     if not EMB_IS_GRAPH:
@@ -172,6 +175,7 @@ def geodesic_correlation(data, emb, landmarks=None,
                         n_jobs=n_jobs,
                         return_instance=False,
                         verbose=False, **kwargs)
+        emb_graph = _angularize_graph(emb_graph, metric, True)
     else:
         emb_graph = emb.copy()
     # Define landmarks if applicable

@@ -800,7 +800,17 @@ class Kernel(BaseEstimator, TransformerMixin):
             if landmark:
                 print('Landmarks are still to be implemented.')
             from topo.eval.local_scores import geodesic_distance
-            SP = geodesic_distance(self._K, method='D', unweighted=False, directed=False, indices=None, n_jobs=self.n_jobs, random_state=self.random_state)
+            # Paths are measured on the distance graph, not on the kernel: an affinity is larger
+            # for closer points, so the "shortest" path over affinities runs through the farthest.
+            if self.knn_ is not None:
+                distances = _angularize_graph(self.knn_, self.metric, self.use_angular)
+            elif self.metric == 'precomputed' and self.X is not None:
+                distances = self.X
+            else:
+                raise ValueError(
+                    "Shortest paths are computed on the distance graph, which is not kept for a kernel fitted "
+                    "on a precomputed graph. Fit with `cache_input=True`, or compute them from that graph.")
+            SP = geodesic_distance(distances, method='D', unweighted=False, directed=False, indices=None, n_jobs=self.n_jobs, random_state=self.random_state)
             SP = (SP + SP.T) / 2
             SP[np.where(SP == 0)] = np.inf
             SP[(np.arange(SP.shape[0]), np.arange(SP.shape[0]))] = 0

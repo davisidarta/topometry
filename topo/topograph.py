@@ -3129,7 +3129,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # base geodesics
         if self.verbosity > 0:
             print('Computing base geodesics...')
-        base_graph = self.base_knn_graph if landmark_indices is None else self.base_knn_graph[landmark_indices, :][:, landmark_indices]
+        # Path lengths have to add up: cosine distance is not a metric, the angle is. The same
+        # conversion is applied to every cosine graph below.
+        base_graph = _angularize_graph(self.base_knn_graph, self.base_metric, True)
+        if landmark_indices is not None:
+            base_graph = base_graph[landmark_indices, :][:, landmark_indices]
         base_geodesics = squareform(geodesic_distance(base_graph, directed=False, n_jobs=n_jobs))
         gc.collect()
 
@@ -3142,6 +3146,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
             emb = self.EigenbasisDict[key].results()
             emb_graph = kNN(emb, n_neighbors=n_neighbors, metric=self.base_metric, n_jobs=n_jobs,
                             backend=self.backend, return_instance=False, verbose=False, **kwargs)
+            emb_graph = _angularize_graph(emb_graph, self.base_metric, True)
             if landmark_indices is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
             embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
@@ -3162,6 +3167,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 print(f"Computing geodesics for projection '{key}...'")
             emb_graph = kNN(self.ProjectionDict[key], n_neighbors=n_neighbors, metric=self.graph_metric,
                             n_jobs=n_jobs, backend=self.backend, return_instance=False, verbose=False, **kwargs)
+            emb_graph = _angularize_graph(emb_graph, self.graph_metric, True)
             if landmark_indices is not None:
                 emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
             embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
@@ -3193,6 +3199,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         pca_emb = PCA(n_components=self.n_eigs).fit_transform(data)
         emb_graph = kNN(pca_emb, n_neighbors=n_neighbors, metric=self.graph_metric, n_jobs=n_jobs,
                         backend=self.backend, return_instance=False, verbose=False, **kwargs)
+        emb_graph = _angularize_graph(emb_graph, self.graph_metric, True)
         if landmark_indices is not None:
             emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
         embedding_geodesics = squareform(geodesic_distance(emb_graph, directed=False, n_jobs=n_jobs))
