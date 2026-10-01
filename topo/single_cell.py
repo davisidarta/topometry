@@ -553,6 +553,9 @@ if _HAVE_SCANPY:
         (5, 2)
         """
 
+        # Work on a copy: every step below writes to the object it is given
+        AnnData = AnnData.copy()
+
         # 1) Keep a copy of raw counts before any normalization/log
         AnnData.layers["counts"] = AnnData.X.copy()
 
@@ -610,7 +613,7 @@ if _HAVE_SCANPY:
             # even if not scaling, keep X consistent with the (possibly log-normalized) values
             pass
 
-        return AnnData.copy()
+        return AnnData
 
 
     def fit_adata(
@@ -1091,7 +1094,7 @@ if _HAVE_SCANPY:
         tg,
         proj_key='X_TopoMAP',
         groupby='topo_clusters',
-        diffusion_t=1,
+        diffusion_t=8,
         n_plot='10%',
         scale_gain=1.0,
         ellipse_alpha=0.15,
@@ -1111,12 +1114,14 @@ if _HAVE_SCANPY:
         adata : AnnData
             Annotated data matrix with projections in adata.obsm.
         tg : TopoGraph
-            Fitted TopoGraph object with base_kernel and Laplacian.
+            Fitted TopoGraph object. The metric is computed with the Laplacian of its refined
+            graph (`tg.graph_kernel.L`).
         proj_key : str
             Key in adata.obsm to use as the 2D embedding for plotting.
-        groupby : str
-            Key in adata.obs for categorical labels (used for coloring).
-        diffusion_t : int, default 1
+        groupby : str or None
+            Key in adata.obs for categorical labels (used for coloring). If its palette is not
+            in `adata.uns`, one is created; if None, points are drawn in a single color.
+        diffusion_t : int, default 8
             Diffusion time for smoothing the deformation metric; higher values yield smoother estimates
         n_plot : int or str, default '10%'
             Number of localized indicatrices to plot, or a percentage string (e.g. '10%')
@@ -1144,6 +1149,8 @@ if _HAVE_SCANPY:
         None (plots are shown and metrics saved in adata)
 
         """
+        import warnings
+        import matplotlib.colors as mcolors
         from topo.eval.rmetric import (
         RiemannMetric,
         plot_riemann_metric_localized,
@@ -1199,12 +1206,23 @@ if _HAVE_SCANPY:
                     pass
 
         # Select colors as in scanpy (categorical)
-
-        labels = adata.obs[groupby]
-        palette = adata.uns[f'{groupby}_colors']
-        cats = labels.cat.categories if labels.dtype.name == 'category' else np.unique(labels)
-        lut = dict(zip(cats, palette))
-        _colors = labels.map(lut)
+        if groupby is not None and groupby not in adata.obs:
+            warnings.warn(f"`{groupby}` not found in adata.obs; points are drawn in a single color.")
+            groupby = None
+        if groupby is None:
+            _colors = None
+        else:
+            labels = adata.obs[groupby]
+            if labels.dtype.name != 'category':
+                labels = labels.astype('category')
+            cats = labels.cat.categories
+            palette = adata.uns.get(f'{groupby}_colors', None)
+            if palette is None or len(palette) < len(cats):
+                # no (or too short a) palette stored for this key: make one
+                cmap = plt.get_cmap('tab20' if len(cats) <= 20 else 'gist_ncar')
+                palette = [mcolors.to_hex(cmap(i / max(len(cats) - 1, 1))) for i in range(len(cats))]
+            lut = dict(zip(cats, palette))
+            _colors = np.array([lut[v] for v in labels], dtype=object)
 
         L = tg.graph_kernel.L
 
@@ -1218,7 +1236,7 @@ if _HAVE_SCANPY:
 
             # --- Cached geometry computations (keyed by basis_key + Y fingerprint) ---
             Y_fp = (Y.shape, float(Y[0, 0]), float(Y[-1, -1]))  # lightweight fingerprint
-            cache_key = (basis_key, Y_fp)
+            cache_key = (basis_key, Y_fp, int(diffusion_t))
             _cache = tg._riemann_cache.get(cache_key, None)
 
             if _cache is not None:
@@ -1235,7 +1253,7 @@ if _HAVE_SCANPY:
                 deform_vals, (dmin, dmax) = calculate_deformation(
                     Y, L,
                     center="median",
-                    diffusion_t=8,
+                    diffusion_t=int(diffusion_t),
                     diffusion_op=getattr(tg.base_kernel, "P", None),
                     normalize="symmetric",
                     clip_percentile=2.0,
@@ -1276,7 +1294,7 @@ if _HAVE_SCANPY:
             sc.pl.embedding(
                 adata,
                 basis=basis_key,
-                color='topo_clusters',
+                color=groupby,
                 legend_loc=None,
                 legend_fontsize=6,
                 show=False,
@@ -1846,7 +1864,8 @@ if _HAVE_SCANPY:
             id_details = getattr(tg, "_id_details", None)
             if id_details is not None:
                 adata.uns['topometry_id_details'] = _h5ad_safe(id_details)
-            adata.uns[f'topometry_id_global_{tg.id_method}'] = float(tg.global_id) if tg.global_id is not None else None
+            if tg.global_id is not None:
+                adata.uns[f'topometry_id_global_{tg.id_method}'] = float(tg.global_id)
             _loc = tg.local_ids()
             if _loc is not None:
                 if isinstance(_loc, dict):
@@ -1863,7 +1882,7 @@ if _HAVE_SCANPY:
             id_est = IntrinsicDim(
                 methods=list(id_methods),
                 k=list(id_k_values),
-                backend='hnswlib',
+                backend=getattr(tg, 'backend', 'hnswlib'),
                 metric='euclidean',
                 n_jobs=n_jobs,
                 plot=False
@@ -2119,7 +2138,8 @@ if _HAVE_SCANPY:
         Compute Riemannian deformation diagnostics for every 2-D embedding in `adata.obsm`.
 
         For each (n,2) embedding in `.obsm`, calculates the centered log-det deformation
-        scalar field (optionally diffusion-smoothed) using the base Laplacian and stores:
+        scalar field (optionally diffusion-smoothed) using the Laplacian of the refined graph
+        (`tg.graph_kernel.L`) and stores:
         - a per-cell vector in `adata.obs[f"metric_deformation__{obsm_key}"]`
         - its display limits in `adata.uns['metric_limits'][obsm_key]`
 
@@ -2150,9 +2170,10 @@ if _HAVE_SCANPY:
         - Deformation vectors and limits stored as described above.
         """
 
-        # Save Laplacian
+        # Save the Laplacian the diagnostics are computed with
+        L = tg.graph_kernel.L
         try:
-            adata.obsp['topometry_laplacian'] = tg.base_kernel.L
+            adata.obsp['topometry_laplacian'] = L
         except Exception:
             pass
 
@@ -2169,7 +2190,7 @@ if _HAVE_SCANPY:
             try:
                 riem = tg.riemann_diagnostics(
                     Y=arr,
-                    L=tg.graph_kernel.L,
+                    L=L,
                     center=center,
                     diffusion_t=diffusion_t,
                     diffusion_op=diffusion_op,
@@ -2278,16 +2299,12 @@ if _HAVE_SCANPY:
             rng = np.random.RandomState(seed)
             return int(rng.choice(idxs))
 
-        # --- 0) Full spectral scaffold + weights from TopOGraph ---
+        # --- 0) Multiscale diffusion coordinates from TopOGraph ---
+        # The msDM scaffold already is phi_j * lambda_j / (1 - lambda_j), with the trivial eigenpair
+        # dropped, so its first columns are the coordinates `tg.pseudotime` builds.
         Z_full = tg.spectral_scaffold(multiscale=True)              # shape (N_full, m)
-        key = 'msDM with ' + str(tg.base_kernel_version)
-        evals = tg.EigenbasisDict[key].eigenvalues                  # includes lambda_0
-        # choose k (drop the trivial first eigenpair)
-        k_use = int(min(64, Z_full.shape[1] - 1)) if Z_full.shape[1] > 1 else 1
-        # weights: lambda/(1 - lambda), like in tg.pseudotime
-        lam = np.asarray(evals[1:k_use+1], float)
-        w = (lam / (1.0 - lam + 1e-12))[None, :]
-        Psi_full = Z_full[:, :k_use] * w                            # (N_full, k_use)
+        k_use = int(min(64, Z_full.shape[1]))
+        Psi_full = Z_full[:, :k_use]                                # (N_full, k_use)
 
         N_full = Psi_full.shape[0]
         N_here = adata.n_obs
@@ -3427,7 +3444,7 @@ if _HAVE_SCANPY:
             ev_ms = _eigvals_from_tg(tg, variant='msDM')
             ev_dm = _eigvals_from_tg(tg, variant='DM') if (ev_ms is None or (hasattr(ev_ms, "size") and ev_ms.size == 0)) else None
             _evals = ev_ms if (ev_ms is not None and getattr(ev_ms, "size", 0) > 0) else (ev_dm if ev_dm is not None else np.array([]))
-            sel_k  = tg.global_id if (hasattr(tg, 'global_id') and tg.global_id is not None) else tg.n_eigs if (hasattr(tg, 'n_eigs') and tg.n_eigs is not None) else None
+            sel_k  = tg.n_scaffold_components if getattr(tg, 'n_scaffold_components', None) is not None else tg.n_eigs if (hasattr(tg, 'n_eigs') and tg.n_eigs is not None) else None
 
             n_cells = adata.n_obs
             n_genes = adata.n_vars
@@ -3509,7 +3526,7 @@ if _HAVE_SCANPY:
             y -= line_h_medium
             s2 = (
                 f"-  Cells x genes: {n_cells} x {n_genes}\n"
-                f"-  Global ID ({tg.id_method}): {int(tg.global_id)}\n"
+                f"-  Global ID ({tg.id_method}): {'n/a' if tg.global_id is None else format(tg.global_id, '.1f')}\n"
                 f"-  spectral scaffold size: {int(tg.n_eigs)}\n"
                 "\n"
                 "Hyperparameters\n"
@@ -4471,6 +4488,26 @@ if _HAVE_SCANPY:
     def _persist_meta_integration(adata, method: str, extra: dict):
         _persist_meta(adata, method, extra)
 
+    def _bbknn_distances(adata) -> "csr_matrix":
+        """
+        The batch-balanced neighbor *distances* BBKNN wrote to `adata.obsp`. TopOGraph builds its
+        kernels from distances; BBKNN's `connectivities` are affinities (larger for closer cells)
+        and would be read upside down.
+        """
+        if "distances" not in adata.obsp:
+            raise RuntimeError("BBKNN failed to populate `.obsp['distances']`.")
+        return adata.obsp["distances"].tocsr().astype(np.float32, copy=True)
+
+    def _blend_distance_graphs(ref, other, alpha: float):
+        """
+        Add the edges of the distance graph `other` to `ref`. An edge held by one graph keeps its
+        distance; an edge held by both gets `(1 - alpha) * ref + alpha * other`.
+        """
+        ref, other = ref.tocsr(), other.tocsr()
+        shared = (ref > 0).multiply(other > 0)
+        blended = (1.0 - float(alpha)) * ref.multiply(shared) + float(alpha) * other.multiply(shared)
+        return (blended + (ref - ref.multiply(shared)) + (other - other.multiply(shared))).tocsr()
+
     def _knn_from_topo(X: np.ndarray, k: int, metric: str, n_jobs: int = -1, backend: str = "hnswlib"):
         """
         Build a kNN graph using topo.base.ann.kNN and return a CSR adjacency (symmetric).
@@ -4526,10 +4563,7 @@ if _HAVE_SCANPY:
                 neighbors_within_batch=int(neighbors_within_batch),
                 **kwargs,
             )
-        if "connectivities" not in adata.obsp:
-            raise RuntimeError("BBKNN failed to populate `.obsp['connectivities']`.")
-
-        knn_X = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        knn_X = _bbknn_distances(adata)
         degX = np.diff(knn_X.indptr)
         k_base_eff = int(max(3, degX.min()))  # must be <= min degree to avoid index errors
 
@@ -4551,7 +4585,7 @@ if _HAVE_SCANPY:
                 neighbors_within_batch=int(neighbors_within_batch),
                 **kwargs,
             )
-        knn_msZ = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        knn_msZ = _bbknn_distances(adata)
         deg_msZ = np.diff(knn_msZ.indptr)
         k_msZ_eff = int(max(3, deg_msZ.min()))
 
@@ -4571,7 +4605,7 @@ if _HAVE_SCANPY:
                 neighbors_within_batch=int(neighbors_within_batch),
                 **kwargs,
             )
-        tg._knn_Z = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=True)
+        tg._knn_Z = _bbknn_distances(adata)
         deg_Z = np.diff(tg._knn_Z.indptr)
         k_Z_eff = int(max(3, deg_Z.min()))
 
@@ -4793,6 +4827,8 @@ if _HAVE_SCANPY:
         bbknn_neighbors_within_batch : int
             BBKNN's neighbors_within_batch used when blending.
         blend_alpha : float
+            Weight of the BBKNN distance where both graphs hold an edge; edges held by only one
+            of them are kept as they are.
             Blend weight in [0,1]; final_knn = (1 - alpha) * kNN + alpha * BBKNN.
         target_min_degree : int or None
             If set, rebuild the kNN once with k = max(graph_knn, target_min_degree) to avoid under-connected cells.
@@ -4931,11 +4967,12 @@ if _HAVE_SCANPY:
                     use_rep=tmp_key,
                     neighbors_within_batch=int(bbknn_neighbors_within_batch),
                 )
-            if "connectivities" in adata.obsp:
-                knn_bb = adata.obsp["connectivities"].tocsr().astype(np.float32, copy=False)
-                # convex blend; ensure shapes match
+            if "distances" in adata.obsp:
+                # both graphs hold distances on Zc; BBKNN's connectivities are affinities and
+                # cannot be mixed into a distance graph
+                knn_bb = _bbknn_distances(adata)
                 if knn_bb.shape == knn_ref.shape:
-                    knn_ref = (1.0 - float(blend_alpha)) * knn_ref + float(blend_alpha) * knn_bb
+                    knn_ref = _blend_distance_graphs(knn_ref, knn_bb, blend_alpha)
 
         # Optional: enforce minimum degree by increasing k once
         if target_min_degree is not None and target_min_degree > 0:
@@ -5152,7 +5189,7 @@ if _HAVE_SCANPY:
     def topological_workflow(AnnData, topograph=None,
                              kernels=['fuzzy', 'cknn',
                                       'bw_adaptive'],
-                             eigenmap_methods=['DM', 'LE'],
+                             eigenmap_methods=['msDM', 'DM'],
                              projections=['Isomap', 'MAP'],
                              resolution=0.8,
                              X_to_csr=False, **kwargs):
@@ -5189,12 +5226,12 @@ if _HAVE_SCANPY:
             * 'gaussian'
             Will not run all by default to avoid long waiting times in reckless calls.
 
-        eigenmap_methods : list of str (optional, default ['DM', 'LE', 'top']).
-            List of eigenmap methods to run. Options are:
-            * 'DM'
-            * 'LE'
-            * 'top'
-            * 'bottom'
+        eigenmap_methods : list of str (optional, default ['msDM', 'DM']).
+            Which of TopOGraph's two diffusion scaffolds to export. Options are:
+            * 'msDM' - multiscale diffusion maps
+            * 'DM' - diffusion maps
+            Other eigenmaps ('LE', 'top', 'bottom') are no longer computed by TopOGraph and are
+            skipped with a warning; see `topo.spectral.EigenDecomposition`.
         
         projections : list of str (optional, default ['Isomap', 'MAP']).
             List of projection methods to run. Options are the same of the `topo.layouts.Projector()` object:
@@ -5238,25 +5275,26 @@ if _HAVE_SCANPY:
                    projections=projections)
         
         # Get results to AnnData
-        for base_kernel in kernels:  
+        import warnings
+        graph_based = ['MAP', 'IsomorphicMDE', 'IsometricMDE', 'Isomap']  # keyed by the refined graph
+        for base_kernel in kernels:
             for eigenmap_method in eigenmap_methods:
-                if eigenmap_method in ['msDM','DM', 'LE']:
-                    basis_key = eigenmap_method + ' with ' + str(base_kernel)
-                elif eigenmap_method == 'top':
-                    basis_key = 'Top eigenpairs with ' + str(base_kernel)
-                elif eigenmap_method == 'bottom':
-                    basis_key = 'Bottom eigenpairs with ' + str(base_kernel)
-                else:
-                    raise ValueError('Unknown eigenmap method.')
+                if eigenmap_method not in ['msDM', 'DM']:
+                    # TopOGraph computes the two diffusion scaffolds; other eigenmaps are available
+                    # from topo.spectral.EigenDecomposition
+                    warnings.warn(f"`{eigenmap_method}` eigenmaps are not computed by TopOGraph and are skipped.")
+                    continue
+                multiscale = (eigenmap_method == 'msDM')
+                basis_key = eigenmap_method + ' with ' + str(base_kernel)
                 AnnData.obsm['X_' + basis_key] = topograph.EigenbasisDict[basis_key].transform(data) # returns the scaled eigenvectors
 
                 for graph_kernel in kernels:
                     graph_key = graph_kernel + ' from ' + basis_key
-                    AnnData.obsp[basis_key + '_distances'] = topograph.eigenbasis_knn_graph
+                    AnnData.obsp[basis_key + '_distances'] = topograph.knn_msZ if multiscale else topograph.knn_Z
                     AnnData.obsp[graph_key + '_connectivities'] = topograph.GraphKernelDict[graph_key].P
                     sc.tl.leiden(AnnData, adjacency = topograph.GraphKernelDict[graph_key].P, resolution=resolution, key_added = graph_key + '_leiden', **kwargs)
                     for projection in projections:
-                        if projection in ['MAP', 'UMAP', 'MDE', 'Isomap']: 
+                        if projection in graph_based:
                             suffix_key = graph_key
                         else:
                             suffix_key = basis_key

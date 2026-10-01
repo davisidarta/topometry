@@ -88,18 +88,11 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                 **kwargs):
         if isinstance(methods, str):
             methods = [methods]
-        if isinstance(k, list):
-            n_k = len(k)
-            use_k = k
-        elif isinstance(k, int):
-            n_k = 1
-            use_k = k
-        elif isinstance(k, range):
-            n_k = len(k)
-            use_k = k
+        # one neighborhood size or any iterable of them
+        use_k = [int(k)] if isinstance(k, (int, np.integer)) else [int(v) for v in k]
         self.methods = methods
         self.use_k = use_k
-        self.n_k = n_k
+        self.n_k = len(use_k)
         self.backend = backend
         self.metric = metric
         self.n_jobs = n_jobs
@@ -130,30 +123,17 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         self.local_id['mle'] = {}
         self.global_id['fsa'] = {}
         self.global_id['mle'] = {}
-        if self.n_k == 1:
-            knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=self.use_k, backend=self.backend)
+        for k in self.use_k:
+            knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=k, backend=self.backend)
             for method in self.methods:
                 if method not in ['fsa', 'mle']:
                     raise ValueError('Invalid method. Valid methods are: fsa, mle.')
                 if method == 'fsa':
-                    self.local_id['fsa'][str(self.use_k)] = fsa_local(knn, self.use_k)
-                    self.global_id['fsa'][str(self.use_k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(self.use_k)])
+                    self.local_id['fsa'][str(k)] = fsa_local(knn, k)
+                    self.global_id['fsa'][str(k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(k)])
                 elif method == 'mle':
-                    self.local_id['mle'][str(self.use_k)] = mle_local(knn, self.use_k)
-                    self.global_id['mle'][str(self.use_k)] = mle_global(knn, id_local=self.local_id['mle'][str(self.use_k)])
-
-        else:
-            for k in self.use_k:
-                knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=k, backend=self.backend)
-                for method in self.methods:
-                    if method not in ['fsa', 'mle']:
-                        raise ValueError('Invalid method. Valid methods are: fsa, mle.')
-                    if method == 'fsa':
-                        self.local_id['fsa'][str(k)] = fsa_local(knn, k)
-                        self.global_id['fsa'][str(k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(k)])
-                    elif method == 'mle':
-                        self.local_id['mle'][str(k)] = mle_local(knn, k)
-                        self.global_id['mle'][str(k)] = mle_global(knn, id_local=self.local_id['mle'][str(k)])
+                    self.local_id['mle'][str(k)] = mle_local(knn, k)
+                    self.global_id['mle'][str(k)] = mle_global(knn, id_local=self.local_id['mle'][str(k)])
 
     def plot_id(self, bins=30, figsize=(6, 8), titlesize=22, labelsize=16, legendsize=10):
         self._parse_random_state()
@@ -290,12 +270,14 @@ def fsa_local(K, n_neighbors=10):
 
 
 def fsa_global(K, id_local=None, **kwargs):
-    from statistics import median
+    """Global FSA dimension: the median of the local estimates."""
     if id_local is None:
         dims = fsa_local(K, **kwargs)
     else:
         dims = id_local
-    return median(np.abs(dims)) / np.log(2)
+    # The local estimates already carry the log(2) of the FSA formula; dividing the median by
+    # it once more overestimated the dimension by 44%.
+    return float(np.median(np.abs(dims)))
 
 
 def mle_local(K, n_neighbors=10, k1=1):
@@ -307,7 +289,7 @@ def mle_local(K, n_neighbors=10, k1=1):
 
 def mle_global(K, id_local=None, n_neighbors=15, k1=1):
     if id_local is None:
-        id_local, _, _ = mle_local(K, n_neighbors, k1)
+        id_local = mle_local(K, n_neighbors, k1)
     return 1.0 / np.mean(1.0 / id_local)
 
 
