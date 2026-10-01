@@ -2377,6 +2377,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
                                 cknn=True,
+                                delta=self.delta,
                                 pairwise=False,
                                 sigma=None,
                                 adaptive_bw=True,
@@ -2460,6 +2461,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 if data_for_expansion is None:
                     raise ValueError('data_for_expansion is None. Provide data for neighborhood expansion when using `bw_adaptive_nbr_expansion`.')
                 use_metric = self.base_metric if base else self.graph_metric
+                if use_metric == 'precomputed':
+                    raise ValueError('`bw_adaptive_nbr_expansion` searches a wider neighborhood, which a precomputed graph cannot provide.')
+                # the wider neighborhood is searched in the data, not in the kNN graph
                 kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
@@ -2476,7 +2480,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
-                                random_state=self.random_state).fit(knn)
+                                random_state=self.random_state).fit(data_for_expansion)
                 _gc.collect()
                 results_dict[kernel_key] = kernel
 
@@ -2484,6 +2488,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 if data_for_expansion is None:
                     raise ValueError('data_for_expansion is None. Provide data for neighborhood expansion when using `bw_adaptive_alpha_decaying_nbr_expansion`.')
                 use_metric = self.base_metric if base else self.graph_metric
+                if use_metric == 'precomputed':
+                    raise ValueError('`bw_adaptive_alpha_decaying_nbr_expansion` searches a wider neighborhood, which a precomputed graph cannot provide.')
+                # the wider neighborhood is searched in the data, not in the kNN graph
                 kernel = Kernel(metric=use_metric,
                                 n_neighbors=n_neighbors,
                                 fuzzy=False,
@@ -2500,7 +2507,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                                 anisotropy=1.0,
                                 cache_input=False,
                                 verbose=self.bases_graph_verbose,
-                                random_state=self.random_state).fit(knn)
+                                random_state=self.random_state).fit(data_for_expansion)
                 _gc.collect()
                 results_dict[kernel_key] = kernel
 

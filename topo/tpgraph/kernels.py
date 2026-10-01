@@ -97,7 +97,7 @@ def compute_kernel(X, metric='cosine',
                    n_neighbors=10, fuzzy=False, cknn=False, delta=1.0, pairwise=False, sigma=None, adaptive_bw=True,
                    expand_nbr_search=False, alpha_decaying=False, return_densities=False, symmetrize=True,
                    backend='hnswlib', n_jobs=-1, verbose=False,
-                   use_angular=False, square_distances=True, **kwargs):
+                   use_angular=None, square_distances=True, **kwargs):
     """
     Compute a kernel matrix from a set of points.
 
@@ -139,6 +139,10 @@ def compute_kernel(X, metric='cosine',
 
     expand_nbr_search : bool (optional, default False).
         Whether to expand the neighborhood search (mitigates a choice of too small a number of k-neighbors).
+        The kernel is then built on a wider graph of `k + (k - median(omega))` neighbors, where `omega`
+        is the local density proxy in [2, k] derived from the adaptive bandwidth - i.e. the search widens
+        by as much as the typical point's neighborhood falls short of `k`. Requires `adaptive_bw` and the
+        data itself (it is ignored for precomputed graphs).
 
     alpha_decaying : bool (optional, default False).
         Whether to use an adaptively decaying kernel.
@@ -161,13 +165,20 @@ def compute_kernel(X, metric='cosine',
     verbose : bool (optional, default False).
         Whether to print progress messages.
 
+    use_angular : bool or None (optional, default None).
+        For `metric='cosine'`, whether to measure distances and bandwidths as angles (arccos) rather than
+        as cosine distances. None means True. Ignored for other metrics.
+
+    square_distances : bool (optional, default True).
+        Whether to square the bandwidth-normalized distances, i.e. use a Gaussian kernel.
+
     **kwargs : dict, optional
         Additional arguments to be passed to the nearest-neighbors backend.
 
     Returns
     -------
     K : array-like, shape (n_samples, n_samples)
-        The kernel matrix.
+        The kernel matrix. It has no self-loops.
 
     densities : dict, optional (if `return_densities` is set to `True`)
         If `fuzzy` and `cknn` are `False`, is a dictionary containing the bandwidth metrics. 
@@ -181,30 +192,29 @@ def compute_kernel(X, metric='cosine',
     adap_sd_new = None
     pm_new = None
     new_K = None
-    dists_new = None
     if n_jobs == -1:
         from joblib import cpu_count
         n_jobs = cpu_count()
     k = n_neighbors
-    # Sensible defaults for cosine-on-Z-scores (correlation geometry)
-    if metric == 'cosine':
-        # Only override if user didn't explicitly set these in kwargs
-        if 'use_angular' not in kwargs:
-            use_angular = True
-        if 'square_distances' not in kwargs:
-            square_distances = True
-        
+    # Cosine distances are measured as angles unless the caller says otherwise
+    if use_angular is None:
+        use_angular = (metric == 'cosine')
+
+    X_for_knn = X
     if metric == 'precomputed':
         K = X
         expand_nbr_search = False
     else:
         # If using cosine with an ANN backend that requires unit vectors, normalize rows
-        X_for_knn = X
         if (metric == 'cosine') and (not pairwise):
             if _cosine_knn_requires_unit_vectors(backend):
                 X_for_knn = _maybe_l2_normalize_rows(X)
         if pairwise:
-            K = pairwise_distances(X_for_knn, metric)
+            # Every pairwise distance, stored as a full graph (self-distance included, as in the
+            # kNN graphs) so that the code below treats both cases alike.
+            D = np.asarray(pairwise_distances(X_for_knn, metric=metric), dtype=float)
+            K = csr_matrix((D.ravel(), np.tile(np.arange(N), N), np.arange(0, N * N + 1, N)), shape=(N, N))
+            expand_nbr_search = False
         else:
             K = kNN(X_for_knn, metric=metric, n_neighbors=k,
                     backend=backend, n_jobs=n_jobs, **kwargs)
@@ -247,22 +257,20 @@ def compute_kernel(X, metric='cosine',
                 dens_dict['omega'] = pm
                 dens_dict['adaptive_bw'] = adap_sd
             if expand_nbr_search:
-                new_k = int(k + (k - pm.max()))
-                new_K = kNN(X, metric=metric, n_neighbors=new_k,
+                # Widen the search by as much as the typical neighborhood falls short of k, and
+                # build the kernel on the wider graph, with its own bandwidths.
+                new_k = int(min(k + (k - np.median(pm)), N - 1))
+                new_K = kNN(X_for_knn, metric=metric, n_neighbors=new_k,
                             backend=backend, n_jobs=n_jobs, **kwargs)
-                new_K_scaled = _angularize_graph(new_K, metric, use_angular)
-                adap_sd_new = _adap_bw(new_K_scaled, new_k)
-                x_new, y_new, dists_new = find(new_K_scaled)
-                # Get an indirect measure of the local density
+                K_scaled = _angularize_graph(new_K, metric, use_angular)
+                adap_sd_new = _adap_bw(K_scaled, new_k)
                 pm_new = np.interp(
                     adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k))
-                if return_densities:
-                    dens_dict['expanded_k_neighbor'] = new_k
-                    dens_dict['omega_nbr_expanded'] = adap_sd_new
-                    dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
-                    dens_dict['expanded_neighborhood_graph'] = new_K
-                    dens_dict['knn_expanded'] = new_K
+                adap_sd, pm, k = adap_sd_new, pm_new, new_k
+        # A point is not its own neighbor: the kernel has no self-loops
         x, y, dists = find(K_scaled)
+        off_diagonal = x != y
+        x, y, dists = x[off_diagonal], y[off_diagonal], dists[off_diagonal]
 
         # Numerical guards for distances (important for arccos and exponent)
         # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.
@@ -272,29 +280,13 @@ def compute_kernel(X, metric='cosine',
             dists = np.clip(dists, 0.0, np.pi)
         else:
             dists = np.maximum(dists, 0.0)
-        if expand_nbr_search and dists_new is not None:
-            if metric == 'cosine' and not use_angular:
-                dists_new = np.clip(dists_new, 0.0, 2.0)
-            elif metric == 'cosine' and use_angular:
-                dists_new = np.clip(dists_new, 0.0, np.pi)
-            else:
-                dists_new = np.maximum(dists_new, 0.0)
         # Normalize distances
         if adaptive_bw:
+            d_scaled = dists / (adap_sd[x] + 1e-10)
             # Alpha decaying: the kernel adaptively decays depending on neighborhood density
             if alpha_decaying:
-                if expand_nbr_search:
-                    base = dists_new / (adap_sd_new[x] + 1e-10)
-                    expo = np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
-                else:
-                    base = dists / (adap_sd[x] + 1e-10)
-                    expo = np.power(2, ((k - pm[x]) / pm[x]))
-                d_scaled = np.power(base, expo)
-            else:
-                if expand_nbr_search:
-                    d_scaled = dists_new / (adap_sd_new[x] + 1e-10)
-                else:
-                    d_scaled = dists / (adap_sd[x] + 1e-10)
+                expo = np.power(2, ((k - pm[x]) / pm[x]))
+                d_scaled = np.power(d_scaled, expo)
             if square_distances:
                 d_scaled = d_scaled ** 2
         else:
@@ -320,15 +312,12 @@ def compute_kernel(X, metric='cosine',
     # handle NaNs/Infs robustly
     W.data = np.where(np.isfinite(W.data), W.data, 0.0)
 
-    # --- only attach expanded-neighborhood diagnostics if they exist ---
-    if return_densities:
-        # existing density keys already set above stay as-is
-        if expand_nbr_search and (new_k is not None):
-            dens_dict['expanded_k_neighbor'] = new_k
-            dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
-            dens_dict['omega_nbr_expanded'] = pm_new
-            dens_dict['expanded_neighborhood_graph'] = new_K
-            dens_dict['knn_expanded'] = new_K
+    if return_densities and (new_k is not None):
+        dens_dict['expanded_k_neighbor'] = new_k
+        dens_dict['adaptive_bw_nbr_expanded'] = adap_sd_new
+        dens_dict['omega_nbr_expanded'] = pm_new
+        dens_dict['expanded_neighborhood_graph'] = new_K
+        dens_dict['knn_expanded'] = new_K
 
     if not return_densities:
         return W
@@ -407,6 +396,13 @@ class Kernel(BaseEstimator, TransformerMixin):
     laplacian_type : str (optional, default 'normalized').
             The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
 
+    use_angular : bool (optional, default True).
+        For `metric='cosine'`, whether to measure distances and bandwidths as angles rather than as
+        cosine distances. Ignored for other metrics.
+
+    delta : float (optional, default 1.0).
+        The scaling factor of the CkNN rule. Only used if `cknn` is `True`.
+
 
     Properties
     ----------
@@ -459,8 +455,10 @@ class Kernel(BaseEstimator, TransformerMixin):
                  cache_input=False,
                  verbose=False,
                  random_state=None,
-                 use_angular=True
+                 use_angular=True,
+                 delta=1.0
                  ):
+        self.delta = delta
         self.n_neighbors = n_neighbors
         self.fuzzy = fuzzy
         self.cknn = cknn
@@ -579,7 +577,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             self.X = X
         self.N, self.M = X.shape
         if self._K is None or (self._K is not None and recompute):
-            self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, pairwise=self.pairwise,
+            self._K, self.dens_dict = compute_kernel(X, metric=self.metric, fuzzy=self.fuzzy, cknn=self.cknn, delta=self.delta, pairwise=self.pairwise,
                                                      n_neighbors=self.n_neighbors, sigma=self.sigma, adaptive_bw=self.adaptive_bw,
                                                      expand_nbr_search=self.expand_nbr_search, alpha_decaying=self.alpha_decaying, return_densities=True, symmetrize=self.symmetrize,
                                                      backend=self.backend, n_jobs=self.n_jobs, use_angular=self.use_angular, verbose=self.verbose, **kwargs)
@@ -595,7 +593,8 @@ class Kernel(BaseEstimator, TransformerMixin):
             if self.adaptive_bw:
                 self.adaptive_bw_ = self.dens_dict['adaptive_bw']
                 self.omega_ = self.dens_dict['omega']
-            if self.expand_nbr_search:
+            # absent when the search could not be expanded (precomputed or pairwise input)
+            if self.expand_nbr_search and 'expanded_k_neighbor' in self.dens_dict:
                 self.expanded_k_neighbor_ = self.dens_dict['expanded_k_neighbor']
                 self.adaptive_bw_nbr_expanded_ = self.dens_dict['adaptive_bw_nbr_expanded']
                 self.omega_nbr_expanded_ = self.dens_dict['omega_nbr_expanded']
@@ -1213,7 +1212,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         return sparserW
 
     def interpolate(self, f_subsampled, keep_inds, target=None, order=100, reg_eps=0.005):
-        """
+        r"""
         Interpolate a graph signal.
 
         Parameters

@@ -9,6 +9,7 @@
 # CkNN was developed by Tyrus Berry and Timothy Sauer [http://dx.doi.org/10.3934/fods.2019001]
 
 import numpy as np
+from warnings import warn
 from scipy.sparse import csr_matrix, find
 from sklearn.base import TransformerMixin
 from topo.base.ann import kNN
@@ -40,7 +41,8 @@ def cknn_graph(X, n_neighbors=10,
 
     delta : float (optional, default=1.0).
         A parameter to decide the radius for each points. The combination
-        radius increases in proportion to this parameter. This should be tunned.
+        radius increases in proportion to this parameter. This should be tunned:
+        the graph gets denser as it grows, and too small a value leaves points isolated.
 
     metric : str (optional, default='euclidean').
         The metric of each points. This parameter depends on the parameter
@@ -49,11 +51,13 @@ def cknn_graph(X, n_neighbors=10,
     weighted : bool (optional, default=False).
         If True, the CkNN graph is weighted (i.e. an affinity matrix). If False, the CkNN graph is unweighted (i.e. the proper adjacency matrix).
         If None, will return a tuple of the adjacency matrix (unweighted) and the affinity matrix (weighted).
+        Points `i` and `j` are connected when `d(i, j) < delta * sqrt(d_k(i) * d_k(j))`, where `d_k` is a point's
+        distance to its k-th neighbor; a connected pair has weight `exp(-d(i, j)^2 / (d_k(i) * d_k(j)))`.
 
     return_densities : bool (optional, default=False).
         If True, will return the distance to the k-nearest-neighbor of each points.
 
-    include_self : bool (optional, default=True).
+    include_self : bool (optional, default=False).
             All diagonal elements are 1.0 if this parameter is True.
 
     backend : str 'hnwslib', 'nmslib' or 'sklearn' (optional, default 'nmslib').
@@ -97,31 +101,39 @@ def cknn_graph(X, n_neighbors=10,
         ]
 
     x, y, dists = find(knn)
-    # The CkNN normalization
-    # prevent division by zero
-    cknn_norm = delta * np.sqrt(adap_sd.dot(adap_sd.T)) + 1e-12
-    A = csr_matrix(((dists / cknn_norm), (x, y)),
-                   shape=[N, N])
-    dd = np.arange(N)
+    # The CkNN rule: i and j are connected when d(i, j) < delta * sqrt(d_k(i) * d_k(j)), with
+    # d_k each point's own distance to its k-th neighbor. The normalization is per pair.
+    ratio = dists / (np.sqrt(adap_sd[x] * adap_sd[y]) + 1e-12)
+    connected = (ratio < delta) & (x != y)
+    x, y, ratio = x[connected], y[connected], ratio[connected]
+    A = csr_matrix((np.ones(x.shape[0]), (x, y)), shape=[N, N])
+    # Locality-sensitive weights on the CkNN edges: exp(-d(i, j)^2 / (d_k(i) * d_k(j)))
+    W = csr_matrix((np.exp(-ratio ** 2), (x, y)), shape=[N, N])
+    # The rule is symmetric in i and j, but only pairs found by the neighbor search are tested
+    A = A.maximum(A.T).tocsr()
+    W = W.maximum(W.T).tocsr()
+    isolated = int((np.diff(A.indptr) == 0).sum())
+    if isolated > 0:
+        warn("CkNN left %i of %i points without any neighbor at delta=%s. Distances concentrate in high "
+             "dimensions, where a larger `delta` (or `n_neighbors`) is needed to connect the graph."
+             % (isolated, N, delta))
     if include_self:
-        A[dd, dd] = True
-    else:
-        A[dd, dd] = False
+        A.setdiag(1.0)
+        W.setdiag(1.0)
+    A, W = A.astype(np.int32), W.astype(np.float32)
     if weighted is None:
         if return_densities:
-            return A.astype(np.int32), A.astype(np.float32), adap_sd
+            return A, W, adap_sd
         else:
-            return A.astype(np.int32), A.astype(np.float32)
+            return A, W
     else:
         if weighted:
             if return_densities:
-                return A.astype(np.float32), adap_sd
+                return W, adap_sd
             else:
-                return A.astype(np.float32)
+                return W
         else:
             if return_densities:
-                return A.astype(np.int32), adap_sd
+                return A, adap_sd
             else:
-                return A.astype(np.int32)
-
-
+                return A
