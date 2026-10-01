@@ -3544,10 +3544,10 @@ if _HAVE_SCANPY:
             ax.text(0.0, y, "What you can use next:", ha='left', va='top', fontsize=12, weight='bold')
             y -= line_h_medium
             avail = []
-            avail.append("-  Spectral scaffold coordinates: in `adata.obsm['X_spectral_scaffold']` and `adata.obsm['X_multiscale_scaffold']`")
+            avail.append("-  Spectral scaffold coordinates: in `adata.obsm['X_spectral_scaffold']` and `adata.obsm['X_ms_spectral_scaffold']`")
             avail.append("  - Construct your own neighborhood graphs on these scaffolds using `sc.pp.neighbors(adata, use_rep='X_spectral_scaffold')`" \
             " to generate custom UMAPs, clusters, etc." )
-            avail.append("  - For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_msDM with bw_adaptive', n_neighbors=10)` ." )
+            avail.append("  - For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_ms_spectral_scaffold', n_neighbors=10)` ." )
             avail.append("-  2-D layouts: " + (", ".join(embeddings_available) if embeddings_available else "(none cached)") + " in adata.obsm")
             avail.append("  - Visualize gene expression and metadata in `adata.obs` using `sc.pl.embedding(adata, basis='TopoMAP',...)` ." )
             avail.append("-  Graphs: " + (", ".join(graphs_available) if graphs_available else "(none cached)") + " in adata.obsp")

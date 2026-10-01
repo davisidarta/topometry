@@ -13,6 +13,7 @@ from topo.spectral._spectral import _arpack_v0, _deterministic_signs
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy import sparse
 from topo.tpgraph.kernels import Kernel
+from topo.utils._utils import PlainEstimatorDisplay
 EIGEN_SOLVERS = ['dense', 'arpack', 'lobpcg']
 try:
     from pyamg import smoothed_aggregation_solver
@@ -127,7 +128,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
     return evals, evecs
 
 
-class EigenDecomposition(BaseEstimator, TransformerMixin):
+class EigenDecomposition(PlainEstimatorDisplay, BaseEstimator, TransformerMixin):
     """
     Scikit-learn flavored class for computing eigendecompositions of sparse symmetric matrices.
     and exploring the associated eigenvectors and eigenvalues.

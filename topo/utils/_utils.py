@@ -5,6 +5,31 @@ from sklearn.utils import check_random_state
 from sklearn.decomposition import TruncatedSVD
 
 
+class PlainEstimatorDisplay:
+    """
+    Mixin for TopoMetry's estimators, to be listed before scikit-learn's BaseEstimator.
+
+    Recent scikit-learn probes every attribute of an estimator - `dir()` calls `hasattr` on each
+    name, and the HTML display in notebooks reads each one. On these classes that evaluates
+    lazily computed properties (a Kernel's shortest paths are an all-pairs computation) and
+    fails on the ones that raise when nothing is fitted. Listing attributes and displaying an
+    object must do neither, so `dir()` only lists, and notebooks show the class's own text
+    summary.
+    """
+
+    def __dir__(self):
+        return object.__dir__(self)
+
+    def _repr_mimebundle_(self, **kwargs):
+        return {"text/plain": repr(self)}
+
+    @property
+    def _repr_html_(self):
+        # IPython asks for an HTML representation separately from the bundle above; having
+        # none makes it use the text one (scikit-learn signals the same way)
+        raise AttributeError("TopoMetry estimators are displayed as text.")
+
+
 def get_landmark_indices(data, n_landmarks=1000, method='random', random_state=None, **kwargs):
     """
     Select landmark indices from data.
