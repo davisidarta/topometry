@@ -44,8 +44,9 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Kernel choice for the base graph (e.g., 'bw_adaptive', 'fuzzy', 'cknn').
     graph_kernel_version : str, default 'bw_adaptive'
         Kernel choice for scaffold graphs (applies to DM and msDM).
-    backend : {'hnswlib', 'nmslib', 'annoy', 'faiss', 'sklearn'}, default 'hnswlib'
-        Approximate nearest-neighbor backend.
+    backend : {'hnswlib', 'nmslib', 'sklearn'}, default 'hnswlib'
+        Nearest-neighbor backend. If its library is not installed, the first available of
+        hnswlib, nmslib and scikit-learn (exact search) is used instead, with a warning.
     base_metric : str, default 'cosine'
         Distance for the base kNN graph (usually cosine/correlation on standardized inputs).
     graph_metric : str, default 'euclidean'
@@ -56,8 +57,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Bandwidth for Gaussian kernels (when selected).
     delta : float, default 1.0
         Radius parameter for cKNN kernels.
-    n_jobs : int, default 1
-        Threads for kNN searches; -1 uses all cores.
+    n_jobs : int, default -1
+        Threads for kNN searches and layout optimization; -1 uses all cores. With `n_jobs=1` and
+        a `random_state`, a fit is reproducible bit for bit; with more threads, approximate
+        index construction and layout optimization are not deterministic.
     low_memory : bool, default False
         Avoid caching large kernel objects when True.
     eigen_tol : float, default 1e-8
@@ -70,10 +73,10 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Cache kernel and eigen objects in dictionaries for reuse.
     verbosity : int, default 0
         0: silent; 1: major steps; 2+: include layout messages; 3: debug neighborhoods.
-    random_state : int or numpy.random.RandomState, default 0
-        Random seed/control for reproducibility.
+    random_state : int or numpy.random.RandomState, default 42
+        Random seed/control for reproducibility (see `n_jobs`).
     id_method : {'mle', 'fsa'}, default 'fsa'
-        Intrinsic dimensionality estimator that selects scaffold size (both are stored).
+        Intrinsic dimensionality estimator that selects the scaffold size.
     id_ks : int or iterable, default 50
         Neighborhood sizes for I.D. estimation.
     id_metric : str, default 'euclidean'
@@ -101,8 +104,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Refined diffusion operators on the multiscale and single-time scaffolds.
     eigenvalues : numpy.ndarray
         Eigenvalues of the active eigenbasis (multiscale by default).
-    MAP, msMAP, PaCMAP, msPaCMAP : numpy.ndarray
+    TopoMAP, msTopoMAP, TopoPaCMAP, msTopoPaCMAP : numpy.ndarray
         Ready-to-plot 2-D layouts computed on refined graphs.
+    global_id : float
+        Intrinsic dimensionality estimated on the input by `id_method`. The number of scaffold
+        components selected from it is `n_scaffold_components`.
     BaseKernelDict, EigenbasisDict, GraphKernelDict, ProjectionDict : dict
         Legacy storage used for benchmarking and model selection.
     """
@@ -350,7 +356,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         self._scaffold_components_dm = k_sel
 
         self.n_eigs = int(max(self.n_eigs, k_sel))
-        local   = id_details.get('local_id_mle', None)
+        local   = id_details.get('local_id', None)
 
         # Cache for downstream report / accessors
         self.global_dimensionality = k_sel
@@ -1361,45 +1367,26 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     @property
     def global_id(self):
         """
-        Global intrinsic dimensionality estimated by the Maximum Likelihood Estimator (MLE).
+        Global intrinsic dimensionality of the input, as estimated by `id_method` during `.fit(X)`.
 
         Returns
         -------
-        float
-            The global MLE dimension estimate, as computed during `.fit(X)`.
-
-        Raises
-        ------
-        AttributeError
-            If MLE details are not available (e.g., `.fit(X)` has not been called).
+        float or None
+            The Levina-Bickel estimate for 'mle'; for 'fsa', the upper quantile (`id_quantile`)
+            of the per-sample estimates. None if no estimate is available (e.g. a precomputed
+            base graph). This is the estimate itself: the number of scaffold components chosen
+            from it, with headroom and bounds applied, is `n_scaffold_components`.
         """
-        return self.global_dimensionality
-
+        det = (getattr(self, "_id_details", None) or {}).get(self.id_method, None)
+        if not det:
+            return None
+        value = det.get('global_id') if det.get('method') == 'mle' else det.get('quantile_value')
+        return None if value is None else float(value)
 
     @property
-    def local_ids(self):
-        """
-        Local intrinsic dimensionality estimates per sample.
-
-        Returns
-        -------
-        dict
-            Dictionary with per-sample ID vectors:
-              • 'mle' → per-sample estimates from Maximum Likelihood Estimator (MLE).
-              • 'fsa' → per-sample estimates from Fisher Separability Analysis (FSA).
-
-        Raises
-        ------
-        AttributeError
-            If local ID details are not available (e.g., `.fit(X)` has not been called).
-        """
-        out = {}
-        det = getattr(self, "_id_details", {}).get(self.id_method, None)
-        if det is not None:
-            out[self.id_method] = det.get('local_id', (self.local_dimensionality or {}).get(self.id_method, None))
-        if not out:
-            raise AttributeError("Local ID details not available. Call .fit(X) first.")
-        return out
+    def n_scaffold_components(self):
+        """Number of spectral scaffold components selected by automated sizing (None before `.fit`)."""
+        return getattr(self, "_scaffold_components_ms", None)
 
 
     # --- Embedding getters (properties) ---
@@ -1465,11 +1452,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         """
         dm_tag = f"{self.graph_kernel_version} from DM with {self.base_kernel_version}"
         ms_tag = f"{self.graph_kernel_version} from msDM with {self.base_kernel_version}"
+        # MAP is optimized on the refined graph; PaCMAP runs on the scaffold coordinates, so its
+        # key does not name a graph kernel
         mapping = {
             'TopoMAP':        f"MAP of {dm_tag}",
             'msTopoMAP':     f"MAP of {ms_tag}",
-            'TopoPaCMAP':     f"PaCMAP of {dm_tag}",
-            'msTopoPaCMAP':  f"PaCMAP of {ms_tag}",
+            'TopoPaCMAP':     f"PaCMAP of DM with {self.base_kernel_version}",
+            'msTopoPaCMAP':  f"PaCMAP of msDM with {self.base_kernel_version}",
         }
         if key in mapping and mapping[key] in self.ProjectionDict:
             return self.ProjectionDict[mapping[key]]
@@ -1500,22 +1489,20 @@ class TopOGraph(BaseEstimator, TransformerMixin):
                 def __init__(self, Y): self.Y = np.asarray(Y, dtype=np.float32, order="C")
                 def transform(self, X=None): return self.Y
             self.EigenbasisDict[eig_key] = _PrecomputedEigenbasis(coords)
+        if not sp.isspmatrix_csr(knn):
+            knn = knn.tocsr()
+        if multiscale:
+            self._knn_msZ = knn
+            self._kernel_msZ, _ = self._compute_kernel_from_version_knn(
+                self._knn_msZ, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                suffix=" (precomputed msZ)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+            )
         else:
-            import scipy.sparse as sp
-            if not sp.isspmatrix_csr(knn):
-                knn = knn.tocsr()
-            if multiscale:
-                self._knn_msZ = knn
-                self._kernel_msZ, _ = self._compute_kernel_from_version_knn(
-                    self._knn_msZ, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
-                    suffix=" (precomputed msZ)", low_memory=self.low_memory, base=False, data_for_expansion=coords
-                )
-            else:
-                self._knn_Z = knn
-                self._kernel_Z, _ = self._compute_kernel_from_version_knn(
-                    self._knn_Z, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
-                    suffix=" (precomputed Z)", low_memory=self.low_memory, base=False, data_for_expansion=coords
-                )
+            self._knn_Z = knn
+            self._kernel_Z, _ = self._compute_kernel_from_version_knn(
+                self._knn_Z, self.graph_knn, self.graph_kernel_version, self.GraphKernelDict,
+                suffix=" (precomputed Z)", low_memory=self.low_memory, base=False, data_for_expansion=coords
+            )
 
 
     # ---------------------------------------------------------------------
@@ -2175,10 +2162,6 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         import numpy as np
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
-        try:
-            import imageio.v2 as imageio
-        except ImportError:
-            raise ImportError("imageio is required to write GIFs. Please install it via `pip install imageio`.")
 
         if multiscale is None:
             if hasattr(self, "msTopoMAP_snapshots") and self.msTopoMAP_snapshots:
@@ -2280,8 +2263,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
             fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
             fig.canvas.draw()
-            w, h = fig.canvas.get_width_height()
-            frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(h, w, 3).copy()
+            # `tostring_rgb` was removed in matplotlib 3.10; the RGBA buffer is available throughout
+            frame = np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()
             frames.append(frame)
             plt.close(fig)
 
@@ -2291,7 +2274,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         # Full-frame GIF write
         from PIL import Image
-        pil_frames = [Image.fromarray(f, mode="RGB") for f in frames]
+        pil_frames = [Image.fromarray(f) for f in frames]
         pil_frames[0].save(
             filename,
             save_all=True,
@@ -2311,28 +2294,33 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
     def run_models(self, X,
                    kernels=['fuzzy', 'cknn', 'bw_adaptive'],
-                   eigenmap_methods=['DM', 'LE', 'top'],
+                   eigenmap_methods=['msDM', 'DM'],
                    projections=['Isomap', 'MAP']):
         """
-        Legacy power function that runs multiple models for benchmarking.
-        Preserved for backward compatibility.
+        Legacy power function that runs multiple models for benchmarking: every combination of
+        base and graph kernel in `kernels`, with the requested projections on both scaffolds.
+        Results accumulate in `BaseKernelDict`, `EigenbasisDict`, `GraphKernelDict` and
+        `ProjectionDict`.
+
+        `eigenmap_methods` is kept for backward compatibility: the msDM and DM scaffolds are
+        always computed, and no other eigenmap is.
         """
-        for kernel in kernels:
-            self.base_kernel_version = kernel
-            for eig_method in eigenmap_methods:
-                # kept for BC, but dual scaffold is always computed anyway
-                self.eigenmap_method = eig_method
-                self.fit(X)
-                gc.collect()
-                for kernel in kernels:
-                    self.graph_kernel_version = kernel
-                    _ = self.transform(X)  # BC; returns current (msZ) K
+        default_projections = self.projection_methods
+        self.projection_methods = None      # only the projections asked for here are computed
+        try:
+            for base_kernel in kernels:
+                self.base_kernel_version = base_kernel
+                for graph_kernel in kernels:
+                    self.graph_kernel_version = graph_kernel
+                    self.fit(X)             # base kernels and eigenbases are cached across calls
                     gc.collect()
                     for projection in projections:
                         # compute on msZ and Z/DM
                         self.project(projection_method=projection, multiscale=True)
                         self.project(projection_method=projection, multiscale=False)
                         gc.collect()
+        finally:
+            self.projection_methods = default_projections
 
     # ---------------------------------------------------------------------
     # I/O (pickle) – in-class helper kept for BC + module-level helpers below
@@ -2341,21 +2329,8 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         """
         Save the TopOGraph object to a pickle file (legacy helper).
         """
-        try:
-            import pickle
-        except ImportError:
-            return print('Pickle is needed for saving the TopOGraph. Please install it with `pip3 install pickle`')
-
-        if self.base_nbrs_class is not None:
-            if remove_base_class:
-                self.base_nbrs_class = None
-            else:
-                raise ValueError('TopOGraph cannot be pickled with the NMSlib base class.')
-
-        with open(filename, 'wb') as output:
-            pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
+        save_topograph(self, filename, remove_base_class=remove_base_class)
         gc.collect()
-        return print('TopOGraph saved at ' + filename)
 
     # ---------------------------------------------------------------------
     # Kernel builder (internal)
@@ -2552,63 +2527,52 @@ class TopOGraph(BaseEstimator, TransformerMixin):
     # ---------------------------------
     # Intrinsic dimension access helpers
     # ---------------------------------
+    def _id_estimate(self, method):
+        det = (getattr(self, "_id_details", None) or {}).get(method, None)
+        return det if det else None
+
     def local_ids(self):
         """
-        Return the local intrinsic dimensionalities computed during automated scaffold sizing,
-        when available. For 'mle', this corresponds to local MLEs; for 'fsa', per-k locals.
+        Return the per-sample intrinsic dimensionalities computed during automated scaffold sizing.
 
         Returns
         -------
-        dict or np.ndarray or None
-            - For MLE: np.ndarray of shape (n,), local id estimates.
-            - For FSA: dict {k -> np.ndarray (n,)} of local id per k, plus
-                'robust_cell_id' under self._id_details (see global getters).
-            - None if details are not available.
+        dict or None
+            {method: np.ndarray of shape (n_samples,)} for the estimator that was run
+            (`id_method`): the local MLEs for 'mle', or the per-sample median across `id_ks`
+            for 'fsa'. None if no estimate is available.
         """
-        det = getattr(self, "_id_details", None)
-        if det is None:
-            return None
-        if det.get("method") == "mle":
-            return det.get("local_id_mle", None)
-        elif det.get("method") == "fsa":
-            return det.get("per_k_local_id", None)
-        return None
+        out = {}
+        for method in ('fsa', 'mle'):
+            det = self._id_estimate(method)
+            if det is not None and det.get('local_id') is not None:
+                out[method] = np.asarray(det['local_id'])
+        return out or None
 
     def global_id_mle(self):
         """
-        Return the global MLE intrinsic dimensionality if computed.
+        Return the global MLE (Levina-Bickel) intrinsic dimensionality.
 
         Returns
         -------
         float or None
+            None unless the model was fitted with `id_method='mle'`.
         """
-        det = getattr(self, "_id_details", None)
-        if det is None:
-            return None
-        if det.get("method") == "mle":
-            return det.get("global_id_mle", None)
-        # If FSA was run, expose quantile-based robust estimate (with headroom) as a fallback
-        if det.get("method") == "fsa":
-            return float(det.get("selected_n_components", np.nan))
-        return None
+        det = self._id_estimate('mle')
+        return None if det is None else float(det['global_id'])
 
     def global_id_fsa(self):
         """
-        Return the quantile-based FSA intrinsic dimensionality if computed.
+        Return the quantile-based FSA intrinsic dimensionality: the `id_quantile` quantile of
+        the per-sample estimates.
 
         Returns
         -------
         float or None
+            None unless the model was fitted with `id_method='fsa'`.
         """
-        det = getattr(self, "_id_details", None)
-        if det is None:
-            return None
-        if det.get("method") == "fsa":
-            return float(det.get("selected_n_components", np.nan))
-        # If MLE was run, expose its selected components (with headroom) as a fallback
-        if det.get("method") == "mle":
-            return float(det.get("selected_n_components", np.nan))
-        return None
+        det = self._id_estimate('fsa')
+        return None if det is None else float(det['quantile_value'])
 
     # ===============================
     # Analysis helpers (no Scanpy I/O)
@@ -2740,13 +2704,13 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         # Prepare Z and evals
         if Z is None:
             Z = self.spectral_scaffold(multiscale=multiscale)
-        if use_scaffold_components and getattr(self, "_scaffold_components", None) is not None:
-            Z = Z[:, :int(self._scaffold_components)]
+        n_selected = getattr(self, "_scaffold_components_ms" if multiscale else "_scaffold_components_dm", None)
+        if use_scaffold_components and n_selected is not None:
+            Z = Z[:, :int(n_selected)]
         if evals is None:
             key = ('msDM' if multiscale else 'DM') + ' with ' + str(self.base_kernel_version)
-            ev = self.EigenbasisDict[key].eigenvalues
-            # eigenvalues include lambda_0; match columns (drop first if eigenvectors drop-first)
-            evals = ev[1:Z.shape[1]+1] if ev.shape[0] >= Z.shape[1] + 1 else ev[:Z.shape[1]]
+            # the trivial eigenpair is already dropped: eigenvalue j belongs to column j
+            evals = self.EigenbasisDict[key].eigenvalues[:Z.shape[1]]
 
         Zs = _std_cols(Z) if standardize else _np.asarray(Z, float)
         w = _weights(evals, m=Z.shape[1], mode=weight_mode)
@@ -2864,7 +2828,7 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         multiscale : bool (default True)
             Use msDM scaffold if True, else DM.
         k : int (default 64)
-            Number of spectral coordinates to use (after dropping the trivial one).
+            Number of spectral coordinates to use (the trivial one is not among them).
         weight_mode : {'lambda_over_one_minus_lambda','lambda','none'}
             Axis weighting for MSDD coordinates.
         null_n_seeds : int (default 0)
@@ -2882,20 +2846,22 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         import numpy as _np
         rng = _np.random.default_rng(random_state)
 
-        # Scaffold + eigenvalues
-        Z = self.spectral_scaffold(multiscale=multiscale)
+        # Eigenvectors + eigenvalues. The trivial eigenpair is already dropped, so eigenvalue j
+        # belongs to eigenvector j; and the weights are applied to the eigenvectors themselves,
+        # not to the scaffold, whose columns are already weighted.
         ev_key = ('msDM' if multiscale else 'DM') + ' with ' + str(self.base_kernel_version)
-        evals = self.EigenbasisDict[ev_key].eigenvalues
+        eig = self.EigenbasisDict[ev_key]
+        phi, evals = eig.eigenvectors, eig.eigenvalues
         # Build MSDD coordinates Psi = phi_1..k * w
-        k_eff = int(min(k, Z.shape[1]-1))
-        lam = _np.asarray(evals[1:k_eff+1], float)
+        k_eff = int(min(k, phi.shape[1]))
+        lam = _np.asarray(evals[:k_eff], float)
         if weight_mode == "lambda_over_one_minus_lambda":
             w = (lam / (1.0 - lam))[None, :]
         elif weight_mode == "lambda":
             w = lam[None, :]
         else:
             w = _np.ones((1, k_eff), float)
-        Psi = Z[:, 0:k_eff] * w
+        Psi = phi[:, :k_eff] * w
 
         # Root selection
         n = Psi.shape[0]
@@ -2998,9 +2964,11 @@ class TopOGraph(BaseEstimator, TransformerMixin):
         Parameters
         ----------
         Y : np.ndarray, shape (n,2), optional
-            2D embedding. If None, uses msMAP if available, else MAP.
+            2D embedding. If None, uses the first available of msTopoMAP, TopoMAP, msTopoPaCMAP
+            and TopoPaCMAP, computing msTopoMAP if there is none.
         L : array-like (Laplacian) or None
-            Graph Laplacian. If None, defaults to base-kernel Laplacian.
+            Graph Laplacian. If None, defaults to the Laplacian of the refined graph
+            (`graph_kernel.L`), as the `tp.sc` wrappers use.
         center : {'median','mean'}
             Centering for deformation calculation.
         diffusion_t : int (default 0)
@@ -3034,24 +3002,19 @@ class TopOGraph(BaseEstimator, TransformerMixin):
 
         # Defaults
         if Y is None:
-            try:
-                Y = self.TopoMAP
-            except Exception:
+            for name in ('msTopoMAP', 'TopoMAP', 'msTopoPaCMAP', 'TopoPaCMAP'):
                 try:
-                    Y = self.msTopoMAP
-                except Exception:
-                    try:
-                        Y = self.TopoPaCMAP
-                    except Exception:
-                        try:
-                            Y = self.msTopoPaCMAP
-                        except Exception:
-                            warnings.warn("No projection found; computing new projection.")
-                            Y = self.project(projection_method='MAP', multiscale=False, random_state=random_state)
-                            Y = self.TopoMAP
+                    Y = getattr(self, name)
+                    break
+                except AttributeError:
+                    continue
+            else:
+                warnings.warn("No projection found; computing new projection.")
+                self.project(projection_method='MAP', multiscale=True)
+                Y = self.msTopoMAP
         if L is None:
-            # Base Laplacian for geometry (as in the demo)
-            L = self.base_kernel.L
+            # Laplacian of the refined graph, on which the projections are computed
+            L = self.graph_kernel.L if getattr(self, "graph_kernel", None) is not None else self.base_kernel.L
 
         # Metric
         out = {}
@@ -3250,11 +3213,15 @@ def save_topograph(tg: TopOGraph, filename: str = 'topograph.pkl', remove_base_c
     if not isinstance(tg, TopOGraph):
         raise TypeError("`tg` must be a TopOGraph instance.")
 
-    if tg.base_nbrs_class is not None and remove_base_class:
+    # The ANN index is left out of the file only: it is put back on the object afterwards
+    base_nbrs_class = tg.base_nbrs_class
+    if remove_base_class:
         tg.base_nbrs_class = None
-
-    with open(filename, 'wb') as f:
-        pickle.dump(tg, f, pickle.HIGHEST_PROTOCOL)
+    try:
+        with open(filename, 'wb') as f:
+            pickle.dump(tg, f, pickle.HIGHEST_PROTOCOL)
+    finally:
+        tg.base_nbrs_class = base_nbrs_class
     print(f'TopOGraph saved at {filename}')
 
 
