@@ -31,14 +31,12 @@ warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 def _maybe_l2_normalize_rows(X):
     """
-    Return X with row-wise L2 normalization if possible.
+    Return a row-wise L2-normalized copy of X.
     Works for dense (ndarray) and CSR/CSC/COO sparse matrices.
     """
-    try:
-        return _l2_normalize_rows(X, norm='l2', axis=1, copy=False)
-    except Exception:
-        # Fall back to a safe copy if in-place fails
-        return _l2_normalize_rows(X, norm='l2', axis=1, copy=True)
+    # Always a copy: X is the caller's data, and normalizing it in place rescaled the
+    # matrix they passed to `Kernel.fit` / `compute_kernel`.
+    return _l2_normalize_rows(X, norm='l2', axis=1, copy=True)
 
 def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
     """Backends that expect unit-norm vectors for 'cosine' space."""
