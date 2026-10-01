@@ -286,19 +286,27 @@ class Projector(BaseEstimator, TransformerMixin):
                 else:
                     K = X.copy()
 
+        # `K` is read below both as distances (Isomap, IsometricMDE) and as affinities
+        # (spectral initialization, MAP, IsomorphicMDE). A cosine kNN graph computed here
+        # holds distances, so its affinity readers are given the matching similarities.
+        K_affinity = K
+        if (not isinstance(X, Kernel)) and self.metric == 'cosine':
+            K_affinity = K.copy()
+            K_affinity.data = 1 - K_affinity.data
+
         if isinstance(self.init, np.ndarray):
             self.init_Y_ = self.init
         else:
             if self.init == 'spectral':
                 try:
                     self.init_Y_ = spectral_layout(
-                        K, self.n_components, self.random_state, laplacian_type='random_walk', eigen_tol=10e-4, return_evals=False)
+                        K_affinity, self.n_components, self.random_state, laplacian_type='random_walk', eigen_tol=10e-4, return_evals=False)
                 except:
                     print(
                         'Multicomponent spectral layout initialization failed, falling back to simple spectral layout...')
                     from topo.spectral.eigen import EigenDecomposition
                     self.init_Y_ = EigenDecomposition(
-                        n_components=self.n_components).fit_transform(K)
+                        n_components=self.n_components).fit_transform(K_affinity)
             else:
                 self.init_Y_ = self.random_state.randn(
                     K.shape[0], self.n_components)
@@ -341,7 +349,7 @@ class Projector(BaseEstimator, TransformerMixin):
 
         elif self.projection_method == 'MAP':
             Y, Y_aux = fuzzy_embedding(
-                K,
+                K_affinity,
                 n_components=self.n_components,
                 init=self.init_Y_,
                 n_epochs=self.num_iters,
@@ -414,7 +422,7 @@ class Projector(BaseEstimator, TransformerMixin):
             attractive_penalty = pymde.penalties.Log1p
             repulsive_penalty = pymde.penalties.Log
             loss = pymde.losses.Absolute
-            graph = preprocess.graph.Graph(K)
+            graph = preprocess.graph.Graph(K_affinity)
             self.estimator_ = IsomorphicMDE(graph,
                                             attractive_penalty=attractive_penalty,
                                             repulsive_penalty=repulsive_penalty,

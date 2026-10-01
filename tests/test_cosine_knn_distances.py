@@ -12,6 +12,8 @@ Covers:
   - Kernel weights decrease with distance, for Kernel(metric='cosine') and for the
     TopOGraph base kernel, and the two agree.
   - Fitting a cosine kernel leaves the caller's data alone.
+  - A standalone Projector hands similarities to its affinity readers and distances to
+    Isomap.
   - Euclidean graphs and kernels are untouched.
   - A dense nmslib index can be queried with the sparse rows it was fitted on.
   - Repeated queries on one transformer keep the same k.
@@ -212,6 +214,36 @@ def test_precomputed_graph_is_used_as_given():
     tg = _topograph("sklearn", base_metric="precomputed").fit(G)
     W_kernel = Kernel(metric="precomputed", n_neighbors=K, backend="sklearn", n_jobs=1).fit(G).K
     np.testing.assert_array_equal(tg.base_kernel.K.toarray(), W_kernel.toarray())
+
+
+# ── standalone Projector ──────────────────────────────────────────────────────
+def test_projector_readers_get_the_graph_they_expect(monkeypatch):
+    """
+    Projector reads its kNN graph as affinities for the spectral initialization and MAP, and
+    as distances for Isomap. All three used to receive cosine similarities.
+    """
+    import topo.layouts.projector as projector
+    X = _blobs()
+    D = cosine_distances(X)
+    seen = {}
+
+    def capture(name, result):
+        def reader(graph, *args, **kwargs):
+            seen[name] = graph
+            return result
+        return reader
+
+    Y = np.zeros((X.shape[0], 2))
+    monkeypatch.setattr(projector, "spectral_layout", capture("init", Y))
+    monkeypatch.setattr(projector, "fuzzy_embedding", capture("MAP", (Y, {})))
+    monkeypatch.setattr(projector, "Isomap", capture("Isomap", Y))
+    for method in ("MAP", "Isomap"):
+        projector.Projector(metric="cosine", projection_method=method, n_neighbors=K, n_jobs=1,
+                            nbrs_backend="sklearn", random_state=0).fit(X)
+
+    for name, expected in (("init", 1 - D), ("MAP", 1 - D), ("Isomap", D)):
+        rows, cols, vals = _edges(seen[name])
+        np.testing.assert_allclose(vals, expected[rows, cols], atol=1e-5, err_msg=name)
 
 
 # ── euclidean is untouched ────────────────────────────────────────────────────
