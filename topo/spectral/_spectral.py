@@ -14,7 +14,7 @@ from sklearn.utils import check_random_state, as_float_array
 
 def _arpack_v0(n, random_state=None):
     """
-    Starting vector for ARPACK. SciPy >= 1.15 draws it from an unseeded generator when none is
+    Starting vector for ARPACK. SciPy >= 1.17 draws it from an unseeded generator when none is
     given, so the signs of the eigenvectors (and the last digits of everything) change from one
     run to the next. With a `random_state` the vector is drawn from it; without one it is
     always the same vector.
