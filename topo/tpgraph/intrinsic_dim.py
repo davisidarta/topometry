@@ -4,7 +4,17 @@ from scipy.sparse.linalg import eigsh
 from topo.spectral import diffusion_operator
 from topo.base.ann import kNN
 from sklearn.base import BaseEstimator, TransformerMixin
+from topo.tpgraph.kernels import _angularize_graph
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
+
+
+def _knn_distances(X, metric, **kwargs):
+    """
+    kNN graph for the estimators below, which read dimension off the *ratio* of neighbor
+    distances and so need a proper metric. Cosine distance grows with the square of a small
+    angle, which halves both estimates, so cosine graphs are converted to angles.
+    """
+    return _angularize_graph(kNN(X, metric=metric, **kwargs), metric, True)
 
 
 class IntrinsicDim(BaseEstimator, TransformerMixin):
@@ -121,7 +131,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         self.global_id['fsa'] = {}
         self.global_id['mle'] = {}
         if self.n_k == 1:
-            knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=self.use_k, metric=self.metric, backend=self.backend)
+            knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=self.use_k, backend=self.backend)
             for method in self.methods:
                 if method not in ['fsa', 'mle']:
                     raise ValueError('Invalid method. Valid methods are: fsa, mle.')
@@ -134,7 +144,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
 
         else:
             for k in self.use_k:
-                knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=k, metric=self.metric, backend=self.backend)
+                knn = _knn_distances(X, self.metric, n_jobs=self.n_jobs, n_neighbors=k, backend=self.backend)
                 for method in self.methods:
                     if method not in ['fsa', 'mle']:
                         raise ValueError('Invalid method. Valid methods are: fsa, mle.')
@@ -312,7 +322,7 @@ def automated_scaffold_sizing(
     min_components: int = 16,
     max_components: int = 512,
     headroom: float = 0.15,
-    random_state=None,
+    random_state=None,             # unused (no kNN backend takes it); kept so existing callers do not break
     use_median: bool = False,      # only used for 'mle': global id via median of locals (else Levina–Bickel global)
     return_details: bool = False,
     **knn_kwargs,
@@ -356,13 +366,12 @@ def automated_scaffold_sizing(
         per_k_local = {}
         for k in ks_use:
             k_eff = min(int(k), max(2, n - 1))
-            K = kNN(
+            K = _knn_distances(
                 X,
+                metric,
                 n_jobs=n_jobs,
                 n_neighbors=k_eff,
-                metric=metric,
                 backend=backend,
-                random_state=random_state,
                 **knn_kwargs,
             )
             d_local = fsa_local(K, n_neighbors=k_eff)
@@ -396,13 +405,12 @@ def automated_scaffold_sizing(
             k_int = max(ks_list) if len(ks_list) else 100  # sensible default
         k_int = min(int(k_int), max(2, n - 1))
 
-        K = kNN(
+        K = _knn_distances(
             X,
+            metric,
             n_jobs=n_jobs,
             n_neighbors=k_int,
-            metric=metric,
             backend=backend,
-            random_state=random_state,
             **knn_kwargs,
         )
         local = np.asarray(mle_local(K, n_neighbors=k_int), dtype=float)
