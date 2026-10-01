@@ -476,3 +476,344 @@ def test_spectral_layout_of_a_disconnected_graph():
     centers = np.array([Y[:60].mean(0), Y[60:140].mean(0), Y[140:].mean(0)])
     spread = max(Y[:60].std(), Y[60:140].std(), Y[140:].std())
     assert np.linalg.norm(centers[0] - centers[1]) > spread
+
+
+# ── intrinsic dimension ───────────────────────────────────────────────────────
+def _sphere(n=3000, dim=5, ambient=40, seed=0):
+    """Points uniform on a `dim`-sphere, isometrically embedded in `ambient` dimensions."""
+    rng = np.random.default_rng(seed)
+    Z = rng.normal(size=(n, dim + 1))
+    Z /= np.linalg.norm(Z, axis=1, keepdims=True)
+    Q, _ = np.linalg.qr(rng.normal(size=(ambient, dim + 1)))
+    return Z @ Q.T
+
+
+@pytest.mark.parametrize("k", [[20], 20, (20, 40), range(20, 60, 20), np.int64(20)])
+def test_intrinsic_dim_accepts_every_form_of_k(k):
+    """A one-element list and a tuple both raised."""
+    from topo.tpgraph.intrinsic_dim import IntrinsicDim
+    est = IntrinsicDim(k=k, plot=False, backend="sklearn", n_jobs=1)
+    est.fit(_blobs(n=150))
+    expected = {str(int(v)) for v in np.atleast_1d(np.asarray(list(k) if not np.isscalar(k) else [k]))}
+    assert set(est.local_id["fsa"]) == set(est.global_id["mle"]) == expected
+
+
+def test_global_intrinsic_dimension_of_a_sphere():
+    """The global FSA estimate divided the median of the local ones by log(2) a second time."""
+    from topo.tpgraph.intrinsic_dim import IntrinsicDim, mle_global
+    X = _sphere(dim=5)
+    est = IntrinsicDim(k=[30], plot=False, backend="sklearn", n_jobs=1)
+    est.fit(X)
+    assert 3.8 < est.global_id["fsa"]["30"] < 6.2
+    assert 3.8 < est.global_id["mle"]["30"] < 6.2
+    G = kNN(X, n_neighbors=30, backend="sklearn", n_jobs=1)
+    assert 3.8 < mle_global(G, n_neighbors=30) < 6.2        # raised when no local estimates were passed
+
+
+@pytest.mark.parametrize("id_method", ["fsa", "mle"])
+def test_topograph_intrinsic_dimension_accessors(id_method):
+    """local_ids() and global_id_mle()/fsa() returned None; global_id was the scaffold size."""
+    X = _blobs()
+    tg = _topograph(id_method=id_method, id_ks=20).fit(X)
+    local = tg.local_ids()
+    assert set(local) == {id_method} and local[id_method].shape == (X.shape[0],)
+    estimate = tg.global_id_fsa() if id_method == "fsa" else tg.global_id_mle()
+    assert estimate is not None and estimate > 0
+    assert tg.global_id == estimate
+    assert (tg.global_id_mle() if id_method == "fsa" else tg.global_id_fsa()) is None
+    assert tg.n_scaffold_components == tg._scaffold_components_ms == 20     # capped by id_max_components
+    assert tg.global_id != tg.n_scaffold_components
+    assert _topograph().global_id is None                                   # before fit
+
+
+# ── TopOGraph accessors and analyses ──────────────────────────────────────────
+@pytest.fixture(scope="module")
+def fitted():
+    X = _blobs()
+    return X, _topograph(projection_methods=["MAP"]).fit(X)
+
+
+def test_y_aliases_match_projection_keys(fitted):
+    """Y('TopoPaCMAP') looked the layout up under a key that names a graph kernel."""
+    _, tg = fitted
+    np.testing.assert_array_equal(tg.Y("TopoMAP"), tg.TopoMAP)
+    np.testing.assert_array_equal(tg.Y("msTopoMAP"), tg.msTopoMAP)
+    fake = np.zeros((2, 2))
+    tg.ProjectionDict["PaCMAP of DM with bw_adaptive"] = fake
+    tg.ProjectionDict["PaCMAP of msDM with bw_adaptive"] = fake + 1
+    try:
+        np.testing.assert_array_equal(tg.Y("TopoPaCMAP"), tg.TopoPaCMAP)
+        np.testing.assert_array_equal(tg.Y("msTopoPaCMAP"), tg.msTopoPaCMAP)
+    finally:
+        del tg.ProjectionDict["PaCMAP of DM with bw_adaptive"], tg.ProjectionDict["PaCMAP of msDM with bw_adaptive"]
+
+
+def test_pseudotime_uses_each_eigenvector_with_its_own_eigenvalue(fitted):
+    """Eigenvalue j+1 was paired with column j, and the weights were applied to the scaffold,
+    whose columns already carry them."""
+    _, tg = fitted
+    eig = tg.EigenbasisDict["msDM with bw_adaptive"]
+    k = 10
+    out = tg.pseudotime(root=3, k=k, multiscale=True)
+    psi = eig.eigenvectors[:, :k] * (eig.eigenvalues[:k] / (1 - eig.eigenvalues[:k]))
+    d2 = ((psi - psi[3]) ** 2).sum(1)
+    np.testing.assert_allclose(out["pseudotime"], (d2 - d2.min()) / (d2.max() - d2.min() + 1e-12))
+    # with these weights, the coordinates are the multiscale scaffold itself
+    np.testing.assert_allclose(psi, tg.spectral_scaffold(multiscale=True)[:, :k])
+    # every available eigenvector can be used
+    assert np.isfinite(tg.pseudotime(root=3, k=10_000)["pseudotime"]).all()
+
+
+def test_spectral_selectivity_uses_the_selected_components(fitted, monkeypatch):
+    """It never trimmed to the scaffold size, and its eigenvalues were shifted by one."""
+    _, tg = fitted
+    n_all = tg.spectral_scaffold(multiscale=True).shape[1]
+    monkeypatch.setattr(tg, "_scaffold_components_ms", 6)
+    assert n_all > 6
+    trimmed = tg.spectral_selectivity(k_neighbors=10, weight_mode="none")
+    full = tg.spectral_selectivity(k_neighbors=10, weight_mode="none", use_scaffold_components=False)
+    assert trimmed["axis"].max() < 6 <= full["axis"].max() + 1 or full["axis"].max() >= trimmed["axis"].max()
+    assert not np.allclose(trimmed["EAS"], full["EAS"])
+
+    # eigenvalue weights line up with the columns: weighting by them equals passing them in
+    evals = tg.EigenbasisDict["msDM with bw_adaptive"].eigenvalues[:6]
+    np.testing.assert_allclose(tg.spectral_selectivity(k_neighbors=10)["EAS"],
+                               tg.spectral_selectivity(k_neighbors=10, evals=evals)["EAS"])
+
+
+def test_riemann_diagnostics_defaults(fitted):
+    """Documented default: the multiscale layout; and the Laplacian the tp.sc wrappers use."""
+    from topo.eval.rmetric import RiemannMetric
+    _, tg = fitted
+    out = tg.riemann_diagnostics()
+    np.testing.assert_allclose(out["G"], RiemannMetric(tg.msTopoMAP, tg.graph_kernel.L).get_rmetric())
+
+
+def test_saving_does_not_strip_the_fitted_object(fitted, tmp_path):
+    import topo as tp
+    _, tg = fitted
+    index = tg.base_nbrs_class
+    assert index is not None
+    tp.save_topograph(tg, str(tmp_path / "tg.pkl"))
+    assert tg.base_nbrs_class is index
+    tg.write_pkl(str(tmp_path / "tg2.pkl"))
+    assert tg.base_nbrs_class is index
+    loaded = tp.load_topograph(str(tmp_path / "tg.pkl"))
+    assert loaded.base_nbrs_class is None
+    np.testing.assert_array_equal(loaded.msTopoMAP, tg.msTopoMAP)
+
+
+def test_visualize_optimization_writes_a_gif(fitted, tmp_path, monkeypatch):
+    """It needed imageio, which it never used, and a canvas method matplotlib removed."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from PIL import Image
+    _, tg = fitted
+    monkeypatch.setitem(sys.modules, "imageio", None)
+    monkeypatch.setitem(sys.modules, "imageio.v2", None)
+    path = tg.visualize_optimization(num_iters=30, save_every=10, filename=str(tmp_path / "map.gif"))
+    with Image.open(path) as gif:
+        assert gif.n_frames >= 3
+
+
+def test_run_models_computes_every_kernel_combination():
+    """Graph kernels other than the first were never computed, so the legacy workflow hit KeyErrors."""
+    X = _blobs(n=200)
+    tg = _topograph(delta=2.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tg.run_models(X, kernels=["bw_adaptive", "cknn"], projections=["MAP"])
+    for base in ("bw_adaptive", "cknn"):
+        for tag in ("msDM", "DM"):
+            assert f"{tag} with {base}" in tg.EigenbasisDict
+            for graph in ("bw_adaptive", "cknn"):
+                assert f"{graph} from {tag} with {base}" in tg.GraphKernelDict
+                assert f"MAP of {graph} from {tag} with {base}" in tg.ProjectionDict
+    assert tg.projection_methods is None      # restored
+
+
+def test_set_refined_from_precomputed_installs_the_graph_with_coords(fitted):
+    """Passing `coords` skipped the graph altogether."""
+    X, _ = fitted
+    tg = _topograph().fit(X)
+    Z = tg.spectral_scaffold(multiscale=True)[:, :5]
+    G = kNN(Z, n_neighbors=K, backend="sklearn", n_jobs=1)
+    tg.set_refined_from_precomputed(G, multiscale=True, coords=Z)
+    assert tg.knn_msZ is G
+    np.testing.assert_array_equal(tg.spectral_scaffold(multiscale=True), Z.astype(np.float32))
+
+
+# ── Riemann metric ────────────────────────────────────────────────────────────
+def test_riemann_metric_keeps_the_laplacian_sparse(fitted):
+    """Every call densified the Laplacian: n^2 * 8 bytes per copy."""
+    from scipy.sparse import issparse
+    from topo.eval import rmetric
+    _, tg = fitted
+    L, Y = tg.graph_kernel.L, tg.msTopoMAP
+    assert issparse(L) and issparse(rmetric._symmetrize(L))
+    assert issparse(rmetric.RiemannMetric(Y, L).L)
+
+    np.testing.assert_allclose(rmetric.RiemannMetric(Y, L).get_rmetric(),
+                               rmetric.RiemannMetric(Y, L.toarray()).get_rmetric(), rtol=1e-8, atol=1e-10)
+    for t in (0, 3):
+        sparse_vals, sparse_lims = rmetric.calculate_deformation(Y, L, diffusion_t=t)
+        dense_vals, dense_lims = rmetric.calculate_deformation(Y, L.toarray(), diffusion_t=t)
+        np.testing.assert_allclose(sparse_vals, dense_vals, rtol=1e-6, atol=1e-8)
+        np.testing.assert_allclose(sparse_lims, dense_lims, rtol=1e-6, atol=1e-8)
+
+
+def test_riemann_plots_run_on_current_matplotlib(fitted):
+    """They called matplotlib.cm.get_cmap, removed in matplotlib 3.9."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from topo.eval import rmetric
+    _, tg = fitted
+    L, Y = tg.graph_kernel.L, tg.msTopoMAP
+    fig, axes = plt.subplots(1, 3)
+    rmetric.plot_riemann_metric_localized(Y, L, n_plot=20, ax=axes[0], seed=0, colors=np.arange(Y.shape[0]))
+    rmetric.plot_riemann_metric_global(Y, L, grid_res=4, k_avg=10, ax=axes[1])
+    rmetric.plot_metric_contraction_expansion(Y, L, ax=axes[2])
+    plt.close(fig)
+
+
+# ── single-cell wrappers ──────────────────────────────────────────────────────
+@pytest.fixture(scope="module")
+def fitted_adata():
+    anndata = pytest.importorskip("anndata")
+    pytest.importorskip("scanpy")
+    import matplotlib
+    matplotlib.use("Agg")
+    import topo as tp
+    rng = np.random.default_rng(0)
+    centers = rng.normal(scale=0.5, size=(5, 40))
+    labels = rng.integers(0, 5, 300)
+    adata = anndata.AnnData((centers[labels] + rng.normal(size=(300, 40))).astype(np.float32))
+    adata.obs["group"] = np.array(list("abcde"))[labels]
+    tg = tp.sc.fit_adata(adata, projections=("MAP",), do_leiden=False, projection_methods=["MAP"],
+                         base_knn=K, graph_knn=K, min_eigs=20, id_min_components=8, id_max_components=20,
+                         n_jobs=1, backend="sklearn", verbosity=0, random_state=0)
+    return adata, tg
+
+
+def test_preprocess_does_not_modify_its_input():
+    """Its docstring promises a copy; it normalized, logged and annotated the object passed in."""
+    anndata = pytest.importorskip("anndata")
+    pytest.importorskip("scanpy")
+    import topo as tp
+    counts = np.random.default_rng(1).poisson(1.0, size=(200, 300)).astype(np.float32)
+    adata = anndata.AnnData(counts.copy())
+    out = tp.sc.preprocess(adata, n_top_genes=100, flavor="seurat")
+    assert out is not adata and out.shape == (200, 100)
+    np.testing.assert_array_equal(adata.X, counts)
+    assert adata.raw is None and "counts" not in adata.layers and "highly_variable" not in adata.var
+    assert "counts" in out.layers and out.raw is not None
+
+
+def test_sc_intrinsic_dim_stores_the_estimates(fitted_adata):
+    """It read the scaffold size as the global estimate and got None for the local ones."""
+    import topo as tp
+    adata, tg = fitted_adata
+    tp.sc.intrinsic_dim(adata, tg, id_k_values=[10, 20])
+    assert adata.uns["topometry_id_global_fsa"] == tg.global_id != tg.n_scaffold_components
+    np.testing.assert_array_equal(adata.obs["local_id_fsa"].to_numpy(), tg.local_ids()["fsa"])
+    assert {"id_fsa_k10", "id_fsa_k20", "id_mle_k10", "id_mle_k20"} <= set(adata.obs.columns)
+    tp.sc.intrinsic_dim(adata, tg, id_k_values=[10])        # a single k used to be skipped with an error
+    assert "10" in adata.uns["intrinsic_dim_estimator"]["local_id"]["fsa"]
+
+
+def test_sc_pseudotime_matches_topograph(fitted_adata):
+    import topo as tp
+    adata, tg = fitted_adata
+    out = tp.sc.pseudotime_analysis(adata, tg, starting_cluster="a", groupby="group", verbose=False)
+    expected = tg.pseudotime(root=out["root"], k=out["k_use"], multiscale=True)["pseudotime"]
+    np.testing.assert_allclose(adata.obs["topo_pseudotime"].to_numpy(), expected, atol=1e-12)
+
+
+def test_plot_riemann_diagnostics_honours_its_arguments(fitted_adata):
+    """`diffusion_t` was ignored, the palette had to exist in .uns, and one panel was always
+    colored by 'topo_clusters'."""
+    import matplotlib.pyplot as plt
+    import topo as tp
+    adata, tg = fitted_adata
+    assert "group_colors" not in adata.uns and "topo_clusters" not in adata.obs
+    deformation = {}
+    for t in (0, 4):
+        fig = tp.sc.plot_riemann_diagnostics(adata, tg, proj_key="X_TopoMAP", groupby="group",
+                                             diffusion_t=t, show=False, verbose=False)
+        plt.close(fig)
+        deformation[t] = adata.obs["deformation_TopoMAP"].to_numpy().copy()
+    assert not np.allclose(deformation[0], deformation[4])
+    for groupby in (None, "not a column"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            plt.close(tp.sc.plot_riemann_diagnostics(adata, tg, groupby=groupby, show=False, verbose=False))
+
+
+def test_sc_riemann_diagnostics_stores_the_laplacian_it_uses(fitted_adata):
+    import topo as tp
+    adata, tg = fitted_adata
+    tp.sc.riemann_diagnostics(adata, tg, diffusion_t=0, diffusion_op=None)
+    assert abs(adata.obsp["topometry_laplacian"] - tg.graph_kernel.L).max() == 0
+    expected = tg.riemann_diagnostics(Y=adata.obsm["X_TopoMAP"], L=tg.graph_kernel.L, compute_metric=False)
+    np.testing.assert_allclose(adata.obs["metric_deformation__X_TopoMAP"].to_numpy(), expected["deformation"])
+
+
+def test_topological_workflow_runs_with_its_defaults():
+    """Its default 'LE' eigenmap and its graph-kernel keys no longer existed in TopOGraph."""
+    anndata = pytest.importorskip("anndata")
+    pytest.importorskip("scanpy")
+    import topo as tp
+    adata = anndata.AnnData(_blobs(n=200).astype(np.float32))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out = tp.sc.topological_workflow(adata, _topograph(delta=2.0), kernels=["bw_adaptive", "cknn"])
+    assert "X_MAP of cknn from msDM with bw_adaptive" in out.obsm
+    assert "X_Isomap of bw_adaptive from DM with cknn" in out.obsm
+    assert "bw_adaptive from msDM with cknn_leiden" in out.obs
+    assert out.obsp["msDM with cknn_distances"].shape == (200, 200)
+    with pytest.warns(UserWarning, match="LE"):
+        tp.sc.topological_workflow(anndata.AnnData(_blobs(n=200).astype(np.float32)), _topograph(),
+                                   kernels=["bw_adaptive"], eigenmap_methods=["DM", "LE"], projections=["MAP"])
+
+
+def _fake_bbknn(adata, batch_key=None, use_rep="X_pca", neighbors_within_batch=3, **kwargs):
+    """Stands in for sc.external.pp.bbknn: writes neighbor distances and UMAP-style connectivities."""
+    Z = np.asarray(adata.obsm[use_rep])
+    G = NearestNeighbors(n_neighbors=K + 1).fit(Z).kneighbors_graph(Z, mode="distance").tocsr()
+    G.setdiag(0.0)
+    G.eliminate_zeros()
+    C = G.copy()
+    C.data = np.exp(-C.data / C.data.mean())
+    adata.obsp["distances"], adata.obsp["connectivities"] = G, C
+
+
+def test_integrate_bbknn_builds_kernels_from_distances(monkeypatch):
+    """It handed BBKNN's connectivities - affinities - to TopOGraph as distances."""
+    import types
+    anndata = pytest.importorskip("anndata")
+    sc = pytest.importorskip("scanpy")
+    import topo as tp
+    monkeypatch.setitem(sys.modules, "bbknn", types.ModuleType("bbknn"))
+    monkeypatch.setattr(sc.external.pp, "bbknn", _fake_bbknn)
+    X = _blobs(n=200).astype(np.float32)
+    adata = anndata.AnnData(X.copy())
+    adata.obs["batch"] = np.where(np.arange(200) % 2 == 0, "a", "b")
+    tg = _topograph(projection_methods=["MAP"], id_ks=10)
+    tp.sc.integrate_bbknn(adata, batch_key="batch", tg=tg)
+
+    rows = np.repeat(np.arange(200), np.diff(tg.base_knn_graph.indptr))
+    np.testing.assert_allclose(tg.base_knn_graph.data, euclidean_distances(X)[rows, tg.base_knn_graph.indices],
+                               rtol=1e-4, atol=1e-4)
+    assert _per_row_spearman(tg.base_kernel.K, euclidean_distances(X)) < -0.6
+    msZ = tg.spectral_scaffold(multiscale=True)
+    assert _per_row_spearman(tg._kernel_msZ.K, euclidean_distances(msZ)) < -0.6
+
+
+def test_blend_distance_graphs_keeps_distances():
+    pytest.importorskip("scanpy")
+    from topo.single_cell import _blend_distance_graphs
+    ref = csr_matrix(np.array([[0, 2.0, 0], [2.0, 0, 4.0], [0, 4.0, 0]]))
+    other = csr_matrix(np.array([[0, 6.0, 1.0], [6.0, 0, 0], [1.0, 0, 0]]))
+    out = _blend_distance_graphs(ref, other, alpha=0.25).toarray()
+    np.testing.assert_allclose(out, [[0, 3.0, 1.0], [3.0, 0, 4.0], [1.0, 4.0, 0]])

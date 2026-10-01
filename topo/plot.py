@@ -270,7 +270,7 @@ def eval_density_at_point(x, embedding):
 
 
 def get_cmap(n, name='hsv'):
-    return plt.cm.get_cmap(name, n)
+    return plt.get_cmap(name, n)
 
 
 def create_density_plot(X, Y, embedding):
