@@ -390,7 +390,7 @@ tp.sc.plot_id_histograms(adata, dpi=80)
     
 
 
-As we can see, the estimated global dimensionality is somewhere between 60 and 100. After running, the estimator object and global summaries are stored in `adata.uns['intrinsic_dim_estimator']`, while local ID values are written into `adata.obs` under `id_*` keys (method-dependent).
+As we can see, the estimated global dimensionality is somewhere between 55 and 100. After running, the estimator object and global summaries are stored in `adata.uns['intrinsic_dim_estimator']`, while local ID values are written into `adata.obs` under `id_*` keys (method-dependent).
 
 In practice, the global estimate provides a sanity check on scaffold dimensionality (too few components risks collapsing trajectories; too many wastes compute and can exaggerate noise), while local ID maps can be overlaid on TopoMAP/TopoPaCMAP layouts to localize where manifold complexity increases. Regions of elevated local ID could coincide with transition zones such as NPC-to-neuroblast progression, branch points separating lineages, or loop-like structure driven by cell-cycle dynamics, and therefore serve as an interpretable geometric guide for component selection and downstream modeling choices.
 
