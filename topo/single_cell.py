@@ -788,9 +788,9 @@ if _HAVE_SCANPY:
                     need_fit = False
             if need_fit:
                 use_rep = None
-                if "X_ms_spectral_scaffold" in adata.obsm_keys():
+                if "X_ms_spectral_scaffold" in adata.obsm:
                     use_rep = "X_ms_spectral_scaffold"
-                elif "X_spectral_scaffold" in adata.obsm_keys():
+                elif "X_spectral_scaffold" in adata.obsm:
                     use_rep = "X_spectral_scaffold"
                 sc.pp.neighbors(
                     adata,
@@ -936,7 +936,7 @@ if _HAVE_SCANPY:
         # -----------------------------
         # 1) Iterate over all obsm reps
         # -----------------------------
-        obsm_keys = list(adata.obsm_keys())
+        obsm_keys = list(adata.obsm.keys())
 
         tp_score   = {}  # composite TopoPreserve score
         parts_all  = {}  # PF1, PJS, SP
@@ -1387,7 +1387,7 @@ if _HAVE_SCANPY:
 
         if do_all:
             proj_names = []
-            for name in adata.obsm_keys():
+            for name in adata.obsm:
                 Yc = np.asarray(adata.obsm[name])
                 if Yc.ndim == 2 and Yc.shape[1] == 2:
                     proj_names.append(name)
