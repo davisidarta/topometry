@@ -817,3 +817,36 @@ def test_blend_distance_graphs_keeps_distances():
     other = csr_matrix(np.array([[0, 6.0, 1.0], [6.0, 0, 0], [1.0, 0, 0]]))
     out = _blend_distance_graphs(ref, other, alpha=0.25).toarray()
     np.testing.assert_allclose(out, [[0, 3.0, 1.0], [3.0, 0, 4.0], [1.0, 4.0, 0]])
+
+
+# ── display in notebooks ──────────────────────────────────────────────────────
+def test_listing_and_displaying_an_estimator_evaluates_nothing(fitted):
+    """
+    scikit-learn's dir() and notebook display read every attribute of an estimator. On a
+    Kernel that raised ValueError ('knn' of a precomputed kernel) or started an all-pairs
+    shortest-path computation ('SP'), so displaying a TopOGraph in Jupyter failed.
+    """
+    X, tg = fitted
+    kernel = Kernel(metric="euclidean", n_neighbors=K, backend="sklearn", n_jobs=1).fit(X)
+    for obj in (tg, tg.base_kernel, kernel, tg.eigenbasis, Kernel(), _topograph()):
+        assert "fit" in dir(obj)
+        bundle = obj._repr_mimebundle_(include=None, exclude=None)     # as IPython calls it
+        assert set(bundle) == {"text/plain"} and bundle["text/plain"] == repr(obj)
+        assert not hasattr(obj, "_repr_html_")      # IPython asks for this one separately
+    assert kernel._SP is None, "listing the attributes computed the shortest paths"
+    assert not hasattr(tg.base_kernel, "SP")        # no distance graph is kept for it
+
+    # an unfitted kernel has no kernel matrix: hasattr says so instead of raising
+    assert not hasattr(Kernel(), "K") and not hasattr(tg.base_kernel, "knn")
+    with pytest.raises(ValueError):     # still a ValueError for code that catches it
+        Kernel().K
+
+
+def test_ipython_shows_the_text_summary(fitted, capsys):
+    formatters = pytest.importorskip("IPython.core.formatters")
+    _, tg = fitted
+    for obj in (tg, tg.base_kernel, tg.eigenbasis):
+        data, _ = formatters.DisplayFormatter().format(obj)
+        assert set(data) == {"text/plain"} and data["text/plain"] == repr(obj)
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err and "Traceback" not in captured.out

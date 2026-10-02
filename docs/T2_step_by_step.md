@@ -26,9 +26,15 @@ You will learn how to:
 
 Besides topometry and standard python libraries (`numpy`, `pandas`, `matplotlib`), we'll use [scanpy](https://scanpy.readthedocs.io/en/stable/index.html) and the `AnnData` data format to manage our single-cell data.
 
+
 ```python
 import numpy as np, pandas as pd, scanpy as sc, topo as tp
 import matplotlib.pyplot as plt
+
+# suppress scanpy warnings (optional, but makes notebook cleaner)
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 np.random.seed(7)
 sc.settings.verbosity = 0
@@ -37,10 +43,12 @@ print("scanpy:", sc.__version__)
 print("topo:", getattr(tp, "__version__", "unknown"))
 ```
 
-    scanpy: 1.10.3
-    topo: 1.0.1
+    scanpy: 1.12.3
+    topo: 1.1.2
+
 
 We'll also use a `matplotlib` coloring palette:
+
 
 ```python
 # Palette
@@ -57,6 +65,7 @@ We'll use the PBMC68k dataset — a benchmark comprising 68,000 peripheral blood
 
 Once the data is saved to our working directory, we can read it:
 
+
 ```python
 adata = sc.read_10x_mtx(
     'filtered_matrices_mex/hg19/',
@@ -67,8 +76,14 @@ adata.var_names_make_unique()
 adata
 ```
 
+
+
+
     AnnData object with n_obs × n_vars = 68579 × 32738
         var: 'gene_ids'
+        layers: None (.X)
+
+
 
 This provides a quick inventory of what is present before any preprocessing or modeling steps. In the sections that follow, these fields will be populated with QC metrics, normalized expression, embeddings, and neighborhood graphs, and the same summary printout can be used to confirm that each stage wrote outputs to the expected locations.
 
@@ -78,6 +93,7 @@ This provides a quick inventory of what is present before any preprocessing or m
 
 Before proceeding with the analysis, we perform some basic quality control:
 
+
 ```python
 adata.var['mt'] = adata.var_names.str.startswith('MT-')
 sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
@@ -85,14 +101,20 @@ sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False,
 
 Plot QC metrics:
 
+
 ```python
 sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts', 'pct_counts_mt'],
              jitter=0.4, multi_panel=True)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_11_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_9_0.png)
+    
+
 
 Filter low-quality cells:
+
 
 ```python
 sc.pp.filter_cells(adata, min_genes=200)
@@ -102,12 +124,17 @@ adata = adata[adata.obs.pct_counts_mt < 5].copy()
 
 Plot filtered QC results:
 
+
 ```python
 sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts', 'pct_counts_mt'],
              jitter=0.4, multi_panel=True)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_15_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_13_0.png)
+    
+
 
 ---
 
@@ -117,16 +144,22 @@ TopoMetry expects ***Z-score–normalized*** (standardized) expression values fo
 
 The automated wrapper `tp.sc.preprocess(adata)` performs exactly these preprocessing steps and prepares adata.X for TopoMetry’s base graph construction.
 
+
 ```python
 adata = tp.sc.preprocess(adata)  # prepares adata.X for base graph construction
 adata
 ```
 
+
+
+
     AnnData object with n_obs × n_vars = 68265 × 3000
         obs: 'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt', 'n_genes'
         var: 'gene_ids', 'mt', 'n_cells_by_counts', 'mean_counts', 'pct_dropout_by_counts', 'total_counts', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
         uns: 'log1p', 'hvg'
-        layers: 'counts', 'scaled'
+        layers: None (.X), 'counts', 'scaled'
+
+
 
 The `tp.sc.preprocess(adata)` wrapper is equivalent to the legacy `scanpy` preprocessing:
 
@@ -145,6 +178,7 @@ and automatically handles `adata.layers` and `adata.raw`.
 ## Minimal celltype annotation
 
 After preprocessing, let's perform some minimal celltype annotation. We take advantage of the fact that PBMCs are very well studied and use [known marker genes](https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering.html#manual-cell-type-annotation) to construct a simple classifier to annotate the main cell types:
+
 
 ```python
 marker_dict = {
@@ -183,7 +217,11 @@ marker_dict_valid = {ct: [g for g in genes if g in adata.var_names]
 sc.pl.dotplot(adata, marker_dict_valid, groupby="predicted_celltype", standard_scale="var")
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_20_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_17_0.png)
+    
+
 
 ---
 
@@ -197,6 +235,7 @@ Next, we run the *de facto* standard in single-cell analysis:
 
 This will give us a baseline to compare TopoMetry to.
 
+
 ```python
 # run PCA
 sc.pp.pca(adata, layer="scaled", n_comps=300)
@@ -205,9 +244,14 @@ sc.pp.pca(adata, layer="scaled", n_comps=300)
 sc.pl.pca_variance_ratio(adata, log=True, n_pcs=100)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_22_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_19_0.png)
+    
+
 
 The variance ratio plot suggests that 30 PCs are enough to explain our data:
+
 
 ```python
 # neighborhood graph
@@ -229,18 +273,25 @@ sc.pl.embedding(adata, basis='PCA_UMAP', color='predicted_celltype', ax=axes[1],
 fig.subplots_adjust(wspace=0.5); plt.show()
 ```
 
-    2026-03-10 15:21:01.343970: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable`TF_ENABLE_ONEDNN_OPTS=0`.
 
-![png](T2_step_by_step_files/T2_step_by_step_24_1.png)
+    
+![png](T2_step_by_step_files/T2_step_by_step_21_0.png)
+    
+
 
 We can also visualize how well PCA explains this data:
+
 
 ```python
 adata_raw = adata.raw.to_adata().copy()
 tp.sc.pca_explained_variance_by_hvg(adata_raw)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_26_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_23_0.png)
+    
+
 
 As the variance-ratio curve suggests, the first ~30 PCs appear to capture “most of the signal,” but this impression can be misleading. In practice, PCA retains only a modest fraction of the total variance even with many components (often <30% by 50 PCs in this dataset), and extending to more PCs typically yields diminishing returns rather than recovering the missing structure. This pattern is common when biologically relevant variation is distributed across many weakly correlated directions and/or organized along **nonlinear** manifolds, where linear projections cannot efficiently parameterize the geometry.
 
@@ -270,6 +321,7 @@ When analyzing single-cell data stored in an `AnnData` object, we use the high-l
 * `projections=("MAP","PaCMAP")`: specifies which 2-D layouts should be computed from the learned scaffolds;
 * `do_leiden=True`: runs Leiden clustering on the refined operator at the requested `leiden_resolutions`.
 
+
 ```python
 tg = tp.sc.fit_adata(
     adata,
@@ -283,15 +335,17 @@ tg = tp.sc.fit_adata(
 adata
 ```
 
-    AnnData object with n_obs × n_vars = 68265 × 3000
 
-    obs: 'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt', 'n_genes', 'predicted_celltype', 'pca_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms'
+
+
+    AnnData object with n_obs × n_vars = 68265 × 3000
+        obs: 'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt', 'n_genes', 'predicted_celltype', 'pca_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms'
         var: 'gene_ids', 'mt', 'n_cells_by_counts', 'mean_counts', 'pct_dropout_by_counts', 'total_counts', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
         uns: 'log1p', 'hvg', 'pca', 'pca_leiden', 'umap', 'pca_leiden_colors', 'predicted_celltype_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8'
         obsm: 'X_pca', 'X_PCA_UMAP', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP', 'X_msTopoPaCMAP', 'X_TopoPaCMAP'
         varm: 'PCs'
-        layers: 'counts', 'scaled'
         obsp: 'pca_distances', 'pca_connectivities', 'topometry_connectivities', 'topometry_distances', '_topo_tmp_dm_distances', '_topo_tmp_dm_connectivities', 'topometry_connectivities_ms', 'topometry_distances_ms', '_topo_tmp_ms_distances', '_topo_tmp_ms_connectivities'
+        layers: None (.X), 'counts', 'scaled'
 
 
 
@@ -318,6 +372,7 @@ Intrinsic dimensionality (ID) is the effective number of degrees of freedom requ
 
 TopoMetry estimates ID at two complementary levels. A global ID summarizes the overall complexity of the dataset and provides a principled baseline for selecting how many spectral components are worth keeping. A local (per-cell) ID map quantifies how complexity varies across the manifold and can highlight biologically meaningful regions where geometry changes, such as branch points, loops, dense terminal attractors, or technical mixing. These estimates are used by default during `TopOGraph.fit()` / `tp.sc.fit_adata()` to size scaffolds conservatively (with guardrails like minimum and maximum components), but it is often useful to recompute or inspect them explicitly when tuning runtime, debugging structure, or preparing downstream models (e.g., choosing latent sizes for parametric models).
 
+
 ```python
 tp.sc.intrinsic_dim(adata, 
                     tg=tg, # pass the topograph to avoid redundant graph construction
@@ -329,9 +384,13 @@ tp.sc.plot_id_histograms(adata, dpi=80)
 # Results: adata.uns['intrinsic_dim_estimator']; per-cell IDs in adata.obs (id_* keys).
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_32_0.png)
 
-As we can see, the estimated global dimensionality is somewhere between 80 and 120. After running, the estimator object and global summaries are stored in `adata.uns['intrinsic_dim_estimator']`, while local ID values are written into `adata.obs` under `id_*` keys (method-dependent).
+    
+![png](T2_step_by_step_files/T2_step_by_step_27_0.png)
+    
+
+
+As we can see, the estimated global dimensionality is somewhere between 55 and 100. After running, the estimator object and global summaries are stored in `adata.uns['intrinsic_dim_estimator']`, while local ID values are written into `adata.obs` under `id_*` keys (method-dependent).
 
 In practice, the global estimate provides a sanity check on scaffold dimensionality (too few components risks collapsing trajectories; too many wastes compute and can exaggerate noise), while local ID maps can be overlaid on TopoMAP/TopoPaCMAP layouts to localize where manifold complexity increases. Regions of elevated local ID could coincide with transition zones such as NPC-to-neuroblast progression, branch points separating lineages, or loop-like structure driven by cell-cycle dynamics, and therefore serve as an interpretable geometric guide for component selection and downstream modeling choices.
 
@@ -345,11 +404,16 @@ Plotting the ordered eigenvalues produces an eigenspectrum (or scree plot). The 
 
 A key diagnostic feature of the eigenspectrum is the eigengap: a sharp drop between consecutive eigenvalues. An eigengap indicates a natural separation between informative dimensions and residual structure, and therefore suggests a principled cutoff for the number of scaffold components to retain. When present, this cutoff often aligns well with global intrinsic dimensionality estimates and provides an intuitive, geometry-driven justification for scaffold sizing.
 
+
 ```python
 tg.eigenspectrum()
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_35_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_29_0.png)
+    
+
 
 Note that the size of the spectral scaffold is usually higher than global intrinsic dimensionality estimates. That is the case because intrinsic dimensionality (ID) is a coarse summary—often a single number—of how many degrees of freedom are needed *locally* or *on average*, whereas a scaffold is an **orthonormal basis** intended to represent the dataset’s geometry **everywhere** and across **multiple scales**. In practice, different regions of the manifold can have different local IDs (branches, loops, mixed trajectories, terminal states), so no single small set of components captures all neighborhoods equally well. Additional scaffold components also act as “coverage”: they provide redundancy so that distinct structures can be represented on different axes, and they help stabilize downstream graphs and layouts when sampling is uneven or when transitions are sharp. Finally, diffusion/Laplacian eigenfunctions are ordered by smoothness, not by “ID relevance,” so it is common to keep more components than a global ID estimate to ensure that both broad structure and finer, region-specific variation are represented without forcing all biology into too few modes.
 
@@ -360,6 +424,7 @@ At the tail of the spectrum, it is common to observe eigenvalues approaching zer
 ## Quick 2‑D visualizations
 
 These layouts are initialized from the spectral scaffold to preserve neighborhoods while keeping global structure reasonable. All results are written to `AnnData`, so we can use scanpy default functions to plot these results. Let's inspect TopoMetry's clustering results and cell type predictions on the TopoMAP and TopoPaCMAP visualizations:
+
 
 ```python
 # Four subplots for the two embeddings, clustering results and predicted cell type visualizations
@@ -380,9 +445,14 @@ sc.pl.embedding(adata, basis="TopoPaCMAP", color="predicted_celltype", ax=axes[1
 fig.subplots_adjust(wspace=0.3, hspace=0.3); plt.show()
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_38_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_31_0.png)
+    
+
 
 TopoMetry also includes utilities to augment scanpy's plots into publication-quality figures with annotation labels:
+
 
 ```python
 fig, ax = plt.subplots(1, 1, figsize=(6,6))  
@@ -394,26 +464,43 @@ tp.sc.repel_annotation_labels(adata, groupby='predicted_celltype', basis='TopoMA
 plt.show()
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_40_0.png)
+    Looks like you are using a tranform that doesn't support FancyArrowPatch, using ax.annotate instead. The arrows might strike through texts. Increasing shrinkA in arrowprops might help.
+
+
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_33_1.png)
+    
+
 
 TopoMetry finds a surprisingly high number of T cell clusters in this dataset. Interestingly, some of them was classified as "Tfh" (T folicular helper).
 
 Let's highlight them in a TopoMAP representation to see if "Tfh" (T folicular helper) cells correspond to one of these populations:
+
 
 ```python
 tp.sc.highlight_embedding(adata, basis='TopoMAP', target='Tfh', groupby='predicted_celltype',
                            title='Tfh-labelled Region Highlighted', circle_size_factor=1.5)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_42_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_35_0.png)
+    
+
 
 As we can see, one of the populations identified by TopoMetry could correspond to cells labelled as 'Tfh' (T follicular helper). Let's check the expression of known Tfh marker genes:
+
 
 ```python
 sc.pl.embedding(adata, basis='TopoMAP', color=["CXCR5", "PDCD1", "ICOS"], cmap='inferno', vmin=0, frameon=False, ncols=6)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_44_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_37_0.png)
+    
+
 
 As we can see, expression of PDCD1 (encoding a immune-inhibitory receptor expressed in activated T cells) was restricted to one of the T cell clusters uncovered with TopoMetry, which was labelled as a Tfh-like population by our simple classifier.
 
@@ -425,6 +512,7 @@ Although TopoMetry produces default 2-D layouts as part of the main pipeline, us
 
 Layouts can be recomputed using the TopOGraph object `tg` created by `fit_adata()`:
 
+
 ```python
 # Remake TopoPaCMAP projection
 adata.obsm['X_TopoPaCMAP'] = tg.project(projection_method='PaCMAP', multiscale=False, num_iters=100, n_neighbors=10)
@@ -433,7 +521,11 @@ adata.obsm['X_TopoPaCMAP'] = tg.project(projection_method='PaCMAP', multiscale=F
 sc.pl.embedding(adata, basis='TopoPaCMAP', color="topo_clusters", legend_loc=None, frameon=False, palette=palette)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_47_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_39_0.png)
+    
+
 
 ---
 
@@ -442,6 +534,7 @@ sc.pl.embedding(adata, basis='TopoPaCMAP', color="topo_clusters", legend_loc=Non
 In addition to inspecting the final embedding, it is often useful to visualize the **layout optimization trajectory**. Watching the map evolve over iterations helps diagnose whether the optimizer has stabilized, whether neighborhoods are still drifting, and whether apparent structure is an artifact of early, under-converged states. This view is also practical for tuning layout hyperparameters (e.g., number of iterations, learning-rate schedule, early exaggeration/repulsion settings, and initialization), and it builds intuition for how TopoMAP/TopoPaCMAP trade off local versus global organization during optimization.
 
 TopoMetry includes a convenience function to visualize the process as an animated GIF, but this is currently limited to TopoMAP embeddings:
+
 
 ```python
 # Generate and inspect GIF — should show visible movement across frames
@@ -460,8 +553,10 @@ gif_path = tp.sc.visualize_optimization(
 print('GIF saved to:', gif_path)
 ```
 
-    GIF saved to: example_optimization.gif![Animated GIF: MAP optimization trajectory](example_optimization.gif)
+    GIF saved to: example_optimization.gif
 
+
+![Animated GIF: MAP optimization trajectory](example_optimization.gif)
 ---
 
 ## Riemannian distortion diagnostics
@@ -470,6 +565,7 @@ A 2-D layout is a mapping from the scaffold space to the plane. The **Riemannian
 
 * **area change** (via the metric’s determinant)—negative log-det means **contraction**/crowding; positive log-det means **expansion**/over-separation;
 * **anisotropy** (via the ratio of its principal stretch factors)—large ratios indicate a strong preferred direction (ray-like stretching). By comparing these quantities to their “no-distortion” ideal (area change ≈ 0, anisotropy ≈ 1), we can judge how faithful a 2-D map is to the scaffold’s local geometry and decide whether to adjust parameters (neighbors, scaffold size, layout iterations) or prefer one layout over another.
+
 
 ```python
 tp.sc.plot_riemann_diagnostics(adata, tg, proj_key='X_TopoMAP', # specify any projection key in adata.obsm to compute diagnostics for that embedding
@@ -480,8 +576,14 @@ tp.sc.plot_riemann_diagnostics(adata, tg, proj_key='X_TopoMAP', # specify any pr
 ```
 
     Riemannian diagnostics for projection 'X_TopoMAP'
+      [riemann] Computing geometry for 'TopoMAP' (will be cached)...
 
-![png](T2_step_by_step_files/T2_step_by_step_51_1.png)
+
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_43_1.png)
+    
+
 
 These panels quantify how a 2-D map deforms the scaffold’s local geometry:
 
@@ -499,6 +601,7 @@ In this specific case, the Riemannian diagnostics show that regions of the manif
 
 TopoMetry also includes a function to quickly calculate a per-point deformation metric for a given 2-D visualization, which can be used to identify regions of the manifold that are more or less distorted relative to the original high-dimensional space. This can be useful for interpreting visualizations:
 
+
 ```python
 # calculate deformation on PCA-based UMAP
 tp.sc.calculate_deformation_on_projection(adata, tg, proj_key='PCA_UMAP') # stored in adata.obs['deformation_'+proj_key]
@@ -507,7 +610,11 @@ tp.sc.calculate_deformation_on_projection(adata, tg, proj_key='PCA_UMAP') # stor
 sc.pl.embedding(adata, basis='PCA_UMAP', color='deformation_PCA_UMAP', cmap='bwr', frameon=False, vmin=-6, vmax=6)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_54_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_45_0.png)
+    
+
 
 ---
 
@@ -522,6 +629,7 @@ TopoMetry summarizes this comparison using complementary operator-native scores:
 * **Spectral Procrustes (SP)** evaluates consistency at the coordinate level by aligning multiscale diffusion coordinates up to an orthogonal transform and reporting an (R^2)-like goodness of fit.
 
 Together, these metrics provide a principled, operator-level view of geometry preservation that simultaneously probes neighborhood structure, transition probabilities, and global spectral organization.
+
 
 ```python
 tp.sc.evaluate_representations(
@@ -541,7 +649,11 @@ tp.sc.evaluate_representations(
 )
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_56_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_47_0.png)
+    
+
 
 The resulting summary plots should be read as **operator-level evidence of geometric fidelity**. In this dataset, the TopoMetry scaffolds typically achieve higher **PF1**, **PJS**, and **SP** than PCA-derived spaces, indicating that their induced diffusion operators more closely match the reference operator on `adata.X` (i.e., neighborhoods, transition probabilities, and the global spectral organization are better preserved).
 
@@ -560,6 +672,7 @@ The spectral scaffold is a set of eigenmodes; **spectral selectivity** asks whic
 
 Use these together to explore the geometrical structure of your data:
 
+
 ```python
 tp.sc.spectral_selectivity(adata, tg, groupby_candidates=['topo_clusters'])
 
@@ -568,7 +681,11 @@ spectral_selectivity_keys = ['spectral_EAS', 'spectral_RayScore', 'spectral_LAC'
 sc.pl.embedding(adata, basis="TopoMAP", color=spectral_selectivity_keys, ncols=4, cmap='inferno')
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_59_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_49_0.png)
+    
+
 
 High values of EAS, RayScore, and LAC co-localized on the map indicate regions where a single scaffold axis dominates (EAS), progression is radially coherent from the spectral origin (RayScore), and local geometry is effectively 1-D (LAC). These areas are prime candidates for axis-aware annotation (e.g., a differentiation ray) and for using that axis as an ordering variable (akin to pseudotime). In contrast, patches with low EAS/LAC suggest multi-axis mixing or locally 2-D/branching structure, where a single latent coordinate will not summarize biology. The spectral radius adds context: larger radius (brighter) often tracks later “diffusion time” or more advanced states along a trajectory, whereas smaller radius marks proximal/early regions near the scaffold origin.
 
@@ -626,6 +743,7 @@ multiscale diffusion map eigenvectors are used as the scaffold. Results are stor
 in `adata.varm` under the key `feature_modes_ms_x_corr` and metadata in
 `adata.uns['feature_modes_ms_x_corr_meta']`.
 
+
 ```python
 tp.sc.calculate_feature_modes(
     adata, tg,
@@ -646,7 +764,11 @@ tp.sc.plot_feature_modes(
 )
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_63_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_51_0.png)
+    
+
 
 Each row of the heatmap is a gene; each column is a scaffold eigenvector (ranked by
 eigenvalue). Colours encode $\pi$-weighted correlation: red means the gene is
@@ -668,6 +790,7 @@ near $0$. After per-column normalisation, the heatmap reveals the **relative
 importance** of genes within each component rather than their absolute correlation.
 This makes it easier to spot secondary gene programmes that are real but subtle.
 
+
 ```python
 tp.sc.calculate_feature_modes(
     adata, tg,
@@ -688,7 +811,11 @@ tp.sc.plot_feature_modes(
 )
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_66_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_53_0.png)
+    
+
 
 Compare this heatmap with the `'corr'` version above:
 
@@ -703,6 +830,7 @@ loadings into GSEA or a regression model) and `'corr_atanh'` for **exploration**
 (spotting unexpected gene programmes worth following up).
 
 You can also inspect the top genes for any component programmatically:
+
 
 ```python
 import pandas as pd
@@ -721,16 +849,17 @@ print(loadings['SC_0'].abs().nlargest(10).to_frame().join(loadings['SC_0'].renam
 
     Top 10 genes for SC_0 (by |corr|):
                   SC_0      corr
-    CST3      0.906831 -0.906831
-    LYZ       0.777585 -0.777585
-    LST1      0.766309 -0.766309
-    FCN1      0.744018 -0.744018
-    S100A9    0.721993 -0.721993
-    AIF1      0.715348 -0.715348
-    SPI1      0.712691 -0.712691
-    CFD       0.708454 -0.708454
-    TYMP      0.704225 -0.704225
-    SERPINA1  0.679776 -0.679776
+    CST3      0.905693  0.905693
+    LYZ       0.776815  0.776815
+    LST1      0.764498  0.764498
+    FCN1      0.744435  0.744435
+    S100A9    0.725095  0.725095
+    AIF1      0.712385  0.712385
+    SPI1      0.711401  0.711401
+    CFD       0.708625  0.708625
+    TYMP      0.703777  0.703777
+    SERPINA1  0.678691  0.678691
+
 
 ---
 
@@ -739,6 +868,7 @@ print(loadings['SC_0'].abs().nlargest(10).to_frame().join(loadings['SC_0'].renam
 TopoMetry supports **geometry-aware imputation** by diffusing expression values over the learned diffusion operator, in close analogy to methods such as MAGIC. Rather than smoothing directly in gene-expression space, imputation is performed on the refined diffusion geometry learned by TopoMetry, so information is propagated preferentially along manifold-consistent directions and across biologically meaningful neighborhoods. This approach reduces technical sparsity while minimizing spurious mixing between unrelated cell states, a common failure mode when imputation is driven by distorted low-dimensional embeddings.
 
 Concretely, gene expression is propagated using powers of the diffusion operator, effectively averaging expression across multi-step random walks on the graph. Early diffusion steps emphasize local denoising, while later steps incorporate broader contextual information along trajectories and branches. Because the operator itself is geometry-preserving by construction, imputed values tend to sharpen continuous programs such as differentiation or cell-cycle progression without collapsing discrete populations. As with MAGIC, diffusion time controls the strength of smoothing, but in TopoMetry this parameter is grounded in the learned manifold and can be interpreted in terms of diffusion scale rather than arbitrary neighborhood size.
+
 
 ```python
 tp.sc.impute_adata(
@@ -750,17 +880,27 @@ tp.sc.impute_adata(
 )
 ```
 
+
 ```python
 sc.pl.embedding(adata, basis='TopoMAP', color=['IL7R', 'CD8A', 'PDCD1', 'CD79A'], cmap='inferno', layer='scaled', vmin=0, size=10)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_71_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_58_0.png)
+    
+
+
 
 ```python
 sc.pl.embedding(adata, basis='TopoMAP', color=['IL7R', 'CD8A', 'PDCD1', 'CD79A'], cmap='inferno', layer='topo_imputation', vmin=0, size=10)
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_72_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_59_0.png)
+    
+
 
 As we can see, the imputation eliminates noisy non-specific signal across different marker genes.
 
@@ -771,6 +911,7 @@ As we can see, the imputation eliminates noisy non-specific signal across differ
 Graph signal filtering treats measurements defined on cells—such as gene expression, categorical annotations, or experimental readouts—as **signals living on a graph**, rather than as independent observations. In single-cell data, the graph encodes the manifold structure of the population through neighborhood relationships, so filtering corresponds to propagating information along biologically meaningful paths while respecting the underlying geometry. By applying diffusion operators to these signals, high-frequency noise that is inconsistent with the graph structure is attenuated, whereas coherent patterns that align with trajectories, branches, or neighborhoods are reinforced. This perspective provides a principled way to denoise, smooth, and interpret cell-level signals in a geometry-aware manner, closely analogous to low-pass filtering in classical signal processing but defined over a data-driven manifold instead of a regular grid.
 
 Because the example dataset (PBMC68k) consists of cells from a single healthy donor, it does not contain a naturally varying signal suitable for demonstrating graph-signal filtering. Instead, we simulate a binary disease-state label by randomly assigning half of the cells to a "disease" state:
+
 
 ```python
 rng = np.random.default_rng(7)
@@ -801,6 +942,7 @@ adata.obs[sim_key] = pd.Categorical(np.where(diseased, "diseased", "healthy"), c
 
 Now that we simulated a disease state, we can filter the signal and visualize the results:
 
+
 ```python
 # Filter the signal with diffusion on the multiscale scaffold
 tp.sc.filter_signal(
@@ -824,11 +966,16 @@ sc.pl.embedding(
 )
 ```
 
-![png](T2_step_by_step_files/T2_step_by_step_78_0.png)
+
+    
+![png](T2_step_by_step_files/T2_step_by_step_63_0.png)
+    
+
 
 ## Saving
 
 Finally, we save a clean, portable `.h5ad` and write the fitted `TopOGraph` as a pickle.
+
 
 ```python
 adata.write_h5ad("pbmc68k_topometry.h5ad")
@@ -837,10 +984,35 @@ tp.save_topograph(tg, "pbmc68k_topograph.pkl")
 
     TopOGraph saved at pbmc68k_topograph.pkl
 
+
+
 ```python
 # Optional: re‑load to verify
 tg = tp.load_topograph("pbmc68k_topograph.pkl")
 tg
 ```
+
+
+
+
+    TopOGraph object with 68265 samples and 3000 observations and:
+     . Base Kernels: 
+        bw_adaptive - .BaseKernelDict['bw_adaptive']
+     . Eigenbases: 
+        DM with bw_adaptive - .EigenbasisDict['DM with bw_adaptive'] 
+        msDM with bw_adaptive - .EigenbasisDict['msDM with bw_adaptive']
+     . Graph Kernels: 
+        bw_adaptive from msDM with bw_adaptive - .GraphKernelDict['bw_adaptive from msDM with bw_adaptive'] 
+        bw_adaptive from DM with bw_adaptive - .GraphKernelDict['bw_adaptive from DM with bw_adaptive']
+     . Projections: 
+        MAP of bw_adaptive from msDM with bw_adaptive - .ProjectionDict['MAP of bw_adaptive from msDM with bw_adaptive'] 
+        MAP of bw_adaptive from DM with bw_adaptive - .ProjectionDict['MAP of bw_adaptive from DM with bw_adaptive'] 
+        PaCMAP of msDM with bw_adaptive - .ProjectionDict['PaCMAP of msDM with bw_adaptive'] 
+        PaCMAP of DM with bw_adaptive - .ProjectionDict['PaCMAP of DM with bw_adaptive'] 
+     Active base kernel  -  .base_kernel 
+     Active eigenbasis  -  .eigenbasis 
+     Active graph kernel  -  .graph_kernel
+
+
 
 That's it for this tutorial! I hope TopoMetry is useful for your research.

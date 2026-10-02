@@ -5,6 +5,7 @@ from topo.spectral import diffusion_operator
 from topo.base.ann import kNN
 from sklearn.base import BaseEstimator, TransformerMixin
 from topo.tpgraph.kernels import _angularize_graph
+from topo.utils._utils import PlainEstimatorDisplay
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 
@@ -17,7 +18,7 @@ def _knn_distances(X, metric, **kwargs):
     return _angularize_graph(kNN(X, metric=metric, **kwargs), metric, True)
 
 
-class IntrinsicDim(BaseEstimator, TransformerMixin):
+class IntrinsicDim(PlainEstimatorDisplay, BaseEstimator, TransformerMixin):
     """
     Scikit-learn flavored class for estimating the intrinsic dimensionalities of high-dimensional data.
     This class iterates over a range of possible values of k-nearest-neighbors to consider in calculations

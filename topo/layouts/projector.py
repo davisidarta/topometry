@@ -13,6 +13,7 @@ from topo.utils._utils import get_landmark_indices
 from topo.spectral.eigen import spectral_layout
 from topo.base.ann import resolve_backend
 from topo.tpgraph.kernels import Kernel, _angularize_graph
+from topo.utils._utils import PlainEstimatorDisplay
 import logging
 
 # dumb warning, suggests lilmatrix but it doesnt work
@@ -20,7 +21,7 @@ from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 
-class Projector(BaseEstimator, TransformerMixin):
+class Projector(PlainEstimatorDisplay, BaseEstimator, TransformerMixin):
     """
     A scikit-learn compatible class that handles all projection methods. 
     Ideally, it takes in either a orthonormal eigenbasis or a graph kernel learned from such an eigenbasis.
