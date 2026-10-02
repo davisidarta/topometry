@@ -81,6 +81,11 @@ adata.write_h5ad("pbmc3k_topometry.h5ad")
 
 ## Changelog
 
+**v1.1.2** — Notebook display
+
+- Displaying a `TopOGraph` or `Kernel` in a Jupyter notebook, or listing its attributes with `dir()` or tab completion, failed with recent scikit-learn, which reads every attribute of an estimator: a `Kernel` property raised `ValueError`, and another started an all-pairs shortest-path computation. These objects now show their own text summary, and listing attributes evaluates nothing.
+- The PDF report named two `adata.obsm` keys that do not exist; it now names `X_ms_spectral_scaffold`.
+
 **v1.1.1** — Fixes to standing issues
 
 ⚠️ Results computed with a cosine metric change, and `base_metric='cosine'` is the default. Analyses run with any release from 0.2.0.0 to 1.1.0 on a cosine metric should be re-run. Euclidean graphs and the default kernels are unchanged on the hnswlib and nmslib backends.
