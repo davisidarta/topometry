@@ -27,13 +27,13 @@ import anndata as ad
 import topo as tp
 
 # figure settings
-sc.settings.set_figure_params(dpi=120, facecolor='white', fontsize=14)
+sc.set_figure_params(dpi=120, facecolor='white', fontsize=14)
 sc.settings.verbosity = 1
 
 print(f'scanpy {sc.__version__}  |  topo {tp.__version__}')
 ```
 
-    scanpy 1.10.3  |  topo 1.0.2
+    scanpy 1.12.3  |  topo 1.1.2
 
 
 ---
@@ -41,7 +41,7 @@ print(f'scanpy {sc.__version__}  |  topo {tp.__version__}')
 
 The Immune_ALL_human dataset contains ~33,500 cells from 10 batches spanning multiple tissues and sequencing platforms. The expression matrix is already log-normalised (`adata.X`), while raw counts are stored in `adata.layers['counts']`. This is a curated dataset, so we can skip quality-control for demonstration purposes.
 
-You can download the dataset from [Figshare](https://figshare.com/ndownloader/files/27686835).
+You can download the dataset from [Figshare](https://figshare.com/ndownloader/files/25717328).
 
 
 ```python
@@ -58,7 +58,7 @@ print(f"adata.X max = {adata.X.max():.3f}  (already log-normalised)")
 
     AnnData object with n_obs × n_vars = 33506 × 12303
         obs: 'batch', 'chemistry', 'data_type', 'dpt_pseudotime', 'final_annotation', 'mt_frac', 'n_counts', 'n_genes', 'sample_ID', 'size_factors', 'species', 'study', 'tissue', 'cell_type'
-        layers: 'counts'
+        layers: 'counts', None (.X)
     
     Batches   (10): ['10X', 'Freytag', 'Oetjen_A', 'Oetjen_P', 'Oetjen_U', 'Sun_sample1_CS', 'Sun_sample2_KC', 'Sun_sample3_TB', 'Sun_sample4_TC', 'Villani']
     Cell types (16): ['CD10+ B cells', 'CD14+ Monocytes', 'CD16+ Monocytes', 'CD20+ B cells', 'CD4+ T cells', 'CD8+ T cells', 'Erythrocytes', 'Erythroid progenitors', 'HSPCs', 'Megakaryocyte progenitors', 'Monocyte progenitors', 'Monocyte-derived dendritic cells', 'NK cells', 'NKT cells', 'Plasma cells', 'Plasmacytoid dendritic cells']
@@ -133,7 +133,7 @@ print(adata_int)
         uns: 'cca_integration'
         obsm: 'X_cca'
         varm: 'cca_loadings'
-        layers: 'counts', 'lognorm', 'original', 'corrected'
+        layers: 'counts', None (.X), 'lognorm', 'original', 'corrected'
 
 
 The output `AnnData` contains:
@@ -160,9 +160,6 @@ tg_w1 = tp.sc.fit_adata(
 print("Available embeddings:", [k for k in adata_int.obsm.keys()])
 ```
 
-    2026-03-25 18:37:48.136004: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
-
-
     Available embeddings: ['X_cca', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP']
 
 
@@ -178,7 +175,7 @@ sc.pl.embedding(adata_int, basis='TopoMAP', color=['batch', 'cell_type'],
 
 
     
-![png](T3_Integration_files/T3_Integration_14_0.png)
+![png](T3_Integration_files/T3_Integration_11_0.png)
     
 
 
@@ -221,12 +218,12 @@ print(metrics_w1.to_string(float_format='{:.4f}'.format))
 
     === Workflow 1 — Integration metrics ===
                 uncorrected  integrated
-    knn_purity       0.8202      0.8304
-    knn_mixing       0.4832      0.6959
-    ilisi            2.3840      4.6099
-    clisi            1.1514      1.1022
-    ari                 NaN      0.5139
-    nmi                 NaN      0.6430
+    knn_purity       0.8212      0.8160
+    knn_mixing       0.4794      0.7043
+    ilisi            2.3472      4.6921
+    clisi            1.1620      1.1085
+    ari                 NaN      0.5002
+    nmi                 NaN      0.6179
 
 
 The iLISI score (batch mixing) should increase substantially after integration, while cLISI (cell-type purity) should remain close to 1 — indicating that batch effects were removed without blurring biological distinctions.
@@ -356,8 +353,14 @@ for b, q in zip(QUERY_BATCHES, adata_queries_raw):
 ```
 
       'Oetjen_U': 2000/2000 reference features covered
+
+
       'Sun_sample3_TB': 2000/2000 reference features covered
+
+
       'Sun_sample4_TC': 2000/2000 reference features covered
+
+
       'Villani': 2000/2000 reference features covered
 
 
@@ -382,8 +385,8 @@ for rank, idx in enumerate(mapping_order):
 
     Optimal mapping order (most → least similar to reference):
       1. Oetjen_U
-      2. Sun_sample3_TB
-      3. Sun_sample4_TC
+      2. Sun_sample4_TC
+      3. Sun_sample3_TB
       4. Villani
 
 
@@ -461,7 +464,7 @@ sc.pl.embedding(adata_atlas, basis='TopoMAP',
 
 
     
-![png](T3_Integration_files/T3_Integration_35_0.png)
+![png](T3_Integration_files/T3_Integration_30_0.png)
     
 
 
@@ -504,13 +507,13 @@ print(metrics_w2.to_string(float_format='{:.4f}'.format))
 ```
 
     === Workflow 2 — Integration metrics ===
-                uncorrected  reference  step_0 (+Oetjen_U)  step_1 (+Sun_sample3_TB)  step_2 (+Sun_sample4_TC)  step_3 (+Villani)  final_atlas
-    knn_purity       0.8191     0.6845              0.6856                    0.6896                    0.6921             0.7201       0.8390
-    knn_mixing       0.4847     0.8149              0.8413                    0.8542                    0.8653             0.8649       0.6737
-    ilisi            2.3673     2.7598              2.7811                    2.9519                    3.1464             3.2433       4.0883
-    clisi            1.1513     1.2424              1.2235                    1.2418                    1.2384             1.1989       1.0991
-    ari                 NaN        NaN                 NaN                       NaN                       NaN                NaN       0.5467
-    nmi                 NaN        NaN                 NaN                       NaN                       NaN                NaN       0.6751
+                uncorrected  reference  step_0 (+Oetjen_U)  step_1 (+Sun_sample4_TC)  step_2 (+Sun_sample3_TB)  step_3 (+Villani)  final_atlas
+    knn_purity       0.8160     0.6905              0.6911                    0.6938                    0.6973             0.7207       0.8389
+    knn_mixing       0.4872     0.8121              0.8390                    0.8521                    0.8627             0.8649       0.6748
+    ilisi            2.4041     2.7910              2.8192                    2.9895                    3.2451             3.2345       4.1051
+    clisi            1.1576     1.2245              1.2228                    1.2221                    1.2240             1.1999       1.0936
+    ari                 NaN        NaN                 NaN                       NaN                       NaN                NaN       0.5808
+    nmi                 NaN        NaN                 NaN                       NaN                       NaN                NaN       0.6749
 
 
 As queries are added, iLISI (batch mixing) should increase progressively while cLISI (cell-type purity) remains stable — confirming that the sequential mapping removes batch effects without distorting biology.
@@ -531,6 +534,6 @@ Both workflows use the same underlying CCA-anchor correction. The sequential map
 
 **What's next?**
 
-- Explore the [Step-by-Step tutorial](T2_step_by_step.ipynb) to learn how to tune individual TopoMetry components.
+- Explore the [Step-by-Step tutorial](T2_step_by_step.md) to learn how to tune individual TopoMetry components.
 - Use `tp.sc.impute_adata()` on the integrated data for denoised gene expression.
 - Apply `tp.sc.evaluate_representations()` and `tp.sc.plot_riemann_diagnostics()` to assess the quality of integrated embeddings.

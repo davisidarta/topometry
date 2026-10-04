@@ -13,13 +13,14 @@ from scipy.sparse import issparse, csr_matrix
 from typing import Dict, Tuple, Optional, Union
 from topo.base.ann import kNN, resolve_backend, _is_installed
 from topo.tpgraph.kernels import Kernel, _angularize_graph
+from topo.utils._utils import PlainEstimatorDisplay
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.spectral._spectral import _arpack_v0
 from topo.layouts.projector import Projector
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
 
 
-class TopOGraph(BaseEstimator, TransformerMixin):
+class TopOGraph(PlainEstimatorDisplay, BaseEstimator, TransformerMixin):
     """
     Geometry-aware estimator that learns spectral scaffolds, refined operators, and 2-D layouts.
 

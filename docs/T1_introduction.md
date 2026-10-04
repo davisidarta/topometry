@@ -15,7 +15,7 @@ import scanpy as sc
 import topo as tp
 
 # figure settings
-sc.settings.set_figure_params(dpi=120, facecolor='white', fontsize=14)
+sc.set_figure_params(dpi=120, facecolor='white', fontsize=14)
 
 # suppress scanpy warnings (optional, but makes notebook cleaner)
 import warnings
@@ -84,11 +84,7 @@ sc.tl.leiden(adata, resolution=0.5, neighbors_key='X', key_added='X_leiden')
 sc.tl.umap(adata, neighbors_key='X')
 adata.obsm['X_UMAP_on_adataX_'] = adata.obsm['X_umap'].copy()
 del adata.obsm['X_umap'] #remove duplicate key
-
 ```
-
-    2026-03-10 09:25:14.135398: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
-
 
 
 ```python
@@ -97,7 +93,7 @@ sc.pl.embedding(adata, basis='PCA_UMAP', color=['pca_leiden','X_leiden'], legend
 
 
     
-![png](T1_introduction_files/T1_introduction_10_0.png)
+![png](T1_introduction_files/T1_introduction_8_0.png)
     
 
 
@@ -108,7 +104,7 @@ sc.pl.embedding(adata, basis='UMAP_on_adataX_', color=['pca_leiden','X_leiden'],
 
 
     
-![png](T1_introduction_files/T1_introduction_11_0.png)
+![png](T1_introduction_files/T1_introduction_9_0.png)
     
 
 
@@ -139,10 +135,6 @@ tg, pdf_path = tp.sc.run_and_report(adata,
 )
 print(f"PDF report saved to: {pdf_path}")
 ```
-
-    /home/davi/topometry/topo/topograph.py:2703: RuntimeWarning: invalid value encountered in log
-      H = -_np.sum(P * _np.log(P + eps), axis=1)
-
 
     PDF report saved to: ./my_topometry_report.pdf
 
@@ -210,7 +202,7 @@ Important caveat: imputed values are not raw counts—they are reconstructions g
 
 After completion, your `AnnData` will be populated with:
 
-* **Spectral Scaffold coordinates:** `adata.obsm['X_spectral_scaffold']`, `adata.obsm['X_multiscale_scaffold']`.
+* **Spectral Scaffold coordinates:** `adata.obsm['X_spectral_scaffold']`, `adata.obsm['X_ms_spectral_scaffold']`.
     * Construct your own neighborhood graphs on these scaffolds using `sc.pp.neighbors(adata, use_rep='X_spectral_scaffold')` to generate custom UMAPs, clusters, etc.
     * For RNA velocity analyses, use `scv.pp.moments(adata, use_rep='X_ms_spectral_scaffold', n_neighbors=10)`
 
@@ -232,13 +224,13 @@ adata
 
 
     AnnData object with n_obs × n_vars = 2700 × 3000
-        obs: 'n_genes', 'pca_leiden', 'X_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topo_clusters_ms', 'id_fsa_k10', 'id_fsa_k90', 'id_mle_k10', 'id_mle_k90', 'spectral_EAS', 'spectral_RayScore', 'spectral_LAC', 'spectral_axis', 'spectral_axis_sign', 'spectral_radius', 'metric_deformation__X_PCA_UMAP', 'metric_deformation__X_UMAP_on_adataX_', 'metric_deformation__X_msTopoMAP', 'metric_deformation__X_TopoMAP', 'metric_deformation__X_msTopoPaCMAP', 'metric_deformation__X_TopoPaCMAP', 'topo_clusters_highestres', 'deformation_TopoMAP', 'metric_anisotropy_TopoMAP', 'metric_logdetG_TopoMAP', 'deformation_msTopoMAP', 'metric_anisotropy_msTopoMAP', 'metric_logdetG_msTopoMAP', 'deformation_TopoPaCMAP', 'metric_anisotropy_TopoPaCMAP', 'metric_logdetG_TopoPaCMAP', 'deformation_msTopoPaCMAP', 'metric_anisotropy_msTopoPaCMAP', 'metric_logdetG_msTopoPaCMAP'
+        obs: 'n_genes', 'pca_leiden', 'X_leiden', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', 'topo_clusters', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topo_clusters_ms', 'local_id_mle', 'id_fsa_k10', 'id_fsa_k90', 'id_mle_k10', 'id_mle_k90', 'spectral_EAS', 'spectral_RayScore', 'spectral_LAC', 'spectral_axis', 'spectral_axis_sign', 'spectral_radius', 'metric_deformation__X_PCA_UMAP', 'metric_deformation__X_UMAP_on_adataX_', 'metric_deformation__X_msTopoMAP', 'metric_deformation__X_TopoMAP', 'metric_deformation__X_msTopoPaCMAP', 'metric_deformation__X_TopoPaCMAP', 'topo_clusters_highestres', 'deformation_TopoMAP', 'metric_anisotropy_TopoMAP', 'metric_logdetG_TopoMAP', 'deformation_msTopoMAP', 'metric_anisotropy_msTopoMAP', 'metric_logdetG_msTopoMAP', 'deformation_TopoPaCMAP', 'metric_anisotropy_TopoPaCMAP', 'metric_logdetG_TopoPaCMAP', 'deformation_msTopoPaCMAP', 'metric_anisotropy_msTopoPaCMAP', 'metric_logdetG_msTopoPaCMAP'
         var: 'gene_ids', 'n_cells', 'highly_variable', 'highly_variable_rank', 'means', 'variances', 'variances_norm', 'mean', 'std'
-        uns: 'log1p', 'hvg', 'pca', 'pca_leiden', 'umap', 'X', 'X_leiden', 'pca_leiden_colors', 'X_leiden_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topometry_id_details', 'topometry_id_global_mle', 'intrinsic_dim_estimator', 'spectral_alignment_summary', 'metric_limits', 'imputation_qc', 'topometry_representation_eval', 'topo_clusters_res0.2_colors', 'topo_clusters_res0.8_colors', 'topo_clusters_res1.2_colors', 'topo_clusters_highestres_colors', 'topo_clusters_colors', 'simulated_state_for_example_colors', '_simulated_state_for_example_colors'
+        uns: 'log1p', 'hvg', 'pca', 'pca_leiden', 'umap', 'X', 'X_leiden', 'pca_leiden_colors', 'X_leiden_colors', '_topo_tmp_dm', 'topo_clusters_res0.2', 'topo_clusters_res0.8', 'topo_clusters_res1.2', '_topo_tmp_ms', 'topo_clusters_ms_res0.2', 'topo_clusters_ms_res0.8', 'topo_clusters_ms_res1.2', 'topometry_id_details', 'topometry_id_global_mle', 'intrinsic_dim_estimator', 'spectral_alignment_summary', 'metric_limits', 'imputation_qc', 'topometry_representation_eval', 'topo_clusters_res0.2_colors', 'topo_clusters_res0.8_colors', 'topo_clusters_res1.2_colors', 'topo_clusters_highestres_colors', 'simulated_state_for_example_colors', '_simulated_state_for_example_colors'
         obsm: 'X_pca', 'X_PCA_UMAP', 'X_UMAP_on_adataX_', 'X_ms_spectral_scaffold', 'X_spectral_scaffold', 'X_msTopoMAP', 'X_TopoMAP', 'X_msTopoPaCMAP', 'X_TopoPaCMAP'
         varm: 'PCs'
-        layers: 'counts', 'scaled', 'topo_imputation'
         obsp: 'pca_distances', 'pca_connectivities', 'X_distances', 'X_connectivities', 'topometry_connectivities', 'topometry_distances', '_topo_tmp_dm_distances', '_topo_tmp_dm_connectivities', 'topometry_connectivities_ms', 'topometry_distances_ms', '_topo_tmp_ms_distances', '_topo_tmp_ms_connectivities', 'topometry_laplacian'
+        layers: None (.X), 'counts', 'scaled', 'topo_imputation'
 
 
 
@@ -252,7 +244,7 @@ sc.pl.embedding(adata, basis='TopoMAP', color=['topo_clusters_res0.8','id_mle_k9
 
 
     
-![png](T1_introduction_files/T1_introduction_20_0.png)
+![png](T1_introduction_files/T1_introduction_15_0.png)
     
 
 
@@ -272,7 +264,7 @@ sc.pl.embedding(adata, basis='TopoMAP', color=['NKG7','MS4A1','LYZ','FCER1A'], c
 
 
     
-![png](T1_introduction_files/T1_introduction_22_0.png)
+![png](T1_introduction_files/T1_introduction_17_0.png)
     
 
 
@@ -287,7 +279,7 @@ sc.pl.embedding(adata, basis='TopoMAP', color=['NKG7','MS4A1','LYZ','FCER1A'], c
 
 
     
-![png](T1_introduction_files/T1_introduction_24_0.png)
+![png](T1_introduction_files/T1_introduction_19_0.png)
     
 
 
@@ -298,5 +290,3 @@ As you can see, the expression of marker genes is now almost entirely restricted
 1) Learn how to run and tune the analysis step-by-step
 2) Explore the TopOGraph object
 3) Check out additional examples of scRNAseq data analysis with comments on interpreting results
-
-

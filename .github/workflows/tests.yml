@@ -21,8 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: setup.cfg
+          # no pip cache: hnswlib is compiled for the CPU of the runner that builds it,
+          # and a wheel cached on one runner can crash on another (illegal instruction)
       - name: Install TopoMetry with its test dependencies
         run: pip install -e ".[test]"
       - name: Install optional backends and projections

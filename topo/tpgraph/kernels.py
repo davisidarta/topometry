@@ -13,6 +13,7 @@ from scipy.spatial import procrustes
 from scipy.stats import rv_discrete
 from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.exceptions import NotFittedError
 from sklearn.preprocessing import normalize as _l2_normalize_rows
 
 from topo.base.ann import kNN, resolve_backend, _is_installed
@@ -21,7 +22,7 @@ from topo.spectral._spectral import graph_laplacian, diffusion_operator
 from topo.spectral._spectral import degree as compute_degree
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
-from topo.utils._utils import get_indices_distances_from_sparse_matrix
+from topo.utils._utils import get_indices_distances_from_sparse_matrix, PlainEstimatorDisplay
 import warnings
 # dumb warning, suggests lilmatrix but it doesnt work
 from scipy.sparse import SparseEfficiencyWarning
@@ -325,7 +326,7 @@ def compute_kernel(X, metric='cosine',
         return W, dens_dict
 
 
-class Kernel(BaseEstimator, TransformerMixin):
+class Kernel(PlainEstimatorDisplay, BaseEstimator, TransformerMixin):
     """
     Scikit-learn flavored class for computing a kernel matrix from a set of points. Includes functions
     for computing the kernel matrix with a variety of methods (adaptive bandwidth, fuzzy simplicial sets,
@@ -640,7 +641,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         Returns the k-nearest-neighbors graph.
         """
         if self.knn_ is None:
-            raise ValueError(
+            raise NotFittedError(
                 "No k-nearest-neighbors graph has been fitted yet or precomputed versions were used!")
         return self.knn_
 
@@ -650,7 +651,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         Kernel matrix.
         """
         if self._K is None:
-            raise ValueError(
+            raise NotFittedError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
         return self._K
 
@@ -660,7 +661,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         Graph adjacency matrix.
         """
         if self._K is None:
-            raise ValueError(
+            raise NotFittedError(
                 "No kernel matrix has been fitted yet. Call fit() first.")
         if self._A is None:
             self._A = self.adjacency()
@@ -674,7 +675,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         if self._degree is None:
             if self._K is None:
-                raise ValueError(
+                raise NotFittedError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
             self._degree = compute_degree(self._A)
         return self._degree
@@ -687,7 +688,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         if self._weighted_degree is None:
             if self._K is None:
-                raise ValueError(
+                raise NotFittedError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
             self._weighted_degree = compute_degree(self._K)
         return self._weighted_degree
@@ -750,7 +751,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             anisotropy = self.anisotropy
         if self._P is None:
             if self._K is None:
-                raise ValueError(
+                raise NotFittedError(
                     "No kernel matrix has been fitted yet. Call fit() first.")
             if anisotropy is None or anisotropy < 0:
                 anisotropy = 0
@@ -808,7 +809,8 @@ class Kernel(BaseEstimator, TransformerMixin):
             elif self.metric == 'precomputed' and self.X is not None:
                 distances = self.X
             else:
-                raise ValueError(
+                # also an AttributeError, so that code probing attributes sees it as unavailable
+                raise NotFittedError(
                     "Shortest paths are computed on the distance graph, which is not kept for a kernel fitted "
                     "on a precomputed graph. Fit with `cache_input=True`, or compute them from that graph.")
             SP = geodesic_distance(distances, method='D', unweighted=False, directed=False, indices=None, n_jobs=self.n_jobs, random_state=self.random_state)
